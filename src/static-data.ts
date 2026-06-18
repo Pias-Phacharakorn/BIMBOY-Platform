@@ -2,7 +2,9 @@ import { ProjectsManager } from "./classes/ProjectsManager";
 import type { Project } from "./classes/Project";
 import type { IProject, ProjectStatus } from "./classes/Project";
 
-const projectImage = new URL("../__New_UI-Design/mp9tdjw6-image.png", import.meta.url).href;
+const projectImage1 = new URL("./assets/mp9tdjw6-image.png", import.meta.url).href;
+const projectImage2 = new URL("./assets/mp9tjoks-image.png", import.meta.url).href;
+const projectImage3 = new URL("./assets/mp9tmqe0-image.png", import.meta.url).href;
 
 export type ProjectView = "card" | "list";
 export type StandardTabId = "bep" | "naming" | "cde";
@@ -121,7 +123,7 @@ const seedProjectData: Array<{ id: string; project: IProject; display: ProjectDi
       statusLabel: "Active",
       statusTone: "ok",
       progress: 65,
-      image: projectImage,
+      image: projectImage1,
     },
   },
   {
@@ -152,7 +154,7 @@ const seedProjectData: Array<{ id: string; project: IProject; display: ProjectDi
       statusLabel: "Review",
       statusTone: "warn",
       progress: 12,
-      image: projectImage,
+      image: projectImage2,
     },
   },
   {
@@ -183,7 +185,7 @@ const seedProjectData: Array<{ id: string; project: IProject; display: ProjectDi
       statusLabel: "Active",
       statusTone: "ok",
       progress: 94,
-      image: projectImage,
+      image: projectImage3,
     },
   },
 ];

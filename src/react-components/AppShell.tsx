@@ -23,9 +23,10 @@ export function AppShell({ project, children }: AppShellProps) {
   };
 
   return (
-    <div className={`app-container ${collapsed ? "collapsed" : ""}`}>
+    <div className="flex w-screen h-screen min-w-0 bg-[#090a0f]">
       <Sidebar project={project} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
-      <main className="main-content">{children}</main>
+      <main className="flex flex-1 flex-col min-w-0 overflow-hidden">{children}</main>
     </div>
   );
 }
+
