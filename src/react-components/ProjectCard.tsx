@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "@tanstack/react-router";
 import type { AppProject } from "../static-data";
 
 interface ProjectCardProps {
@@ -37,7 +37,8 @@ export function ProjectCard({ project, view = "card" }: ProjectCardProps) {
     return (
       <Link
         className="grid grid-cols-[80px_2fr_1.2fr_100px_120px_120px_180px] items-center gap-5 px-6 py-3 border-b border-border bg-surface text-fg hover:bg-surface-alt no-underline select-none transition-all duration-150"
-        to={`/projects/${project.id}/model`}
+        to="/projects/$projectId/model"
+        params={{ projectId: project.id }}
       >
         <div
           className="w-16 h-10 border border-border rounded flex items-center justify-center bg-gradient-to-br from-[oklch(21%_0.05_252)] to-[oklch(9%_0.014_255)_64%]"
@@ -71,7 +72,8 @@ export function ProjectCard({ project, view = "card" }: ProjectCardProps) {
   return (
     <Link
       className="block border border-border bg-[oklch(14.5%_0.014_255_/_94%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_12px_34px_rgba(0,0,0,0.22)] overflow-hidden rounded-radius text-fg no-underline hover:border-[oklch(43%_0.045_252)] hover:shadow-[0_18px_50px_rgba(0,0,0,0.44)] hover:-translate-y-1 transition-all duration-200"
-      to={`/projects/${project.id}/model`}
+      to="/projects/$projectId/model"
+      params={{ projectId: project.id }}
     >
       <div
         className="flex items-center justify-center h-40 border-b border-border bg-gradient-to-br from-[oklch(21%_0.05_252)] to-[oklch(9%_0.014_255)_64%]"

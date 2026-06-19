@@ -14,20 +14,34 @@ Communicate concisely. Don't over-explain fundamentals.
 
 ## 🏗️ Project Identity
 
-**BIMBOY** is a BIM + GIS portfolio web application built on the [That Open Company](.agent/ThatOpen_docs/intro.md) ecosystem. Users browse construction projects, load IFC/Fragment 3D models, query building data with smart views, and overlay GIS map layers (Cesium 3D Tiles).
+**BIMBOY** is a Digital BIM Management Platform built on the [That Open Company](.agent/ThatOpen_docs/intro.md) ecosystem. It centralizes BIM models, project documents, coordination data, and geospatial information into a single environment for project teams.
+
+Features (in migration order):
+1. **BIM Model Viewer** — IFC/Fragment 3D viewport (OBC engine)
+2. **Clash Detection Dashboard** — BCF/Navisworks import, severity tracking
+3. **Document Management Dashboard** — drawing lists, revisions, status
+4. **Drawing & Shop Drawing Management** — CAD viewer, PDF tools
+5. **BIM + GIS Integration** — Cesium 3D Tiles, coordinate overlay
 
 ### Tech Stack
 
-| Layer        | Technology                                                      |
-| ------------ | --------------------------------------------------------------- |
-| UI Framework | React 19 + React Router 7                                       |
-| Styling      | Tailwind CSS v4                                                 |
-| BIM Engine   | `@thatopen/components` (OBC) + `@thatopen/ui` (BUI) — v3.4.x  |
-| 3D Renderer  | Three.js ^0.182                                                 |
-| GIS          | Cesium ^1.140 + 3d-tiles-renderer ^0.4                          |
-| Build Tool   | Vite 7                                                          |
-| Backend      | Firebase (Firestore, Cloud Functions + Emulator)                |
-| Language     | TypeScript ^5.2                                                 |
+| Layer         | Technology                                                      |
+| ------------- | --------------------------------------------------------------- |
+| UI Framework  | React 19                                                        |
+| Routing       | `@tanstack/react-router` (SPA, file-based, type-safe)           |
+| Server State  | `@tanstack/react-query` v5 (Firebase data fetching + caching)   |
+| UI State      | Zustand v5 (BIM engine state, project context)                  |
+| Styling       | Tailwind CSS v4                                                 |
+| Icons         | `lucide-react`                                                  |
+| Schema/Validation | `zod` v3                                                    |
+| Date Utilities | `date-fns` v4                                                  |
+| BIM Engine    | `@thatopen/components` (OBC) + `@thatopen/ui` (BUI) — v3.4.x  |
+| 3D Renderer   | Three.js ^0.182                                                 |
+| GIS           | Cesium ^1.140 (deferred — add with GIS feature)                 |
+| Build Tool    | Vite 7 + `@tanstack/router-plugin/vite` + `vite-tsconfig-paths` |
+| Backend       | Firebase (Firestore, Storage)                                   |
+| Language      | TypeScript ^5.2 (`@/*` → `src/*` path alias)                   |
+| Linting       | ESLint + typescript-eslint (flat config)                        |
 
 ---
 
@@ -43,14 +57,37 @@ All custom base styles must live inside `@layer base {}` in `style.css`.
 | Topic                               | Location                                                        |
 | ----------------------------------- | --------------------------------------------------------------- |
 | Agent Skills (Architecture, UI, BIM)| `.agent/skills/`                                                |
-| React Router 7 Patterns             | `.agent/skills/react-router-framework-mode/SKILL.md`           |
-| Firestore setup & rules             | `.agent/skills/firebase-firestore/SKILL.md`                    |
-| Global icons & constants            | `src/globals.ts`                                                |
-| BIM engine initialization           | `src/bim-components/setup/src/index.ts`                        |
-| Main React entry                    | `src/index.tsx`                                                 |
-| 3D viewer page (grid layout)        | `src/react-components/ProjectDetailsPage.tsx`                  |
-| Clash Report (BIM component)        | `src/bim-components/ClashReport/index.ts`                      |
-| Clash HTML Parser logic             | `src/bim-components/ClashReport/src/parser.ts`                 |
+| TanStack Router Patterns            | `src/routes/` (file-based — auto-generates `routeTree.gen.ts`) |
+| Router Instance                     | `src/router.tsx`                                                |
+| React Entry                         | `src/main.tsx`                                                  |
+| Firebase Client Init                | `src/lib/firebase.ts`                                           |
+| TanStack Query Client               | `src/lib/queryClient.ts`                                        |
+| General Utilities (cn, formatDate)  | `src/lib/utils.ts`                                              |
+| BIM Engine State (Zustand)          | `src/store/useBimStore.ts`                                      |
+| Project Context (Zustand)           | `src/store/useProjectStore.ts`                                  |
+| Domain Types + Zod Schemas          | `src/types/` (barrel at `src/types/index.ts`)                   |
+| BIM engine initialization           | `src/bim-components/setup/src/index.ts`                         |
+| BIM Components (OBC)                | `src/bim-components/`                                           |
+| React UI Components                 | `src/react-components/`                                         |
+| Design System Tokens                | `src/style.css` + `DESIGN.md`                                   |
+| Firestore setup & rules             | `.agent/skills/firebase-firestore/SKILL.md`                     |
+
+---
+
+## ⚠️ Important Routing Notes
+
+- **DO NOT use react-router-dom** — it has been removed. Use `@tanstack/react-router`.
+- The `routeTree.gen.ts` is auto-generated by the Vite plugin — **never edit it manually**.
+- Route files live in `src/routes/` using file-based routing conventions:
+  - `__root.tsx` — root layout
+  - `index.tsx` — redirect to /projects
+  - `projects.tsx` — projects layout (AppShell)
+  - `projects/index.tsx` — project list page
+  - `projects/$projectId.tsx` — per-project layout
+  - `projects/$projectId/model.tsx` — BIM viewer
+  - `projects/$projectId/clashes.tsx` — clash detection
+  - `projects/$projectId/documents.tsx` — documents
+  - `projects/$projectId/settings.tsx` — settings
 
 ---
 
@@ -72,11 +109,14 @@ Wait for user approval before execution.
 - Refer to the local [ThatOpen Docs](.agent/ThatOpen_docs) for any OBC feature before implementing.
 - Always check `.agent/skills/` for UI separation, BUI event binding, and component rules.
 - Implement `OBC.Disposable`, use `OBC.Disposer` for Three.js meshes, and unbind all DOM events. See `.agent/skills/learnopen-add-custom-bim-component`.
+- Use `@/*` imports (e.g., `import { cn } from '@/lib/utils'`) — never deep relative paths.
+- For Firestore data: use TanStack Query hooks with Firebase SDK snapshot listeners.
+- For UI state: use Zustand stores (`useBimStore`, `useProjectStore`).
 
 ---
 
 ## 🔄 Version
 
-- Current: **3.4.x** — keep all ThatOpen libraries on the same version to avoid compatibility issues.
+- ThatOpen: **3.4.x** — keep all ThatOpen libraries on the same version to avoid compatibility issues.
 - Check peer deps (`three.js`, `web-ifc`) when upgrading.
-- If an API seems missing, check the local [migration.md](.agent/ThatOpen_docs/migration.md) guide.
+- If an API seems missing, check the local [migration.md](.agent/ThatOpen_docs/migration.md) guide.

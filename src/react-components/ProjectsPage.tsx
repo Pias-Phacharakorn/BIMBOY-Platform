@@ -39,11 +39,10 @@ export function ProjectsPage() {
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex gap-[3px] max-w-full overflow-x-auto p-[3px] border border-border rounded-radius bg-[oklch(10.5%_0.014_255)]" aria-label="Project view">
             <button
-              className={`flex-none px-[11px] py-[5px] border rounded-radius-sm cursor-pointer text-xs font-semibold whitespace-nowrap transition-all duration-120 ${
-                view === "card"
+              className={`flex-none px-[11px] py-[5px] border rounded-radius-sm cursor-pointer text-xs font-semibold whitespace-nowrap transition-all duration-120 ${view === "card"
                   ? "bg-[oklch(24%_0.038_252)] border-[oklch(45%_0.07_252)] text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                   : "border-transparent text-muted hover:bg-surface-alt hover:text-fg"
-              }`}
+                }`}
               title="Card View"
               type="button"
               onClick={() => setView("card")}
@@ -56,11 +55,10 @@ export function ProjectsPage() {
               </svg>
             </button>
             <button
-              className={`flex-none px-[11px] py-[5px] border rounded-radius-sm cursor-pointer text-xs font-semibold whitespace-nowrap transition-all duration-120 ${
-                view === "list"
+              className={`flex-none px-[11px] py-[5px] border rounded-radius-sm cursor-pointer text-xs font-semibold whitespace-nowrap transition-all duration-120 ${view === "list"
                   ? "bg-[oklch(24%_0.038_252)] border-[oklch(45%_0.07_252)] text-fg shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                   : "border-transparent text-muted hover:bg-surface-alt hover:text-fg"
-              }`}
+                }`}
               title="List View"
               type="button"
               onClick={() => setView("list")}

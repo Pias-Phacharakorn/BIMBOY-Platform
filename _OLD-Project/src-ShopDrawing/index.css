@@ -1,0 +1,122 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens — HSL only. Inspired by RITTA Konext (navy + amber). */
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 222 57% 21%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 220 14% 95%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 33 95% 54%;
+    --accent-foreground: 0 0% 100%;
+
+    --slider-handle: 352 76% 49%;
+    --slider-handle-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 60% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 210 92% 45%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 220 13% 89%;
+    --input: 220 13% 89%;
+    --ring: 222 57% 21%;
+
+    --radius: 0.5rem;
+
+    /* Legacy aliases kept for components that still use them */
+    --navy: 222 57% 14%;
+    --navy-light: 222 47% 20%;
+    --cyan: 222 57% 21%;
+    --cyan-light: 218 66% 85%;
+    --cyan-foreground: 0 0% 100%;
+
+    /* Sidebar — dark navy + amber accent */
+    --sidebar-background: 222 57% 14%;
+    --sidebar-foreground: 220 14% 85%;
+    --sidebar-primary: 33 95% 54%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 47% 20%;
+    --sidebar-accent-foreground: 220 14% 92%;
+    --sidebar-border: 222 30% 22%;
+    --sidebar-ring: 33 95% 54%;
+    --sidebar-muted: 220 9% 60%;
+  }
+
+  .dark {
+    --background: 222 47% 7%;
+    --foreground: 210 40% 96%;
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 33 95% 54%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 30% 18%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 222 30% 15%;
+    --muted-foreground: 220 9% 55%;
+    --accent: 33 95% 54%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 222 30% 18%;
+    --input: 222 30% 18%;
+    --ring: 33 95% 54%;
+    --sidebar-background: 222 47% 7%;
+    --sidebar-foreground: 220 14% 85%;
+    --sidebar-primary: 33 95% 54%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 30% 15%;
+    --sidebar-accent-foreground: 220 14% 92%;
+    --sidebar-border: 222 30% 15%;
+    --sidebar-ring: 33 95% 54%;
+    --sidebar-muted: 220 9% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-card/80 backdrop-blur-sm border border-border/50;
+  }
+}

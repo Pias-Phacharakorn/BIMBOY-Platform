@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams } from "@tanstack/react-router";
 import { AppShell } from "./AppShell";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { getProjectById, clashRecords, clashStats, type BadgeTone } from "../static-data";
@@ -11,7 +11,7 @@ const severityClass: Record<BadgeTone, string> = {
 };
 
 export function ClashDetectionPage() {
-  const { projectId } = useParams();
+  const { projectId } = useParams({ strict: false });
   const project = getProjectById(projectId);
 
   return (

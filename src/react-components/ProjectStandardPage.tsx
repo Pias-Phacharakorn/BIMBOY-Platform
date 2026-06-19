@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams } from "@tanstack/react-router";
 import { AppShell } from "./AppShell";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import {
@@ -55,7 +55,7 @@ function StandardCardGrid({ cards }: { cards: StandardCard[] }) {
 }
 
 export function ProjectStandardPage() {
-  const { projectId } = useParams();
+  const { projectId } = useParams({ strict: false });
   const project = getProjectById(projectId);
   const [activeTab, setActiveTab] = useState<StandardTabId>("bep");
 

@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams } from "@tanstack/react-router";
 import { AppShell } from "./AppShell";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import { documentRecords, documentStats, getProjectById } from "../static-data";
@@ -10,7 +10,7 @@ const approvalClass = {
 };
 
 export function DocumentStatusPage() {
-  const { projectId } = useParams();
+  const { projectId } = useParams({ strict: false });
   const project = getProjectById(projectId);
 
   return (
