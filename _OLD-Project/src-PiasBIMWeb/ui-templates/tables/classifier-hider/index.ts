@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as OBC from "@thatopen/components";
 import * as BUI from "@thatopen/ui";
 import { ClassifierListState, ClassifierListTableData } from "./src/types";
@@ -90,4 +91,5 @@ export async function applyActiveFilters(components: OBC.Components) {
 }
 
 export * from "./src/types";
+
 

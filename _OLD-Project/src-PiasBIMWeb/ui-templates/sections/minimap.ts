@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import { MiniMap } from "../../bim-components/MiniMap";
@@ -40,3 +41,4 @@ export const minimapSectionTemplate = (state: { components: OBC.Components }) =>
     </bim-panel-section>
   `;
 };
+

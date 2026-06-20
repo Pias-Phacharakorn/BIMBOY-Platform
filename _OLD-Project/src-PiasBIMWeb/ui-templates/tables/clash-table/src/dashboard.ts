@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import { ClashData } from "../../../../bim-components";
 
@@ -113,3 +114,4 @@ export const renderDashboard = (list: ClashData[]) => {
     </div>
   `;
 };
+

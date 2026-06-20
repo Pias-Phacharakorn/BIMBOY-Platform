@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet } from '@tanstack/react-router'
-import { useProjectStore } from '@/store/useProjectStore'
+import { useProjectStore } from '@/react-components/store/projectStore'
 import { useEffect } from 'react'
 
 // ─── /projects/$projectId (layout) ────────────────────────────────────────────

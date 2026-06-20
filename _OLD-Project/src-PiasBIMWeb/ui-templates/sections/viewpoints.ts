@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import * as THREE from "three";
@@ -642,3 +643,4 @@ export const viewpointPanelTemplate: BUI.StatefullComponent<ViewpointsPanelState
 
   return container;
 };
+

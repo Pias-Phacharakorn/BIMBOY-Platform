@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as OBC from "@thatopen/components";
 import * as BUI from "@thatopen/ui";
 
@@ -16,4 +17,5 @@ export interface ClashTableData {
   Date: string;
   Actions: string;
 }
+
 

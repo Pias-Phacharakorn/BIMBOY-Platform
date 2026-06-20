@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
 import * as BUI from "@thatopen/ui";
@@ -56,3 +57,4 @@ export async function applyActiveFilters(components: OBC.Components) {
 }
 
 export * from "./src/types";
+

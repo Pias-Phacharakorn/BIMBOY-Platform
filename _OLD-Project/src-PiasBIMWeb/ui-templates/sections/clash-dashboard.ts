@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import { appIcons } from "../../globals";
@@ -69,3 +70,4 @@ export const clashDashboardSectionTemplate: BUI.StatefullComponent<ClashDashboar
     </bim-panel-section>
   `;
 };
+

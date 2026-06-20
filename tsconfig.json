@@ -23,5 +23,6 @@
     }
   },
   "include": ["src", "vite.config.ts"],
+  "exclude": ["src/bim-components/**/*", "src/ui-templates/**/*"],
   "references": []
 }

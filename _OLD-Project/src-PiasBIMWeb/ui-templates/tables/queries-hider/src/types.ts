@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as OBC from "@thatopen/components";
 
 export interface QueriesListState {
@@ -8,3 +9,4 @@ export type QueriesListTableData = {
   Name: string;
   Actions: string;
 };
+

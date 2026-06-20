@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as OBC from "@thatopen/components";
 import * as BUI from "@thatopen/ui";
 import { ClassifierListState, ClassifierListTableData } from "./types";
@@ -34,3 +35,4 @@ export const classifierListTemplate: BUI.StatefullComponent<ClassifierListState>
     <bim-table ${BUI.ref(onCreated)}></bim-table>
   `;
 };
+

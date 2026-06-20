@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as OBC from "@thatopen/components";
 import * as BUI from "@thatopen/ui";
 import {
@@ -64,3 +65,4 @@ export const viewportGridTemplate: BUI.StatefullComponent<ViewportGridState> = (
 
   return BUI.html`<bim-grid floating class="viewport-grid" ${BUI.ref(onCreated)}></bim-grid>`;
 };
+

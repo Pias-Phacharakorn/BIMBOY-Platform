@@ -76,6 +76,13 @@ export class ProjectsManager {
       if (!filesList) { return }
       reader.readAsText(filesList[0])
     })
-    input.click()
   }
 }
+
+import { getProjectById as getProjectByIdFromStatic } from "../static-data";
+
+export const projectsManager = new ProjectsManager();
+
+export const getProjectById = (id?: string) => {
+  return getProjectByIdFromStatic(id);
+};

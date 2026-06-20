@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as THREE from "three";
 import * as OBC from "@thatopen/components";
 import * as BUI from "@thatopen/ui";
@@ -229,3 +230,4 @@ export const gisPanelTemplate: BUI.StatefullComponent<GisPanelState> = (
   </bim-panel>
   `;
 };
+

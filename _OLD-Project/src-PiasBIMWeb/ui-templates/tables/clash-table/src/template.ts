@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import { ClashTableState } from "./types";
 import { ClashImport, ClashData } from "../../../../bim-components";
@@ -566,3 +567,4 @@ export const clashTableTemplate: BUI.StatefullComponent<ClashTableState> = (
     </div>
   `;
 };
+

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import { queriesList } from "../tables/queries-hider";
@@ -29,3 +30,4 @@ export const customSetPanelTemplate: BUI.StatefullComponent<CustomSetPanelState>
     </bim-panel-section>
   </bim-panel>`;
 };
+

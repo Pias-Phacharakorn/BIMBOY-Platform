@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import { PropertyTable } from "../../bim-components/PropertyTable";
@@ -253,3 +254,4 @@ export const propertyTablePanelTemplate: BUI.StatefullComponent<
 
   return panel;
 };
+

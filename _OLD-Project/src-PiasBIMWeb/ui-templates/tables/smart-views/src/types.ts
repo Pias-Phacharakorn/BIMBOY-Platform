@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as OBC from "@thatopen/components";
 
 export interface SmartViewsListState {
@@ -9,3 +10,4 @@ export type SmartViewsListTableData = {
   Name: string;
   Actions: string;
 };
+

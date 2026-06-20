@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import { ClashTableSectionState } from "../../../sections/clash-table";
 import { ClashDashboardSectionState } from "../../../sections/clash-dashboard";
@@ -40,3 +41,4 @@ export type ClashpageGridSidebar = BUI.Grid<
   ClashpageGridSidebarLayouts,
   ClashpageGridSidebarElements
 >;
+

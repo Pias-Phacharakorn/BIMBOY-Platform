@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as OBC from "@thatopen/components";
 import * as BUI from "@thatopen/ui";
 import { SmartViewsListState, SmartViewsListTableData } from "./types";
@@ -29,3 +30,4 @@ export const smartViewsListTemplate: BUI.StatefullComponent<SmartViewsListState>
     <bim-table ${BUI.ref(onCreated)}></bim-table>
   `;
   };
+

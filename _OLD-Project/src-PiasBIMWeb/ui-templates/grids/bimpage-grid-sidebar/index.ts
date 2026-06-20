@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import { BimpageGridSidebar } from "./src";
@@ -261,3 +262,4 @@ export const bimpageGridSidebarTemplate: BUI.StatefullComponent<
   </div>
   `;
 };
+

@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { ProjectStandardPage } from '@/react-components/ProjectStandardPage'
+import { StandardView } from '@/react-components/views/standard'
 
 export const Route = createFileRoute('/projects/$projectId/standard')({
-  component: ProjectStandardPage,
+  component: StandardView,
 })

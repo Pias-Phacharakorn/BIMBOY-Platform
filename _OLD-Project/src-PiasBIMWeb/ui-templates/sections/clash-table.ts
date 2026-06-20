@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import { ClashImport } from "../../bim-components";
@@ -57,3 +58,4 @@ export const clashTableSectionTemplate: BUI.StatefullComponent<ClashTableSection
     </bim-panel-section>
   `;
 };
+

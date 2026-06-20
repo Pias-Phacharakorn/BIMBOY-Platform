@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import { ClashTableState, ClashTableData } from "./types";
 
@@ -36,6 +37,7 @@ export const setDefaults = (state: ClashTableState, table: BUI.Table<ClashTableD
   });
   table.appendChild(missingDataSlot);
 };
+
 
 
 

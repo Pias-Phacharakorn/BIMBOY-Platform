@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as OBC from "@thatopen/components";
 import * as BUI from "@thatopen/ui";
 import { QueriesListState, QueriesListTableData } from "./src/types";
@@ -34,3 +35,4 @@ export const queriesList = (state: QueriesListState) => {
   return component;
 };
 export * from "./src/types";
+

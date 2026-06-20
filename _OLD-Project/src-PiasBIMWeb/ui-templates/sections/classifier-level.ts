@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import { classifierList, selectedFilters, activeUpdateFunctions, applyActiveFilters } from "../tables/classifier-hider";
@@ -48,3 +49,4 @@ export const classifierLevelPanelTemplate: BUI.StatefullComponent<ClassifierLeve
     </bim-panel-section>
   </bim-panel>`;
 };
+

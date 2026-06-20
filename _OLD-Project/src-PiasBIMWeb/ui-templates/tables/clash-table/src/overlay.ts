@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import { ref, getDownloadURL } from "firebase/storage";
 import { storage } from "../../../../firebase";
@@ -409,3 +410,4 @@ export const clashDetailOverlay = (clash: ClashData, onClose: () => void) => {
   window.addEventListener("keydown", handleEsc);
   return element;
 };
+

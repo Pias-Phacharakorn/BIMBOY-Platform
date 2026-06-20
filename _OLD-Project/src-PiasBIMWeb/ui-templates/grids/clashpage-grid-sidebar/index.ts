@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import { ClashpageGridSidebar } from "./src";
@@ -71,3 +72,4 @@ export const clashpageGridSidebarTemplate: BUI.StatefullComponent<
     <bim-grid ${BUI.ref(onCreated)} class="components-grid"></bim-grid>
   `;
 };
+

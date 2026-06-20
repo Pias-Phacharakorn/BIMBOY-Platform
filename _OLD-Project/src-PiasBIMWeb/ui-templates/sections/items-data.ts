@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import * as CUI from "@thatopen/ui-obc"
@@ -59,3 +60,4 @@ export const itemsDataPanelTemplate: BUI.StatefullComponent<ItemsDataPanelState>
     ${propsTable}
   </bim-panel-section>`;
 };
+

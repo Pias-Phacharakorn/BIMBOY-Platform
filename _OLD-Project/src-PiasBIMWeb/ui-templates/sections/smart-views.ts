@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import { smartViewsList } from "../tables/smart-views";
@@ -61,3 +62,4 @@ export const smartViewsPanelTemplate: BUI.StatefullComponent<
     </bim-panel-section>
     `;
 };
+

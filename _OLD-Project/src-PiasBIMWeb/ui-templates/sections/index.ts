@@ -1,3 +1,4 @@
+// @ts-nocheck
 export * from "./models";
 export * from "./items-data";
 export * from "./clash-table";

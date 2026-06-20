@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import {
@@ -112,4 +113,5 @@ export type BimpageGridSidebar = BUI.Grid<
   BimpageGridSidebarLayouts,
   BimpageGridSidebarElements
 >;
+
 

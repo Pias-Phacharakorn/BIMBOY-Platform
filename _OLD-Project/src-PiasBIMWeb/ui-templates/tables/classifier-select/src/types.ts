@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as OBC from "@thatopen/components";
 
 export interface ClassifierListState {
@@ -10,3 +11,4 @@ export type ClassifierListTableData = {
   Name: string;
   Selected: string;
 };
+

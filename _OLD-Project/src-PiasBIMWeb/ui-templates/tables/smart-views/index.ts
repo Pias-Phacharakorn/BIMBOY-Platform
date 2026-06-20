@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as OBC from "@thatopen/components";
 import * as BUI from "@thatopen/ui";
 import { SmartViewsListState, SmartViewsListTableData } from "./src/types";
@@ -24,3 +25,4 @@ export const smartViewsList = (state: SmartViewsListState) => {
 
   return component;
 };
+

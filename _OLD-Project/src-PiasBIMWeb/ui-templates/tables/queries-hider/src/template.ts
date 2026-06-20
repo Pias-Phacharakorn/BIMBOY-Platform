@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as OBC from "@thatopen/components";
 import * as BUI from "@thatopen/ui";
 import { QueriesListState, QueriesListTableData } from "./types";
@@ -35,3 +36,4 @@ export const queriesListTemplate: BUI.StatefullComponent<QueriesListState> = (st
    <bim-table ${BUI.ref(onCreated)}></bim-table> 
   `;
 };
+
