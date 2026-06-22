@@ -1,3 +1,6 @@
 export * from './AppShell'
 export * from './Sidebar'
 export * from './WorkspaceHeader'
+export * from './LeftPanel'
+export * from './RightPanel'
+export * from './PanelSection'

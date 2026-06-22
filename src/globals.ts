@@ -41,4 +41,8 @@ export const appIcons = {
   CLOSE: "material-symbols:close",
   EDIT: "material-symbols:edit",
   WARNING: "material-symbols:warning",
+  PANEL_LEFT_CLOSE: "lucide:panel-left-close",
+  PANEL_LEFT_OPEN: "lucide:panel-left-open",
+  PANEL_RIGHT_CLOSE: "lucide:panel-right-close",
+  PANEL_RIGHT_OPEN: "lucide:panel-right-open",
 };

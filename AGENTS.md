@@ -283,16 +283,10 @@ export function cn(...inputs: ClassValue[]) {
 
 ## 📋 Mandatory Workflow
 
-Plan before writing code
-A very important best practice is: do not write code immediately. Have Claude analyze and plan first.
-.
-🔹 Example
-▪️ Analyze this requirement first.
-▪️ Summarize the architecture.
-▪️ Explain the impact.
-▪️ Then propose the development plan.
-▪️ Do not write code until I approve.
-This approach reduces code rewrites and provides a clear big picture before starting.
+- **Plan before writing code**: Always plan before writing code. Do not write code immediately.
+- **Stress-Test & Alignment**: Use the [grill-with-docs](.agent/skills/grill-with-docs/SKILL.md) skill by default to align on a plan through an interactive interview, stress-test it against the domain model, and update documentation.
+- **Interactive Work & Execution**: When asking the user or generating code outputs, use the [caveman-code](.agent/skills/caveman-code/SKILL.md) skill to perform token-efficient coding tasks or run autonomous goal loops.
+- **Approval**: Do not write code until the user approves.
 
 ---
 

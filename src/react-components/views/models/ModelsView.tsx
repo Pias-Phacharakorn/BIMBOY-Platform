@@ -1,5 +1,5 @@
 import { useParams } from "@tanstack/react-router";
-import { AppShell, WorkspaceHeader } from "@/react-components/components/layout";
+import { AppShell, WorkspaceHeader, RightPanel, PanelSection } from "@/react-components/components/layout";
 import { Icon } from "@/react-components/components/ui";
 import { ViewportWrapper, ViewportSettings, ViewportToolbar } from "@/react-components/components/bim";
 import { getProjectById, modelFiles, workspaceTabs } from "@/static-data";
@@ -16,12 +16,12 @@ export function ModelsView() {
         activeTab="Models"
         actions={
           <>
-            <div className="flex items-center gap-2 p-[4px_12px] border border-border bg-[oklch(14.5%_0.014_255_/_94%)] rounded-[20px] cursor-pointer text-xs font-medium text-fg hover:bg-surface-alt transition-colors duration-120">
+            <div className="flex items-center gap-2 p-[4px_12px] border border-border bg-surface/94 rounded-[20px] cursor-pointer text-xs font-medium text-fg hover:bg-surface-alt transition-colors duration-120">
               <Icon name="MODEL" size={14} />
               <span>Default Layout</span>
               <Icon name="RIGHT" size={12} />
             </div>
-            <button className="inline-flex items-center justify-center gap-2 min-h-8 px-3 border rounded-radius cursor-pointer text-xs font-semibold no-underline hover:-translate-y-[1px] active:translate-y-0 transition-all duration-120 border-[oklch(69%_0.15_252)] bg-gradient-to-b from-[oklch(70%_0.16_252)] to-[oklch(57%_0.16_252)] text-[oklch(99%_0.004_255)] hover:from-[oklch(73%_0.16_252)] hover:to-[oklch(60%_0.16_252)]" type="button">
+            <button className="inline-flex items-center justify-center gap-2 min-h-8 px-3 border rounded-radius cursor-pointer text-xs font-semibold no-underline hover:-translate-y-[1px] active:translate-y-0 transition-all duration-120 border-accent bg-gradient-to-b from-accent to-accent-muted text-fg hover:from-accent hover:to-accent/90" type="button">
               Share
             </button>
           </>
@@ -34,27 +34,23 @@ export function ModelsView() {
           <ViewportToolbar />
         </section>
 
-        <aside className="flex flex-col flex-none w-[min(320px,32vw)] bg-[oklch(14.5%_0.014_255_/_94%)]">
-          <div className="flex items-center justify-between p-[12px_16px] bg-[oklch(12%_0.014_255)] border-b border-border text-muted text-xs font-semibold tracking-wider uppercase">
-            Models List
-            <Icon name="EXPAND" size={14} />
-          </div>
-          <div className="flex-1 overflow-auto p-4 flex flex-col gap-1">
-            {modelFiles.map((file) => (
-              <div className="flex items-center gap-2 py-1.5 px-2 rounded-radius-sm text-fg cursor-pointer text-[13px] hover:bg-[oklch(20%_0.02_255)] hover:text-accent-2 transition-all duration-120" key={file.name}>
-                <Icon name={file.loaded ? "CHECK" : "MODEL"} size={14} />
-                {file.name}
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center justify-between p-[12px_16px] bg-[oklch(12%_0.014_255)] border-b border-t border-border text-muted text-xs font-semibold tracking-wider uppercase">
-            Item Properties
-            <Icon name="EXPAND" size={14} />
-          </div>
-          <div className="p-4 bg-[oklch(12.5%_0.012_255_/_40%)] min-h-[120px]">
-            <p className="text-muted text-xs leading-relaxed">Select an item in the viewport to view detailed BIM metadata.</p>
-          </div>
-        </aside>
+        <RightPanel icon="MODEL" defaultOpen={true}>
+          <PanelSection label="Models List" icon="MODEL" defaultOpen={true}>
+            <div className="flex flex-col gap-1">
+              {modelFiles.map((file) => (
+                <div className="flex items-center gap-2 py-1.5 px-2 rounded-radius-sm text-fg cursor-pointer text-[13px] hover:bg-surface-alt hover:text-accent-2 transition-all duration-120" key={file.name}>
+                  <Icon name={file.loaded ? "CHECK" : "MODEL"} size={14} />
+                  {file.name}
+                </div>
+              ))}
+            </div>
+          </PanelSection>
+          <PanelSection label="Item Properties" icon="SETTINGS" defaultOpen={true}>
+            <div className="p-3 bg-bg/40 rounded-radius border border-border min-h-[120px]">
+              <p className="text-muted text-xs leading-relaxed">Select an item in the viewport to view detailed BIM metadata.</p>
+            </div>
+          </PanelSection>
+        </RightPanel>
       </div>
     </AppShell>
   );
