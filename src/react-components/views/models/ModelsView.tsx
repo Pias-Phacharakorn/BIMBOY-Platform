@@ -3,6 +3,7 @@ import { useParams } from "@tanstack/react-router";
 import { AppShell, WorkspaceHeader, LeftPanel, RightPanel, PanelSection } from "@/react-components/components/layout";
 import { Icon } from "@/react-components/components/ui";
 import { ViewportWrapper, ViewportSettings, ViewportToolbar, ModelsList } from "@/react-components/components/bim";
+import { PropertyPanel } from "@/react-components/features/property-panel";
 import { getProjectById, workspaceTabs } from "@/static-data";
 
 export function ModelsView() {
@@ -43,10 +44,13 @@ export function ModelsView() {
         </section>
 
         <RightPanel icon="SETTINGS" defaultOpen={true}>
-          <PanelSection label="Item Properties" icon="SETTINGS" defaultOpen={true}>
-            <div className="p-3 bg-bg/40 rounded-radius border border-border min-h-[120px]">
-              <p className="text-muted text-xs leading-relaxed">Select an item in the viewport to view detailed BIM metadata.</p>
-            </div>
+          <PanelSection
+            label="Item Properties"
+            icon="SETTINGS"
+            defaultOpen={true}
+            noPadding={true}
+          >
+            <PropertyPanel />
           </PanelSection>
         </RightPanel>
       </div>

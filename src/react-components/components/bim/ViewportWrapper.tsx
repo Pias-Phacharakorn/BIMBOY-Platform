@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
+import * as OBF from "@thatopen/components-front";
 import { setupComponents } from "@/bim-components";
 import { useBimStore } from "@/react-components/store/bimStore";
 
@@ -33,6 +34,8 @@ export function ViewportWrapper({
     let isCancelled = false;
     let viewportElement: any = null;
     let activeComponents: any = null;
+    let onHighlightCallback: any = null;
+    let onClearCallback: any = null;
 
     setupComponents().then(({ components, viewport }) => {
       if (isCancelled) {
@@ -47,6 +50,27 @@ export function ViewportWrapper({
 
       // Sync active state to Zustand store
       useBimStore.getState().setBimData(components, world, viewport);
+
+      // Subscribe to selection events
+      const highlighter = components.get(OBF.Highlighter);
+      
+      const syncSelection = () => {
+        const selectMap = highlighter.selection.select;
+        const clonedMap: OBC.ModelIdMap = {};
+        const selectedIds: number[] = [];
+        for (const modelId in selectMap) {
+          const expressIds = selectMap[modelId];
+          clonedMap[modelId] = new Set(expressIds);
+          selectedIds.push(...expressIds);
+        }
+        useBimStore.getState().setSelectedElements(selectedIds, clonedMap);
+      };
+
+      onHighlightCallback = syncSelection;
+      onClearCallback = syncSelection;
+
+      highlighter.events.select.onHighlight.add(onHighlightCallback);
+      highlighter.events.select.onClear.add(onClearCallback);
 
       // Execute custom setups if provided
       if (onSetup) {
@@ -89,11 +113,24 @@ export function ViewportWrapper({
     return () => {
       isCancelled = true;
       useBimStore.getState().clearBimData();
+      
+      if (activeComponents) {
+        try {
+          const highlighter = activeComponents.get(OBF.Highlighter);
+          if (onHighlightCallback) {
+            highlighter.events.select.onHighlight.remove(onHighlightCallback);
+          }
+          if (onClearCallback) {
+            highlighter.events.select.onClear.remove(onClearCallback);
+          }
+        } catch (e) {
+          // Ignore error if highlighter is disposed
+        }
+        activeComponents.dispose();
+      }
+
       if (viewportElement) {
         viewportElement.remove();
-      }
-      if (activeComponents) {
-        activeComponents.dispose();
       }
     };
   }, [gridTemplate, onSetup]);

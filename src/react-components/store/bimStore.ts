@@ -26,6 +26,7 @@ interface BimState {
   // UI State
   activeTool: BimTool
   selectedElementIds: number[]
+  selectionMap: OBC.ModelIdMap
   activePanel: BimPanel
   engineReady: boolean
   isModelLoading: boolean
@@ -39,7 +40,7 @@ interface BimState {
   ) => void
   clearBimData: () => void
   setActiveTool: (tool: BimTool) => void
-  setSelectedElements: (ids: number[]) => void
+  setSelectedElements: (ids: number[], map: OBC.ModelIdMap) => void
   clearSelection: () => void
   setActivePanel: (panel: BimPanel) => void
   setEngineReady: (ready: boolean) => void
@@ -56,6 +57,7 @@ const initialState = {
   viewport: null as BUI.Viewport | null,
   activeTool: null as BimTool,
   selectedElementIds: [] as number[],
+  selectionMap: {} as OBC.ModelIdMap,
   activePanel: null as BimPanel,
   engineReady: false,
   isModelLoading: false,
@@ -76,9 +78,9 @@ export const useBimStore = create<BimState>()(
 
     setActiveTool: (tool) => set({ activeTool: tool }),
 
-    setSelectedElements: (ids) => set({ selectedElementIds: ids }),
+    setSelectedElements: (ids, map) => set({ selectedElementIds: ids, selectionMap: map }),
 
-    clearSelection: () => set({ selectedElementIds: [] }),
+    clearSelection: () => set({ selectedElementIds: [], selectionMap: {} }),
 
     setActivePanel: (panel) =>
       set((state) => ({

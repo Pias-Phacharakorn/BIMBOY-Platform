@@ -9,6 +9,7 @@ interface PanelSectionProps {
   actions?: React.ReactNode;
   className?: string;
   onSearch?: (query: string) => void;
+  noPadding?: boolean;
 }
 
 export function PanelSection({
@@ -19,6 +20,7 @@ export function PanelSection({
   actions,
   className = "",
   onSearch,
+  noPadding = false,
 }: PanelSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [isSearching, setIsSearching] = useState(false);
@@ -109,7 +111,7 @@ export function PanelSection({
       {/* Section Content */}
       <div
         className={`transition-all duration-200 ease-in-out overflow-hidden ${
-          isOpen ? "max-h-[1000px] opacity-100 p-4" : "max-h-0 opacity-0"
+          isOpen ? `max-h-[1000px] opacity-100 ${noPadding ? "" : "p-4"}` : "max-h-0 opacity-0"
         }`}
       >
         {children}
