@@ -1,25 +1,23 @@
 # AGENT.md — PIAS-BimWebApp (BIMBOY)
 
-> Read this first. It tells you who you're working with, what this project is, and the rules you must follow before writing any code.
+> **Read this entire file before writing any code.** It defines the project identity, stack, architecture constraints, and mandatory workflow. Violating these rules will cause rejected PRs and wasted effort.
 
 ---
 
 ## 🧑‍💻 About the Developer
 
-You are pair-programming with a **Senior Software Developer** with deep expertise in:
-- **BIM** — IFC workflows, model data, clipping, highlighting, clash detection
-- **GIS** — Cesium, 2D/3D map layers, coordinate systems
-- **Web** — React, Three.js, Vite, TypeScript, Firebase
+Pair-programming with a **Senior Software Developer**. Expertise: BIM (IFC workflows, clash detection, clipping), GIS (Cesium, coordinate systems), Web (React, Three.js, Vite, TypeScript, Firebase).
 
-Communicate concisely. Don't over-explain fundamentals.
+**Communication style:** Concise and technical. Skip fundamentals. Surface tradeoffs. Ask targeted questions.
 
 ---
 
 ## 🏗️ Project Identity
 
-**BIMBOY** is a Digital BIM Management Platform built on the [That Open Company](.agent/ThatOpen_docs/intro.md) ecosystem. It centralizes BIM models, project documents, coordination data, and geospatial information into a single environment for project teams.
+**BIMBOY** is a Digital BIM Management Platform built on the [ThatOpen](https://docs.thatopen.com) ecosystem. It centralizes BIM models, project documents, coordination data, and geospatial information for project teams.
 
-Features (in development order):
+### Feature Development Order
+
 1. **BIM Model Viewer** — IFC/Fragment 3D viewport (OBC engine)
 2. **Clash Detection Dashboard** — BCF/Navisworks import, severity tracking
 3. **Document Management Dashboard** — drawing lists, revisions, status
@@ -30,176 +28,61 @@ Features (in development order):
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology |
-|---|---|
-| UI Framework | React 19 |
-| Routing | `@tanstack/react-router` (file-based, type-safe) |
-| UI State | Zustand v5 |
-| Styling | Tailwind CSS v4 |
-| Icons | `lucide-react` |
-| Schema/Validation | `zod` v3 |
-| BIM Engine | `@thatopen/components` (OBC) + `@thatopen/ui` (BUI) — v3.4.x |
-| 3D Renderer | Three.js ^0.182 |
-| GIS | Cesium ^1.140 (deferred — add with GIS feature) |
-| Build Tool | Vite 7 + `@tanstack/router-plugin/vite` + `vite-tsconfig-paths` |
-| Backend | Firebase (Firestore, Auth, Storage) |
-| Language | TypeScript ^5.2 (`@/*` → `src/*` path alias) |
+| Layer             | Technology                                                       |
+| ----------------- | ---------------------------------------------------------------- |
+| UI Framework      | React 19                                                         |
+| Routing           | `@tanstack/react-router` (file-based, type-safe)                 |
+| UI State          | Zustand v5                                                       |
+| Server State      | TanStack Query (Firebase async ops)                              |
+| Styling           | Tailwind CSS v4                                                  |
+| Icons             | `lucide-react`                                                   |
+| Schema/Validation | `zod` v3                                                         |
+| BIM Engine        | `@thatopen/components` (OBC) + `@thatopen/ui` (BUI) — **v3.4.x** |
+| 3D Renderer       | Three.js ^0.182                                                  |
+| GIS               | Cesium ^1.140 _(deferred — add only with GIS feature)_           |
+| Build Tool        | Vite 7 + `@tanstack/router-plugin/vite` + `vite-tsconfig-paths`  |
+| Backend           | Firebase (Firestore, Auth, Storage)                              |
+| Language          | TypeScript ^5.2 (`@/*` → `src/*` path alias)                     |
+| Date Utilities    | `date-fns`                                                       |
+
+**Critical version constraint:** All ThatOpen libraries must stay on **v3.4.x**. Check peer deps (`three.js`, `web-ifc`) before any upgrade.
 
 ---
 
-## 🗺️ Project Structure
-
-```
-PIAS-BimWebApp/
-├── .agent/                        # Agent skills and ThatOpen docs
-├── public/                        # Static assets
-├── src/
-│   ├── bim-components/            # ThatOpen OBC — DO NOT MODIFY
-│   │   ├── ClashImport/
-│   │   ├── GisLayers/
-│   │   ├── MiniMap/
-│   │   ├── PropertyTable/
-│   │   ├── SpotCoordinate/
-│   │   ├── setup/
-│   │   └── index.ts
-│   │
-│   ├── classes/                   # Core TS classes — DO NOT MODIFY
-│   │   ├── CanvasCursorOverlay.ts
-│   │   ├── Project.ts
-│   │   └── ProjectsManager.ts
-│   │
-│   ├── firebase/                  # Firebase SDK — DO NOT MODIFY
-│   │   ├── auth.ts
-│   │   ├── dbReset.ts
-│   │   ├── index.ts
-│   │   └── types.ts
-│   │
-│   ├── context/                   # React contexts — DO NOT MODIFY
-│   │   └── AuthContext.tsx
-│   │
-│   ├── routes/                    # TanStack Router file-based routes
-│   │   ├── __root.tsx             # Root layout
-│   │   ├── index.tsx              # Redirect → /projects
-│   │   ├── projects.tsx           # Projects layout (AppShell)
-│   │   ├── projects/
-│   │   │   ├── index.tsx          # Project list
-│   │   │   └── $projectId/
-│   │   │       ├── index.tsx      # Redirect → model
-│   │   │       ├── model.tsx      # BIM viewer
-│   │   │       ├── clashes.tsx    # Clash detection
-│   │   │       ├── documents.tsx  # Documents
-│   │   │       └── settings.tsx   # Settings
-│   │   └── routeTree.gen.ts       # AUTO-GENERATED — never edit manually
-│   │
-│   ├── react-components/          # ALL React UI lives here
-│   │   ├── components/            # Atomic UI — no business logic
-│   │   │   ├── ui/
-│   │   │   │   ├── Button.tsx
-│   │   │   │   ├── Badge.tsx
-│   │   │   │   ├── Modal.tsx
-│   │   │   │   ├── Input.tsx
-│   │   │   │   ├── DataTable.tsx
-│   │   │   │   └── index.ts
-│   │   │   ├── layout/
-│   │   │   │   ├── AppShell.tsx
-│   │   │   │   ├── Sidebar.tsx
-│   │   │   │   ├── WorkspaceHeader.tsx
-│   │   │   │   └── index.ts
-│   │   │   └── bim/
-│   │   │       ├── ViewportWrapper.tsx  # ← BUI lives HERE ONLY
-│   │   │       └── index.ts
-│   │   │
-│   │   ├── features/              # Logic + UI, self-contained
-│   │   │   ├── clash-filter/
-│   │   │   │   ├── ClashFilter.tsx
-│   │   │   │   ├── useClashFilter.ts
-│   │   │   │   └── index.ts
-│   │   │   ├── clash-table/
-│   │   │   │   ├── ClashTable.tsx
-│   │   │   │   ├── useClashTable.ts
-│   │   │   │   └── index.ts
-│   │   │   ├── clash-dashboard/
-│   │   │   │   ├── ClashDashboard.tsx
-│   │   │   │   ├── useClashDashboard.ts
-│   │   │   │   └── index.ts
-│   │   │   ├── property-panel/
-│   │   │   │   ├── PropertyPanel.tsx
-│   │   │   │   ├── usePropertyPanel.ts
-│   │   │   │   └── index.ts
-│   │   │   └── project-card/
-│   │   │       ├── ProjectCard.tsx
-│   │   │       ├── useProjectCard.ts
-│   │   │       └── index.ts
-│   │   │
-│   │   ├── views/                 # Tab switching + LAYOUTS config
-│   │   │   ├── clash/
-│   │   │   │   ├── ClashView.tsx  # Dashboard / ClashModel / Issue List
-│   │   │   │   └── index.ts
-│   │   │   ├── models/
-│   │   │   │   ├── ModelsView.tsx # Viewer / CustomView / GIS
-│   │   │   │   └── index.ts
-│   │   │   ├── settings/
-│   │   │   │   ├── SettingsView.tsx
-│   │   │   │   └── index.ts
-│   │   │   └── projects/
-│   │   │       ├── ProjectsView.tsx
-│   │   │       └── index.ts
-│   │   │
-│   │   └── store/                 # Zustand stores
-│   │       ├── uiStore.ts         # modal, sidebar, activeLayout
-│   │       ├── projectStore.ts    # projects list, activeProject
-│   │       └── clashStore.ts      # clashes, filters, selected
-│   │
-│   ├── lib/
-│   │   ├── firebase.ts            # Firebase client init
-│   │   └── utils.ts               # cn(), formatDate(), helpers
-│   │
-│   ├── types/
-│   │   └── index.ts               # Domain types + Zod schemas
-│   │
-│   ├── globals.ts                 # Icon and tooltip global map
-│   ├── main.tsx                   # React + Router entry point
-│   └── style.css                  # Tailwind @theme {} only
-│
-├── index.html
-├── tsconfig.json
-├── vite.config.ts
-├── AGENT.md                       # ← this file
-└── DESIGN.md
-```
-
----
-
-## 📐 Architecture Rules — MUST FOLLOW
+## 📐 Architecture Rules
 
 ### Layer responsibilities
 
-| Layer | Knows about | Must NOT know about |
-|---|---|---|
-| `components/` | Props, Tailwind classes | Store, Firebase, BIM, routing |
-| `features/` | Store, Firebase, BIM props | Routing, other features |
-| `views/` | Features, components, store | Firebase directly |
-| `routes/` | Views, routing params | Logic, state, Firebase |
-| `store/` | Zustand state shape | React components |
+| Layer         | Knows about                 | Must NOT know about           |
+| ------------- | --------------------------- | ----------------------------- |
+| `components/` | Props, Tailwind classes     | Store, Firebase, BIM, routing |
+| `features/`   | Store, Firebase, BIM props  | Routing, other features       |
+| `views/`      | Features, components, store | Firebase directly             |
+| `routes/`     | Views, routing params       | Logic, state, Firebase        |
+| `store/`      | Zustand state shape         | React components              |
 
-### File placement — ask in order
+### File placement decision tree
 
 ```
-Has store hook / fetch / useEffect?     → features/
-Has LAYOUTS config + tab switching?     → views/
-Is it a route entry point?              → routes/
-None of the above?                      → components/
+New file needed?
+│
+├── Has store hook / data fetch / useEffect?     → features/
+├── Has LAYOUTS config + tab switching?          → views/
+├── Is it a route entry point?                   → routes/
+└── None of the above (pure UI, props only)      → components/
 ```
+
+When uncertain, ask: _"Does this component need to know where it is in the app?"_ If yes → `features/` or `views/`.
 
 ### Routes are composition only
 
 ```tsx
-// ✅ CORRECT
+// ✅ Correct — route is a thin wrapper
 export const Route = createFileRoute('/projects/$projectId/clashes')({
   component: () => <ClashView />,
 })
 
-// ❌ WRONG — no logic in routes
+// ❌ Wrong — no logic, state, or fetching in routes
 export const Route = createFileRoute('/projects/$projectId/clashes')({
   component: () => {
     const [data, setData] = useState([])
@@ -213,59 +96,77 @@ export const Route = createFileRoute('/projects/$projectId/clashes')({
 
 ```tsx
 const LAYOUTS = {
-  Dashboard:  { areas: `"dashboard filter" "table filter"`, cols: "1fr 20rem", rows: "auto 1fr" },
-  ClashModel: { areas: `"viewport viewport" "table filter"`, cols: "1fr 20rem", rows: "1fr 1fr" },
+  Dashboard: {
+    areas: `"dashboard filter" "table filter"`,
+    cols: "1fr 20rem",
+    rows: "auto 1fr",
+  },
+  ClashModel: {
+    areas: `"viewport viewport" "table filter"`,
+    cols: "1fr 20rem",
+    rows: "1fr 1fr",
+  },
   "Issue List": { areas: `"table"`, cols: "1fr", rows: "1fr" },
-} as const
+} as const;
 
-// active layout from store — never local useState
-const { clashLayout, setClashLayout } = useUIStore()
+// Active layout always comes from store — never local useState
+const { clashLayout, setClashLayout } = useUIStore();
 ```
 
-### BUI / Shadow DOM — hard boundary
+### State management
 
-- `<bim-*>` elements are **only allowed** inside `components/bim/ViewportWrapper.tsx`
-- BUI theming via CSS variables (`--bim-*`) mapped in `@theme {}` — never `color: #fff !important`
-- Do NOT use `<bim-panel>`, `<bim-panel-section>`, or `<bim-grid>`. Use the custom React layout components instead: [PanelSection.tsx](file:///c:/Users/PhacharakornMuangkae/AppData/Roaming/_GitHub%20Port/BIM-BOY/src/react-components/components/layout/PanelSection.tsx), [LeftPanel.tsx](file:///c:/Users/PhacharakornMuangkae/AppData/Roaming/_GitHub%20Port/BIM-BOY/src/react-components/components/layout/LeftPanel.tsx), and [RightPanel.tsx](file:///c:/Users/PhacharakornMuangkae/AppData/Roaming/_GitHub%20Port/BIM-BOY/src/react-components/components/layout/RightPanel.tsx).
-- All other UI is React + Tailwind — no exceptions
+| State type             | Where it lives                |
+| ---------------------- | ----------------------------- |
+| Modal open/close       | `uiStore`                     |
+| Sidebar collapse       | `uiStore`                     |
+| Active layout per view | `uiStore`                     |
+| Projects list          | `projectStore`                |
+| Active project         | `projectStore`                |
+| Clash data + filters   | `clashStore`                  |
+| URL-shareable state    | TanStack Router search params |
+| Firebase async ops     | TanStack Query                |
+| Auth state             | `AuthContext` only            |
 
-### Styling rules
+**Do not move `AuthContext` to Zustand.**
 
-- Tailwind utility classes only — no plain CSS class names
+---
+
+## 🎨 Styling Rules
+
+- **Tailwind utility classes only** — no plain CSS class names
 - No `!important` anywhere
 - No raw `oklch()` values outside `style.css` `@theme {}`
 - All custom base styles inside `@layer base {}` in `style.css` so utilities win
-- Conditional classes via `cn()`:
+- Conditional classes via `cn()` from `@/lib/utils`:
 
 ```ts
-// src/lib/utils.ts
-import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+  return twMerge(clsx(inputs));
 }
 ```
 
-### Store rules
+---
 
-- `uiStore` — modal open/close, sidebar collapse, activeLayout per view
-- `projectStore` — projects list, activeProject
-- `clashStore` — clashes data, filters, selected clash
-- `AuthContext` stays in `context/` — do NOT move auth to Zustand
+## ⚡ BUI / Shadow DOM Boundary
 
-### Imports
+This is a hard architectural boundary — no exceptions.
 
-- Always use `@/*` path alias — never deep relative paths
-- `import { cn } from '@/lib/utils'`
-- `import { useUIStore } from '@/react-components/store/uiStore'`
+- `<bim-*>` Web Components are **only allowed** inside `components/bim/ViewportWrapper.tsx`
+- **Forbidden everywhere else:** `<bim-panel>`, `<bim-panel-section>`, `<bim-grid>`
+- Use the custom React layout components instead: `LeftPanel.tsx`, `RightPanel.tsx`, `PanelSection.tsx`
+- BUI theming via CSS variables (`--bim-*`) mapped in `@theme {}` — never inline color overrides
+
+All other UI is **React + Tailwind only**.
 
 ---
 
 ## ⚠️ Routing — TanStack Router
 
-- **DO NOT use react-router-dom** — use `@tanstack/react-router` only
-- `routeTree.gen.ts` is auto-generated by Vite plugin — **never edit manually**
+- **Never use `react-router-dom`** — use `@tanstack/react-router` exclusively
+- `routeTree.gen.ts` is auto-generated — **never edit manually**
 - Use `createFileRoute()` in every route file
 - Navigate with `useNavigate()` or `<Link>` from `@tanstack/react-router`
 
@@ -273,32 +174,94 @@ export function cn(...inputs: ClassValue[]) {
 
 ## 🔬 BIM / ThatOpen Rules
 
-- Refer to `.agent/ThatOpen_docs/` before implementing any OBC feature
-- Always check `.agent/skills/` for BUI event binding and component rules
-- Implement `OBC.Disposable`, use `OBC.Disposer` for Three.js meshes
-- Unbind all DOM events on dispose
-- Keep all ThatOpen libraries on **v3.4.x** — never mix versions
-- Check peer deps (`three.js`, `web-ifc`) before upgrading
+1. Read `.agent/ThatOpen_docs/` before implementing any OBC feature
+2. Check `.agent/skills/` for BUI event binding and component patterns
+3. Implement `OBC.Disposable`, use `OBC.Disposer` for all Three.js meshes
+4. Unbind all DOM events on `dispose()`
+5. Never mix ThatOpen library versions — pin everything to **v3.4.x**
+6. Check peer deps (`three.js`, `web-ifc`) before any upgrade
+
+---
+
+## 📦 Imports
+
+Always use the `@/*` path alias — never deep relative paths.
+
+```ts
+// ✅
+import { cn } from "@/lib/utils";
+import { useUIStore } from "@/react-components/store/uiStore";
+
+// ❌
+import { cn } from "../../../lib/utils";
+```
+
+---
+
+## 🔒 Protected Files — Do Not Modify
+
+Changes to these require explicit developer approval:
+
+| Path                  | Reason                        |
+| --------------------- | ----------------------------- |
+| `src/bim-components/` | ThatOpen OBC components       |
+| `src/classes/`        | Core TS classes               |
+| `src/firebase/`       | Firebase SDK wrappers         |
+| `src/context/`        | Auth context                  |
+| `routeTree.gen.ts`    | Auto-generated by Vite plugin |
 
 ---
 
 ## 📋 Mandatory Workflow
 
-- **Plan before writing code**: Always plan before writing code. Do not write code immediately.
-- **Stress-Test & Alignment**: Use the [grill-with-docs](.agent/skills/grill-with-docs/SKILL.md) skill by default to align on a plan through an interactive interview, stress-test it against the domain model, and update documentation.
-- **Interactive Work & Execution**: When asking the user or generating code outputs, use the [caveman-code](.agent/skills/caveman-code/SKILL.md) skill to perform token-efficient coding tasks or run autonomous goal loops.
-- **Approval**: Do not write code until the user approves.
+Follow this strictly — in order:
+
+### 1. Read before implementing
+
+- For any OBC/BIM feature: read `.agent/ThatOpen_docs/` first
+- For BUI component patterns: read `.agent/skills/` first
+- Never assume API shapes from memory — OBC v3.4.x has breaking changes from v2
+
+### 2. Plan before coding
+
+Use the `grill-with-docs` skill (`.agent/skills/grill-with-docs/SKILL.md`) to:
+
+- Clarify requirements through a targeted interview
+- Stress-test the plan against the domain model
+- Confirm placement in the layer hierarchy
+
+**Do not write code until the developer explicitly approves the plan.**
+
+### 3. Execute with the caveman-code skill
+
+Use `.agent/skills/caveman-code/SKILL.md` for:
+
+- Token-efficient coding tasks
+- Autonomous goal loops
+- Iterative file edits
+
+### 4. When uncertain
+
+If a decision is ambiguous, ask **one targeted question** with concrete options. Example:
+
+> "Should the filter state live in `clashStore` (persisted across tab switches) or URL search params (shareable)? I'd go with URL params for shareability."
+
+Never make silent assumptions about state placement, data shape, or layer assignment.
 
 ---
 
-## 🚫 Never Do
+## 🚫 Hard Constraints
 
-- Add files directly to `react-components/` root — always use subfolders
-- Place `<bim-*>` anywhere outside `components/bim/ViewportWrapper.tsx`
-- Use `<bim-panel>`, `<bim-panel-section>`, or `<bim-grid>`
-- Add `useState` / `useEffect` / data fetching inside `routes/`
-- Write plain CSS class names — Tailwind only
-- Use `!important`
-- Create a `sections/` folder — intentionally removed
-- Edit `routeTree.gen.ts` manually
-- Modify `bim-components/`, `classes/`, `firebase/`, `context/`
+| Rule                                                  | Why                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------ |
+| No `<bim-*>` outside `ViewportWrapper.tsx`            | Shadow DOM isolation — styles and events bleed               |
+| No `<bim-panel>`, `<bim-panel-section>`, `<bim-grid>` | Replaced by custom React layout components                   |
+| No `useState` / `useEffect` / fetching in `routes/`   | Routes are composition only                                  |
+| No plain CSS class names — Tailwind only              | Consistency and purge safety                                 |
+| No `!important`                                       | Tailwind specificity model breaks                            |
+| No raw `oklch()` outside `style.css @theme {}`        | Token system integrity                                       |
+| No deep relative imports — use `@/*`                  | Refactor safety                                              |
+| No `react-router-dom`                                 | Stack is TanStack Router only                                |
+| No manual edits to `routeTree.gen.ts`                 | Will be overwritten by Vite plugin                           |
+| No auth state in Zustand                              | Auth lifecycle requires React context                        |
+| No files directly in `react-components/` root         | Always use `components/`, `features/`, `views/`, or `store/` |

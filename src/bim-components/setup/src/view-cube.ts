@@ -4,6 +4,46 @@ import * as OBC from "@thatopen/components";
 
 export const setupViewCube = (world: any, viewport: any, components?: OBC.Components) => {
   const viewCube = document.createElement("bim-view-cube") as any;
+
+  // Custom high-performance updateOrientation override to bypass LitElement's reactive style tag updates
+  const originalUpdate = viewCube.updateOrientation.bind(viewCube);
+  viewCube.updateOrientation = () => {
+    if (!viewCube.camera) return;
+
+    const root = viewCube.shadowRoot;
+    const cube = root?.querySelector(".cube") as HTMLElement;
+
+    if (!cube) {
+      // Fallback to the original LitElement update if the DOM is not ready
+      originalUpdate();
+      return;
+    }
+
+    viewCube._matrix.extractRotation(viewCube.camera.matrixWorldInverse);
+    const { elements: t } = viewCube._matrix;
+
+    const matrixStr = `matrix3d(
+      ${viewCube._epsilon(t[0])},
+      ${viewCube._epsilon(-t[1])},
+      ${viewCube._epsilon(t[2])},
+      ${viewCube._epsilon(t[3])},
+      ${viewCube._epsilon(t[4])},
+      ${viewCube._epsilon(-t[5])},
+      ${viewCube._epsilon(t[6])},
+      ${viewCube._epsilon(t[7])},
+      ${viewCube._epsilon(t[8])},
+      ${viewCube._epsilon(-t[9])},
+      ${viewCube._epsilon(t[10])},
+      ${viewCube._epsilon(t[11])},
+      ${viewCube._epsilon(t[12])},
+      ${viewCube._epsilon(-t[13])},
+      ${viewCube._epsilon(t[14])},
+      ${viewCube._epsilon(t[15])}
+    )`;
+
+    cube.style.transform = `translateZ(-300px) ${matrixStr}`;
+  };
+
   viewCube.camera = world.camera.three;
 
   // Set explicit labels for all faces
@@ -14,22 +54,33 @@ export const setupViewCube = (world: any, viewport: any, components?: OBC.Compon
   viewCube.leftText = "Left";
   viewCube.rightText = "Right";
 
-
-
   viewport.append(viewCube);
 
-  // Keep the view cube updated as the user orbits the camera
-  world.camera.controls.addEventListener("update", () => {
-    // Ensure the ViewCube tracks the currently active camera
-    // (fixes issue when switching between Perspective and Orthographic)
-    if (viewCube.camera !== world.camera.three) {
-      viewCube.camera = world.camera.three;
-    }
+  let disposed = false;
+  let updateRequested = false;
 
-    if (viewCube && typeof viewCube.updateOrientation === "function") {
-      viewCube.updateOrientation();
-    }
-  });
+  const updateOrientation = () => {
+    if (updateRequested) return;
+    updateRequested = true;
+
+    requestAnimationFrame(() => {
+      updateRequested = false;
+      if (disposed) return;
+
+      // Ensure the ViewCube tracks the currently active camera
+      // (fixes issue when switching between Perspective and Orthographic)
+      if (viewCube.camera !== world.camera.three) {
+        viewCube.camera = world.camera.three;
+      }
+
+      if (viewCube && typeof viewCube.updateOrientation === "function") {
+        viewCube.updateOrientation();
+      }
+    });
+  };
+
+  // Keep the view cube updated as the user orbits the camera
+  world.camera.controls.addEventListener("update", updateOrientation);
 
   const controls = world.camera.controls;
 
@@ -140,10 +191,13 @@ export const setupViewCube = (world: any, viewport: any, components?: OBC.Compon
   const augmentViewCube = async () => {
     let attempts = 0;
     while (attempts < 20) {
+      if (disposed) return;
       if (viewCube.shadowRoot && viewCube.shadowRoot.querySelector(".cube")) break;
       await new Promise(resolve => setTimeout(resolve, 100));
       attempts++;
     }
+
+    if (disposed) return;
 
     const root = viewCube.shadowRoot;
     if (!root) return;
@@ -252,5 +306,11 @@ export const setupViewCube = (world: any, viewport: any, components?: OBC.Compon
   };
 
   augmentViewCube();
+
+  return () => {
+    disposed = true;
+    world.camera.controls.removeEventListener("update", updateOrientation);
+    viewCube.remove();
+  };
 };
 

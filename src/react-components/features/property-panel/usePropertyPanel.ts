@@ -12,37 +12,34 @@ export interface PropGroup {
   rows: PropRow[];
 }
 
+function getPropertyValue(obj: any, keys: string[]): any {
+  if (!obj || typeof obj !== "object") return undefined;
+  for (const key of keys) {
+    const val = obj[key];
+    if (val !== undefined && val !== null) {
+      if (typeof val === "object" && "value" in val) {
+        return val.value;
+      }
+      return val;
+    }
+  }
+  return undefined;
+}
+
 function parseIfcData(ifcData: any, expressId: number, model: any): PropGroup[] {
   const groups: PropGroup[] = [];
 
   // 1. Item Group
-  const identityRows: PropRow[] = [];
-  
   const getName = () => {
-    for (const key of ["Name", "name", "NAME"]) {
-      const val = ifcData[key];
-      if (val !== undefined && val !== null) {
-        if (typeof val === "object" && "value" in val) return String(val.value);
-        if (typeof val === "string" || typeof val === "number") return String(val);
-      }
-    }
-    return "-";
+    return String(getPropertyValue(ifcData, ["Name", "name", "NAME"]) || "-");
   };
 
   const getGuid = () => {
-    for (const key of ["globalId", "GlobalId", "globalID", "GlobalID", "guid", "Guid", "GUID"]) {
-      const val = ifcData[key];
-      if (val !== undefined && val !== null) {
-        if (typeof val === "object" && "value" in val) return String(val.value);
-        if (typeof val === "string" || typeof val === "number") return String(val);
-      }
-    }
-    return "-";
+    return String(getPropertyValue(ifcData, ["_guid", "globalId", "GlobalId", "globalID", "GlobalID", "guid", "Guid", "GUID"]) || "-");
   };
 
   const getCategory = () => {
-    const rawType = ifcData.type || ifcData.Template?.value || "-";
-    return typeof rawType === "string" ? rawType : "-";
+    return String(getPropertyValue(ifcData, ["_category", "type", "Template"]) || "-");
   };
 
   const getSourceFile = () => {
@@ -50,12 +47,16 @@ function parseIfcData(ifcData: any, expressId: number, model: any): PropGroup[] 
     return nameToUse.replace(/\.(ifc|frag)$/i, "") || "-";
   };
 
+  const getLocalId = () => {
+    return String(getPropertyValue(ifcData, ["_localId", "localId", "localID", "expressId", "expressID"]) || expressId);
+  };
+
   // 1. Item Group
   const itemRows: PropRow[] = [];
   itemRows.push({ key: "Name", value: getName() });
   itemRows.push({ key: "Type", value: getCategory() });
   itemRows.push({ key: "Source File", value: getSourceFile() });
-  itemRows.push({ key: "Express ID", value: String(expressId) });
+  itemRows.push({ key: "Express ID", value: getLocalId() });
 
   groups.push({ title: "Item", rows: itemRows });
 
@@ -65,9 +66,98 @@ function parseIfcData(ifcData: any, expressId: number, model: any): PropGroup[] 
     rows: [{ key: "Value", value: getGuid() }],
   });
 
-  // 3. Attributes Group
+  // 3. Location Group (from ContainedInStructure)
+  if (ifcData.ContainedInStructure && Array.isArray(ifcData.ContainedInStructure)) {
+    const locationRows: PropRow[] = [];
+    for (const container of ifcData.ContainedInStructure) {
+      const type = String(getPropertyValue(container, ["_category", "type"]) || "");
+      const name = getPropertyValue(container, ["Name", "name", "NAME"]);
+      if (name) {
+        const upperType = type.toUpperCase();
+        if (upperType === "IFCBUILDINGSTOREY") {
+          locationRows.push({ key: "Level", value: String(name) });
+        } else if (upperType === "IFCSPACE") {
+          locationRows.push({ key: "Space", value: String(name) });
+        } else {
+          const cleanType = type.replace(/^IFC/i, "").toLowerCase();
+          const capitalizedType = cleanType ? (cleanType.charAt(0).toUpperCase() + cleanType.slice(1)) : "Structure";
+          locationRows.push({ key: capitalizedType, value: String(name) });
+        }
+      }
+    }
+    if (locationRows.length > 0) {
+      groups.push({ title: "Location", rows: locationRows });
+    }
+  }
+
+  // 4. Material Group (from HasAssociations)
+  if (ifcData.HasAssociations && Array.isArray(ifcData.HasAssociations)) {
+    const materialNames: string[] = [];
+    for (const assoc of ifcData.HasAssociations) {
+      const name = getPropertyValue(assoc, ["Name", "name", "NAME"]);
+      const type = String(getPropertyValue(assoc, ["_category", "type"]) || "").toUpperCase();
+
+      if (name && (type === "IFCMATERIAL" || type === "IFCMATERIALLAYER" || type === "IFCMATERIALPROFILE")) {
+        materialNames.push(String(name));
+      } else if (type === "IFCMATERIALLAYERSETUSAGE" || type === "IFCMATERIALLAYERSET" || type === "IFCMATERIALPROFILESETUSAGE" || type === "IFCMATERIALPROFILESET") {
+        if (name) {
+          materialNames.push(String(name));
+        }
+        if (assoc.ForLayerSet?.MaterialLayers && Array.isArray(assoc.ForLayerSet.MaterialLayers)) {
+          for (const layer of assoc.ForLayerSet.MaterialLayers) {
+            const layerMatName = getPropertyValue(layer.Material, ["Name", "name", "NAME"]);
+            if (layerMatName) {
+              materialNames.push(String(layerMatName));
+            }
+          }
+        }
+        if (assoc.MaterialLayers && Array.isArray(assoc.MaterialLayers)) {
+          for (const layer of assoc.MaterialLayers) {
+            const layerMatName = getPropertyValue(layer.Material, ["Name", "name", "NAME"]);
+            if (layerMatName) {
+              materialNames.push(String(layerMatName));
+            }
+          }
+        }
+      } else if (name) {
+        materialNames.push(String(name));
+      }
+    }
+    if (materialNames.length > 0) {
+      const uniqueMaterials = Array.from(new Set(materialNames));
+      groups.push({
+        title: "Material",
+        rows: uniqueMaterials.map((mat, idx) => ({
+          key: uniqueMaterials.length === 1 ? "Name" : `Material ${idx + 1}`,
+          value: mat,
+        })),
+      });
+    }
+  }
+
+  // 5. Parent Element Group (from Decomposes)
+  if (ifcData.Decomposes && Array.isArray(ifcData.Decomposes)) {
+    const parentRows: PropRow[] = [];
+    for (const parent of ifcData.Decomposes) {
+      const name = getPropertyValue(parent, ["Name", "name", "NAME"]);
+      const type = String(getPropertyValue(parent, ["_category", "type"]) || "");
+      if (name) {
+        const cleanType = type.replace(/^IFC/i, "").toLowerCase();
+        const capitalizedType = cleanType ? (cleanType.charAt(0).toUpperCase() + cleanType.slice(1)) : "Parent";
+        parentRows.push({ key: capitalizedType, value: String(name) });
+      }
+    }
+    if (parentRows.length > 0) {
+      groups.push({ title: "Parent Element", rows: parentRows });
+    }
+  }
+
+  // 6. Attributes Group
   const attributeRows: PropRow[] = [];
-  const excludedKeys = new Set(["name", "globalid", "localid", "category", "sourcefile", "type", "expressid"]);
+  const excludedKeys = new Set([
+    "name", "globalid", "localid", "category", "sourcefile", "type", "expressid",
+    "_guid", "_category", "_localid"
+  ]);
   
   for (const [key, value] of Object.entries(ifcData)) {
     if (key.startsWith("_") || Array.isArray(value) || typeof value !== "object") continue;
@@ -88,7 +178,7 @@ function parseIfcData(ifcData: any, expressId: number, model: any): PropGroup[] 
     groups.push({ title: "Attributes", rows: attributeRows });
   }
 
-  // 4. Property Sets (Psets)
+  // 7. Property Sets (Psets)
   if (ifcData.IsDefinedBy && Array.isArray(ifcData.IsDefinedBy)) {
     for (const pset of ifcData.IsDefinedBy) {
       const psetName = pset.Name?.value;
@@ -175,6 +265,13 @@ export function usePropertyPanel() {
           attributesDefault: true,
           relations: {
             IsDefinedBy: { attributes: true, relations: true },
+            ContainedInStructure: { attributes: true, relations: true },
+            HasAssociations: { attributes: true, relations: true },
+            Decomposes: { attributes: true, relations: true },
+            DefinesOccurrence: { attributes: false, relations: false },
+            ContainsElements: { attributes: false, relations: false },
+            AssociatedTo: { attributes: false, relations: false },
+            IsDecomposedBy: { attributes: false, relations: false },
           },
         });
 

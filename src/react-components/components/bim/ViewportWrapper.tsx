@@ -3,6 +3,7 @@ import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
 import { setupComponents } from "@/bim-components";
+import { setupViewCube } from "@/bim-components/setup/src/view-cube";
 import { useBimStore } from "@/react-components/store/bimStore";
 
 interface ViewportWrapperProps {
@@ -36,6 +37,7 @@ export function ViewportWrapper({
     let activeComponents: any = null;
     let onHighlightCallback: any = null;
     let onClearCallback: any = null;
+    let cleanupViewCube: (() => void) | null = null;
 
     setupComponents().then(({ components, viewport }) => {
       if (isCancelled) {
@@ -47,6 +49,10 @@ export function ViewportWrapper({
       // Extract active world
       const worlds = components.get(OBC.Worlds);
       const world = worlds.list.values().next().value || null;
+
+      if (world) {
+        cleanupViewCube = setupViewCube(world, viewport, components);
+      }
 
       // Sync active state to Zustand store
       useBimStore.getState().setBimData(components, world, viewport);
@@ -113,6 +119,10 @@ export function ViewportWrapper({
     return () => {
       isCancelled = true;
       useBimStore.getState().clearBimData();
+      
+      if (cleanupViewCube) {
+        cleanupViewCube();
+      }
       
       if (activeComponents) {
         try {
