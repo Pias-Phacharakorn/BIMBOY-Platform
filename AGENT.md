@@ -283,14 +283,16 @@ export function cn(...inputs: ClassValue[]) {
 
 ## 📋 Mandatory Workflow
 
-For **every** prompt, before writing any code:
-
-1. **The Problem** — what is being asked
-2. **The Solution** — technical approach
-3. **Open Questions** — up to 3 clarifying questions if needed
-4. **Verification Plan** — how to confirm it works
-
-Wait for approval before writing code.
+Plan before writing code
+A very important best practice is: do not write code immediately. Have Claude analyze and plan first.
+.
+🔹 Example
+▪️ Analyze this requirement first.
+▪️ Summarize the architecture.
+▪️ Explain the impact.
+▪️ Then propose the development plan.
+▪️ Do not write code until I approve.
+This approach reduces code rewrites and provides a clear big picture before starting.
 
 ---
 
