@@ -226,6 +226,7 @@ const { clashLayout, setClashLayout } = useUIStore()
 
 - `<bim-*>` elements are **only allowed** inside `components/bim/ViewportWrapper.tsx`
 - BUI theming via CSS variables (`--bim-*`) mapped in `@theme {}` — never `color: #fff !important`
+- Do NOT use `<bim-panel>`, `<bim-panel-section>`, or `<bim-grid>`. Use the custom React layout components instead: [PanelSection.tsx](file:///c:/Users/PhacharakornMuangkae/AppData/Roaming/_GitHub%20Port/BIM-BOY/src/react-components/components/layout/PanelSection.tsx), [LeftPanel.tsx](file:///c:/Users/PhacharakornMuangkae/AppData/Roaming/_GitHub%20Port/BIM-BOY/src/react-components/components/layout/LeftPanel.tsx), and [RightPanel.tsx](file:///c:/Users/PhacharakornMuangkae/AppData/Roaming/_GitHub%20Port/BIM-BOY/src/react-components/components/layout/RightPanel.tsx).
 - All other UI is React + Tailwind — no exceptions
 
 ### Styling rules
@@ -294,6 +295,7 @@ export function cn(...inputs: ClassValue[]) {
 
 - Add files directly to `react-components/` root — always use subfolders
 - Place `<bim-*>` anywhere outside `components/bim/ViewportWrapper.tsx`
+- Use `<bim-panel>`, `<bim-panel-section>`, or `<bim-grid>`
 - Add `useState` / `useEffect` / data fetching inside `routes/`
 - Write plain CSS class names — Tailwind only
 - Use `!important`

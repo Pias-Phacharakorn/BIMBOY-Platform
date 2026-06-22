@@ -22,31 +22,31 @@ export function LeftPanel({
         isOpen ? "w-[320px]" : "w-[48px]"
       } ${className}`}
     >
-      {/* Header Container (Standard 58px Height) */}
-      <div className={`flex items-center h-[58px] border-b border-border bg-bg px-3.5 ${isOpen ? "justify-end" : "justify-center"}`}>
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center justify-center h-8 w-8 rounded hover:bg-surface-alt text-muted hover:text-fg transition-colors cursor-pointer"
-          type="button"
-          title={isOpen ? "Collapse Panel" : "Expand Panel"}
-        >
-          <Icon name={isOpen ? "PANEL_LEFT_CLOSE" : "PANEL_LEFT_OPEN"} size={20} />
-        </button>
-      </div>
-
       {/* Content Area */}
       {isOpen ? (
-        <div className="flex-1 overflow-y-auto p-3">
-          <div className="w-full h-full flex flex-col gap-3">
+        <div className="flex-1 overflow-y-auto">
+          <div className="w-full h-full flex flex-col">
             {children}
           </div>
         </div>
       ) : (
         /* Collapsed Icon Strip Indicator */
-        <div className="flex flex-col items-center gap-4 py-4 text-muted">
+        <div className="flex-1 flex flex-col items-center gap-4 py-4 text-muted overflow-y-auto">
           <Icon name={icon} size={20} className="opacity-70 hover:opacity-100 transition-opacity" />
         </div>
       )}
+
+      {/* Footer Container (Standard 48px Height containing the collapse button) */}
+      <div className={`flex items-center h-[48px] border-t border-border bg-bg px-3.5 flex-none ${isOpen ? "justify-end" : "justify-center"}`}>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center justify-center h-7 w-7 rounded hover:bg-surface-alt text-muted hover:text-fg transition-colors cursor-pointer"
+          type="button"
+          title={isOpen ? "Collapse Panel" : "Expand Panel"}
+        >
+          <Icon name={isOpen ? "PANEL_LEFT_CLOSE" : "PANEL_LEFT_OPEN"} size={16} />
+        </button>
+      </div>
     </div>
   );
 }

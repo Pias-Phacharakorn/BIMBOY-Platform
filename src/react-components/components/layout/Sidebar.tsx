@@ -69,13 +69,23 @@ export function Sidebar({ project, collapsed, onToggleCollapsed }: SidebarProps)
           </Link>
         ))}
 
-        <div className="mt-auto pt-2 border-t border-border">
-          <button className={`${baseNavItemClass} w-full bg-transparent cursor-pointer text-left`} type="button" onClick={onToggleCollapsed}>
-            <Icon name={collapsed ? "RIGHT" : "LEFT"} />
-            <span className={collapsed ? "hidden" : ""}>Collapse Sidebar</span>
-          </button>
-        </div>
       </nav>
+
+      {/* Sidebar Footer (Standard 48px Height containing the collapse button) */}
+      <div
+        className={`flex items-center h-[48px] border-t border-border bg-bg flex-none transition-all duration-180 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
+          collapsed ? "justify-center px-0" : "px-[14px]"
+        }`}
+      >
+        <button
+          className={`${baseNavItemClass} w-full bg-transparent cursor-pointer text-left`}
+          type="button"
+          onClick={onToggleCollapsed}
+        >
+          <Icon name={collapsed ? "RIGHT" : "LEFT"} />
+          <span className={collapsed ? "hidden" : ""}>Collapse Sidebar</span>
+        </button>
+      </div>
     </aside>
   );
 }

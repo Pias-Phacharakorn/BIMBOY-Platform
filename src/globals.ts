@@ -45,4 +45,5 @@ export const appIcons = {
   PANEL_LEFT_OPEN: "lucide:panel-left-open",
   PANEL_RIGHT_CLOSE: "lucide:panel-right-close",
   PANEL_RIGHT_OPEN: "lucide:panel-right-open",
+  SEARCH: "mdi:magnify",
 };

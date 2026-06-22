@@ -26,6 +26,35 @@
 
 :root {
   color-scheme: dark;
+
+  /* Map ThatOpen BUI variables to match the DESIGN.md visual system */
+  --bim-ui_main-base: var(--color-accent);
+  --bim-ui_accent-base: var(--color-accent);
+  --bim-ui_main-contrast: var(--color-fg);
+  --bim-ui_accent-contrast: var(--color-fg);
+  --bim-ui_bg-base: var(--color-surface);
+  --bim-ui_bg-contrast-20: var(--color-surface-alt);
+  --bim-ui_bg-contrast-40: var(--color-surface-raised);
+  --bim-ui_bg-contrast-60: var(--color-border);
+  --bim-ui_bg-contrast-80: var(--color-muted);
+  --bim-ui_bg-contrast-100: var(--color-fg);
+  --bim-ui_text: var(--color-fg);
+  --bim-ui_accent: var(--color-accent);
+  --bim-ui_border: var(--color-border);
+  --bim-label_color: var(--color-fg);
+  --bim-icon_color: var(--color-fg);
+  --bim-font-family: var(--font-ui);
+  --bim-ui_size-base: 11px;
+  --bim-ui_size-lg: 14px;
+  --bim-ui_size-16xl: 0.0rem;
+
+  /* Target component color overrides */
+  --bim-label--c: var(--color-fg);
+  --bim-icon--c: var(--color-fg);
+  --bim-table_header--c: var(--color-fg);
+  --bim-panel--c: var(--color-fg);
+  --bim-button--c: var(--color-fg);
+  --bim-input--c: var(--color-fg);
 }
 
 @layer base {

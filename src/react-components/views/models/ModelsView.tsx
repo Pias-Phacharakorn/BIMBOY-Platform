@@ -1,12 +1,14 @@
+import { useState } from "react";
 import { useParams } from "@tanstack/react-router";
-import { AppShell, WorkspaceHeader, RightPanel, PanelSection } from "@/react-components/components/layout";
+import { AppShell, WorkspaceHeader, LeftPanel, RightPanel, PanelSection } from "@/react-components/components/layout";
 import { Icon } from "@/react-components/components/ui";
-import { ViewportWrapper, ViewportSettings, ViewportToolbar } from "@/react-components/components/bim";
-import { getProjectById, modelFiles, workspaceTabs } from "@/static-data";
+import { ViewportWrapper, ViewportSettings, ViewportToolbar, ModelsList } from "@/react-components/components/bim";
+import { getProjectById, workspaceTabs } from "@/static-data";
 
 export function ModelsView() {
   const { projectId } = useParams({ strict: false });
   const project = getProjectById(projectId);
+  const [modelSearchQuery, setModelSearchQuery] = useState("");
 
   return (
     <AppShell project={project}>
@@ -28,23 +30,19 @@ export function ModelsView() {
         }
       />
       <div className="flex flex-row flex-1 min-h-0 w-full">
+        <LeftPanel icon="MODEL" defaultOpen={true}>
+          <PanelSection label="Models List" icon="MODEL" defaultOpen={true} onSearch={setModelSearchQuery}>
+            <ModelsList searchQuery={modelSearchQuery} />
+          </PanelSection>
+        </LeftPanel>
+
         <section className="flex-1 h-full min-w-0 relative border border-border overflow-hidden bg-[#0d0e12]">
           <ViewportWrapper />
           <ViewportSettings />
           <ViewportToolbar />
         </section>
 
-        <RightPanel icon="MODEL" defaultOpen={true}>
-          <PanelSection label="Models List" icon="MODEL" defaultOpen={true}>
-            <div className="flex flex-col gap-1">
-              {modelFiles.map((file) => (
-                <div className="flex items-center gap-2 py-1.5 px-2 rounded-radius-sm text-fg cursor-pointer text-[13px] hover:bg-surface-alt hover:text-accent-2 transition-all duration-120" key={file.name}>
-                  <Icon name={file.loaded ? "CHECK" : "MODEL"} size={14} />
-                  {file.name}
-                </div>
-              ))}
-            </div>
-          </PanelSection>
+        <RightPanel icon="SETTINGS" defaultOpen={true}>
           <PanelSection label="Item Properties" icon="SETTINGS" defaultOpen={true}>
             <div className="p-3 bg-bg/40 rounded-radius border border-border min-h-[120px]">
               <p className="text-muted text-xs leading-relaxed">Select an item in the viewport to view detailed BIM metadata.</p>
