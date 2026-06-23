@@ -102,8 +102,8 @@ export function LeftPanel({
         <div className="absolute right-0 top-0 w-[2px] h-full bg-accent opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
       </div>
 
-      {/* Footer Container (Standard 48px Height containing the collapse button) */}
-      <div className={`flex items-center h-[48px] border-t border-border bg-bg px-3.5 flex-none ${isOpen ? "justify-end" : "justify-center"}`}>
+      {/* Footer Container (Standard 40px Height containing the collapse button) */}
+      <div className={`flex items-center h-[40px] border-t border-border bg-bg px-3.5 flex-none ${isOpen ? "justify-end" : "justify-center"}`}>
         <button
           onClick={() => {
             if (!isOpen) {

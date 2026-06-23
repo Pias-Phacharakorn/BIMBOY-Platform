@@ -35,16 +35,16 @@ export function Sidebar({ project, collapsed, onToggleCollapsed }: SidebarProps)
   return (
     <aside
       className={`relative z-10 flex flex-col flex-none bg-[linear-gradient(180deg,oklch(13.5%_0.016_255),oklch(10.8%_0.014_255))] border-r border-border transition-[width] duration-180 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
-        collapsed ? "w-[68px]" : "w-[248px]"
+        collapsed ? "w-[52px]" : "w-[225px]"
       }`}
     >
       {/* Sidebar right border glow overlay */}
       <div className="absolute top-0 -right-[1px] w-[1px] h-full bg-[linear-gradient(180deg,transparent,oklch(66%_0.17_252/0.4),transparent)] opacity-45 pointer-events-none" />
 
-      <div className={`flex items-center h-[58px] border-b border-border ${collapsed ? "justify-center px-0" : "px-[18px]"}`}>
+      <div className={`flex items-center h-[58px] ${collapsed ? "justify-center px-0" : "px-[18px]"}`}>
         <Link className="flex items-center gap-2 text-fg font-semibold no-underline" to="/projects">
           <div className="w-5 h-5 rounded-[var(--radius-radius-sm)] bg-[linear-gradient(135deg,var(--color-accent),var(--color-accent-2))] shadow-[0_0_0_1px_oklch(88%_0.06_230/0.18),0_10px_26px_oklch(66%_0.17_252/0.18)]" />
-          <span className={collapsed ? "hidden" : ""}>LearnThatOpen</span>
+          <span className={collapsed ? "hidden" : ""}>BIM BOY</span>
         </Link>
       </div>
 
@@ -73,7 +73,7 @@ export function Sidebar({ project, collapsed, onToggleCollapsed }: SidebarProps)
 
       {/* Sidebar Footer (Standard 48px Height containing the collapse button) */}
       <div
-        className={`flex items-center h-[48px] border-t border-border bg-bg flex-none transition-all duration-180 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
+        className={`flex items-center h-[48px] bg-bg flex-none transition-all duration-180 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
           collapsed ? "justify-center px-0" : "px-[14px]"
         }`}
       >
