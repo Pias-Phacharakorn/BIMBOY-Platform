@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as OBC from "@thatopen/components";
 import { Ion } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
@@ -98,4 +97,3 @@ export class GisLayers extends OBC.Component implements OBC.Disposable {
     this.onDisposed.reset();
   }
 }
-

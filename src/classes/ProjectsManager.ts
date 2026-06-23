@@ -5,6 +5,18 @@ export class ProjectsManager {
   OnProjectCreated = (project: Project) => {}
   OnProjectDeleted = (id: string) => {}
 
+  private _onProjectsLoadedListeners = new Set<(projects: Project[]) => void>()
+
+  onProjectsLoaded(cb: (projects: Project[]) => void) {
+    this._onProjectsLoadedListeners.add(cb)
+    if (this.list.length > 0) {
+      cb(this.list)
+    }
+    return () => {
+      this._onProjectsLoadedListeners.delete(cb)
+    }
+  }
+
   filterProjects (value: string){
       const filteredProject = this.list.filter((project) => {
         return project.projectName.includes(value)

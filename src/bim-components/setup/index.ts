@@ -19,6 +19,7 @@ import {
 import { PropertyTable } from "../PropertyTable";
 import { SpotCoordinate } from "../SpotCoordinate";
 import { CursurSurface } from "../CursurSurface";
+import { GisLayers } from "../GisLayers";
 
 export const setupComponents = async () => {
   BUI.Manager.init();
@@ -44,6 +45,7 @@ export const setupComponents = async () => {
   
   new PropertyTable(components);
   new SpotCoordinate(components);
+  new GisLayers(components);
 
 
   components.init()

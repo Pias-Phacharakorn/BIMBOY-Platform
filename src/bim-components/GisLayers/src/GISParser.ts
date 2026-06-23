@@ -38,12 +38,12 @@ export class GISParser {
         };
       }
     }
-    // Default zero coordinates if project or location configuration is missing
+    // Default London coordinates if project or location configuration is missing
     return {
-      latitude: 0,
-      longitude: 0,
-      rotation: 0,
-      height: 0,
+      latitude: 51.5005,
+      longitude: -0.127,
+      rotation: 93,
+      height: 61.3,
     };
   }
 }

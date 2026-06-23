@@ -116,4 +116,3 @@ export class GisLayer2d {
     (this._marker.position as any) = value;
   }
 }
-
