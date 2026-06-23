@@ -6,7 +6,7 @@ interface PropertyPanelProps {
   searchQuery?: string;
 }
 
-export function PropertyPanel() {
+export function PropertyPanel({ fullHeight = false }: { fullHeight?: boolean }) {
   const {
     isLoading,
     error,
@@ -33,7 +33,7 @@ export function PropertyPanel() {
 
   if (totalSelectedCount === 0) {
     return (
-      <div className="mx-4 my-4 flex flex-col items-center justify-center min-h-[140px] text-center p-4 bg-surface/30 rounded-radius border border-border">
+      <div className={`mx-4 my-4 flex flex-col items-center justify-center text-center p-4 bg-surface/30 rounded-radius border border-border ${fullHeight ? "flex-1 min-h-[140px]" : "min-h-[140px]"}`}>
         <p className="text-muted text-xs leading-relaxed max-w-[200px]">
           Select an item in the viewport to view detailed BIM metadata.
         </p>
@@ -43,8 +43,8 @@ export function PropertyPanel() {
 
   if (isLoading) {
     return (
-      <div className="p-4 w-full">
-        <PropertyPanelSkeleton />
+      <div className={`p-4 w-full ${fullHeight ? "h-full" : ""}`}>
+        <PropertyPanelSkeleton fullHeight={fullHeight} />
       </div>
     );
   }
@@ -74,7 +74,7 @@ export function PropertyPanel() {
     : propertyGroups;
 
   return (
-    <div className="flex flex-col text-xs w-full max-h-[calc(100vh-170px)] min-h-0 bg-surface/10">
+    <div className={`flex flex-col text-xs w-full min-h-0 bg-surface/10 ${fullHeight ? "h-full" : "max-h-[calc(100vh-170px)]"}`}>
       
       {/* Navisworks Style Selection Pagination Toolbar */}
       <div className="flex items-center gap-3 py-1.5 px-4 bg-surface-alt/30 border-b border-border text-xs shrink-0 select-none justify-start">
@@ -212,9 +212,9 @@ export function PropertyPanel() {
   );
 }
 
-function PropertyPanelSkeleton() {
+function PropertyPanelSkeleton({ fullHeight = false }: { fullHeight?: boolean }) {
   return (
-    <div className="border border-border/30 rounded-radius overflow-hidden bg-surface/10 animate-pulse w-full flex flex-col">
+    <div className={`border border-border/30 rounded-radius overflow-hidden bg-surface/10 animate-pulse w-full flex flex-col ${fullHeight ? "h-full" : ""}`}>
       <div className="h-8 bg-surface-alt/50 px-3 py-2 flex items-center justify-between border-b border-border/20">
         <div className="h-3 bg-surface-alt rounded w-1/4" />
         <div className="h-3 bg-surface-alt rounded w-1/3" />

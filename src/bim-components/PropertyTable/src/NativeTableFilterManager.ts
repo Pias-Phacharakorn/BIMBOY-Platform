@@ -21,7 +21,7 @@ export class NativeTableFilterManager {
     }
 
     const dropdown = document.createElement("div");
-    dropdown.className = "prop-table-filter-dropdown";
+    dropdown.className = "fixed bg-surface-raised border border-accent rounded-radius shadow-[0_4px_12px_rgba(0,0,0,0.4)] z-[10001] w-[220px] flex flex-col max-h-[300px] overflow-hidden";
     dropdown.dataset.column = column;
     this.activeDropdown = dropdown;
 
@@ -38,11 +38,11 @@ export class NativeTableFilterManager {
     const searchBox = document.createElement("input");
     searchBox.type = "text";
     searchBox.placeholder = "Search values...";
-    searchBox.className = "prop-table-filter-search";
+    searchBox.className = "p-[8px_10px] bg-transparent border-none border-b border-border text-fg text-xs outline-none font-ui h-8 shrink-0";
     dropdown.appendChild(searchBox);
 
     const list = document.createElement("div");
-    list.className = "prop-table-filter-list";
+    list.className = "overflow-y-auto flex-1 divide-y divide-border/10";
 
     const renderList = (filterText = "") => {
       list.innerHTML = "";
@@ -53,10 +53,11 @@ export class NativeTableFilterManager {
       // "Select All" row
       if (filtered.length > 0) {
         const allItem = document.createElement("div");
-        allItem.className = "prop-table-filter-item select-all";
+        allItem.className = "flex items-center gap-2 p-[6px_10px] cursor-pointer text-xs text-fg hover:bg-surface-alt border-b border-border italic text-muted shrink-0";
 
         const allChk = document.createElement("input");
         allChk.type = "checkbox";
+        allChk.className = "accent-accent shrink-0";
         allChk.checked = filtered.every(v => activeFilters.has(v));
 
         const allLabel = document.createElement("span");
@@ -82,10 +83,11 @@ export class NativeTableFilterManager {
       // Individual value rows
       filtered.forEach(val => {
         const item = document.createElement("div");
-        item.className = "prop-table-filter-item";
+        item.className = "flex items-center gap-2 p-[6px_10px] cursor-pointer text-xs text-fg hover:bg-surface-alt";
 
         const chk = document.createElement("input");
         chk.type = "checkbox";
+        chk.className = "accent-accent shrink-0";
         chk.checked = activeFilters.has(val);
 
         const lbl = document.createElement("span");
@@ -113,12 +115,11 @@ export class NativeTableFilterManager {
 
     // "Clear" action button
     const actions = document.createElement("div");
-    actions.className = "prop-table-filter-actions";
+    actions.className = "p-[6px_10px] border-t border-border flex justify-end shrink-0";
 
     const clearBtn = document.createElement("button");
     clearBtn.textContent = "Clear filter";
-    clearBtn.style.cssText =
-      "background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:4px; padding:3px 8px; font-size:11px; cursor:pointer;";
+    clearBtn.className = "bg-transparent border border-border text-muted hover:text-fg hover:border-border-strong rounded px-2.5 py-0.8 text-[11px] cursor-pointer transition-colors duration-120";
     clearBtn.onclick = () => {
       this.context.columnFilters.delete(column);
       this._applyAndRefresh();

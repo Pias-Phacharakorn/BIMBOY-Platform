@@ -2,21 +2,24 @@ import { useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { AppShell, WorkspaceHeader, LeftPanel, RightPanel, PanelSection } from "@/react-components/components/layout";
 import { Icon } from "@/react-components/components/ui";
-import { ViewportWrapper, ViewportSettings, ViewportToolbar, ModelsList } from "@/react-components/components/bim";
+import { ViewportWrapper, ViewportRightToolbar, ViewportToolbar, ModelsList } from "@/react-components/components/bim";
 import { PropertyPanel } from "@/react-components/features/property-panel";
+import { PropertyTable } from "@/react-components/features/property-table/PropertyTable";
 import { getProjectById, workspaceTabs } from "@/static-data";
 
 export function ModelsView() {
   const { projectId } = useParams({ strict: false });
   const project = getProjectById(projectId);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("Models");
 
   return (
     <AppShell project={project}>
       <WorkspaceHeader
         title="BIM Model"
         tabs={workspaceTabs}
-        activeTab="Models"
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
         actions={
           <>
             <div className="flex items-center gap-2 p-[4px_12px] border border-border bg-surface/94 rounded-[20px] cursor-pointer text-xs font-medium text-fg hover:bg-surface-alt transition-colors duration-120">
@@ -30,20 +33,40 @@ export function ModelsView() {
           </>
         }
       />
-      <div className="flex flex-row flex-1 min-h-0 w-full">
-        <LeftPanel icon="MODEL" defaultOpen={true}>
+      <div
+        className={activeTab === "Models" ? "flex flex-row flex-1 min-h-0 w-full" : "grid flex-1 min-h-0 w-full"}
+        style={activeTab === "Queries" ? {
+          gridTemplateColumns: "1fr 320px",
+          gridTemplateRows: "1fr 0.8fr",
+          gridTemplateAreas: '"viewport propertypanel" "propertytable propertytable"',
+        } : undefined}
+      >
+        <LeftPanel
+          icon="MODEL"
+          defaultOpen={true}
+          className={activeTab === "Models" ? "" : "hidden"}
+        >
           <PanelSection label="Models List" icon="MODEL" defaultOpen={true} onSearch={setModelSearchQuery}>
             <ModelsList searchQuery={modelSearchQuery} />
           </PanelSection>
         </LeftPanel>
 
-        <section className="flex-1 h-full min-w-0 relative border border-border overflow-hidden bg-[#0d0e12]">
+        <section
+          className={`h-full min-w-0 relative border border-border overflow-hidden bg-[#0d0e12] ${
+            activeTab === "Models" ? "flex-1" : ""
+          }`}
+          style={activeTab === "Queries" ? { gridArea: "viewport" } : undefined}
+        >
           <ViewportWrapper />
-          <ViewportSettings />
+          <ViewportRightToolbar />
           <ViewportToolbar />
         </section>
 
-        <RightPanel icon="SETTINGS" defaultOpen={true}>
+        <RightPanel
+          icon="SETTINGS"
+          defaultOpen={true}
+          className={activeTab === "Models" ? "" : "hidden"}
+        >
           <PanelSection
             label="Item Properties"
             icon="SETTINGS"
@@ -53,7 +76,26 @@ export function ModelsView() {
             <PropertyPanel />
           </PanelSection>
         </RightPanel>
+
+        {activeTab === "Queries" && (
+          <div style={{ gridArea: "propertypanel" }} className="border-l border-border h-full flex flex-col min-h-0 bg-surface">
+            <PanelSection
+              label="Item Properties"
+              icon="SETTINGS"
+              defaultOpen={true}
+              noPadding={true}
+              fullHeight={true}
+            >
+              <PropertyPanel fullHeight={true} />
+            </PanelSection>
+          </div>
+        )}
+
+        <div style={{ gridArea: "propertytable" }} className={activeTab === "Queries" ? "w-full h-full min-h-0 border-t border-border" : "hidden"}>
+          <PropertyTable />
+        </div>
       </div>
     </AppShell>
   );
 }
+

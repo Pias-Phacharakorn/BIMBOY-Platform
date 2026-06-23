@@ -1,4 +1,4 @@
 export * from './ViewportWrapper'
-export * from './ViewportSettings'
+export * from './ViewportRightToolbar'
 export * from './ViewportToolbar'
 export * from './ModelsList'

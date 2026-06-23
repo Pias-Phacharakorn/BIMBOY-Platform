@@ -289,7 +289,7 @@ export class TableDataManager {
     };
 
     const getGuid = () => {
-      for (const key of ["globalId", "GlobalId", "globalID", "GlobalID", "guid", "Guid", "GUID"]) {
+      for (const key of ["_guid", "globalId", "GlobalId", "globalID", "GlobalID", "guid", "Guid", "GUID"]) {
         const val = ifcData[key];
         if (val !== undefined && val !== null) {
           if (typeof val === "object" && "value" in val) return String(val.value);

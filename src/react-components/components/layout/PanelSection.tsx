@@ -10,6 +10,7 @@ interface PanelSectionProps {
   className?: string;
   onSearch?: (query: string) => void;
   noPadding?: boolean;
+  fullHeight?: boolean;
 }
 
 export function PanelSection({
@@ -21,6 +22,7 @@ export function PanelSection({
   className = "",
   onSearch,
   noPadding = false,
+  fullHeight = false,
 }: PanelSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [isSearching, setIsSearching] = useState(false);
@@ -50,7 +52,7 @@ export function PanelSection({
   };
 
   return (
-    <div className={`flex flex-col border-b border-border last:border-b-0 ${className}`}>
+    <div className={`flex flex-col border-b border-border last:border-b-0 ${fullHeight ? "flex-1 min-h-0" : ""} ${className}`}>
       {/* Section Header */}
       <div
         onClick={() => !isSearching && setIsOpen(!isOpen)}
@@ -111,7 +113,9 @@ export function PanelSection({
       {/* Section Content */}
       <div
         className={`transition-all duration-200 ease-in-out overflow-hidden ${
-          isOpen ? `max-h-[1000px] opacity-100 ${noPadding ? "" : "p-4"}` : "max-h-0 opacity-0"
+          isOpen
+            ? `${fullHeight ? "flex-1 flex flex-col min-h-0" : "max-h-[1000px]"} opacity-100 ${noPadding ? "" : "p-4"}`
+            : "max-h-0 opacity-0"
         }`}
       >
         {children}

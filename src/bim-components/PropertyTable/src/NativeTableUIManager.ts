@@ -51,11 +51,11 @@ export class NativeTableUIManager {
 
     // Scrollable table wrapper — overflow:auto gives BOTH scrollbars
     this.tableWrapper = document.createElement("div");
-    this.tableWrapper.className = "prop-table-wrapper";
+    this.tableWrapper.className = "flex-1 overflow-auto scroll-smooth min-h-0 relative bg-surface";
 
     // The actual <table>
     this.tableElement = document.createElement("table");
-    this.tableElement.className = "prop-table";
+    this.tableElement.className = "w-max min-w-full border-collapse text-xs text-fg";
 
     this.tableHeader = document.createElement("thead");
     this.tableBody = document.createElement("tbody");
@@ -66,7 +66,7 @@ export class NativeTableUIManager {
 
     // Loading overlay (absolute over the wrapper)
     this.loadingOverlay = document.createElement("div");
-    this.loadingOverlay.className = "prop-table-loading-overlay";
+    this.loadingOverlay.className = "absolute inset-0 bg-bg/80 flex items-center justify-center z-10";
 
     const loadingContent = document.createElement("div");
     loadingContent.style.cssText = "display:flex; flex-direction:column; align-items:center; gap:10px;";
@@ -76,10 +76,10 @@ export class NativeTableUIManager {
     this.loadingText.textContent = "Loading properties...";
 
     const progressContainer = document.createElement("div");
-    progressContainer.className = "prop-table-progress-container";
+    progressContainer.className = "w-[200px] h-[5px] bg-border rounded-full overflow-hidden mt-2";
 
     this.loadingBar = document.createElement("div");
-    this.loadingBar.className = "prop-table-progress-bar";
+    this.loadingBar.className = "h-full bg-accent rounded-full transition-[width] duration-120";
     this.loadingBar.style.width = "0%";
 
     progressContainer.appendChild(this.loadingBar);
@@ -102,7 +102,7 @@ export class NativeTableUIManager {
     this.tableBody.innerHTML = "";
 
     // Priority columns always shown first in the requested order
-    const priorityCols = ["Category", "Name", "SourceFile", "LocalId", "Guid"];
+    const priorityCols = ["Category", "Name", "SourceFile", "Guid"];
     const otherCols = Array.from(knownColumns)
       .filter(c => !priorityCols.includes(c) && c !== "expressID" && c !== "modelId")
       .sort();
@@ -125,10 +125,10 @@ export class NativeTableUIManager {
 
     this.currentColumns.forEach(col => {
       const th = document.createElement("th");
-      th.className = "sortable";
+      th.className = "sticky top-0 z-10 bg-surface-alt px-3 py-2 border-b-2 border-accent border-r border-border text-white whitespace-nowrap cursor-pointer select-none text-[11px] font-bold tracking-wider hover:bg-surface-raised";
 
       const content = document.createElement("div");
-      content.className = "th-content";
+      content.className = "flex items-center justify-between gap-2";
 
       const label = document.createElement("span");
       label.textContent = col.charAt(0).toUpperCase() + col.slice(1);
@@ -137,19 +137,19 @@ export class NativeTableUIManager {
       const sortManager = this.context.sortManager;
       if (sortManager?.currentSort?.column === col) {
         const indicator = document.createElement("span");
-        indicator.className = "sort-indicator";
+        indicator.className = "text-[9px] text-fg ml-1";
         indicator.textContent = sortManager.currentSort.direction === "asc" ? " ▲" : " ▼";
         label.appendChild(indicator);
       }
 
       // Filter funnel icon
       const filterBtn = document.createElement("span");
-      filterBtn.className = "filter-icon";
+      filterBtn.className = "opacity-35 transition-opacity duration-150 shrink-0 leading-none hover:opacity-100";
       const isFiltered = this.context.columnFilters.has(col) && this.context.columnFilters.get(col)!.size > 0;
       filterBtn.innerHTML = isFiltered
         ? `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4-2v-4L3 4z"/></svg>`
         : `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 4h18l-7 9v6l-4-2v-4L3 4z"/></svg>`;
-      if (isFiltered) filterBtn.classList.add("active");
+      if (isFiltered) filterBtn.classList.add("text-status-ok", "opacity-100");
 
       filterBtn.onclick = (e) => {
         e.stopPropagation();
@@ -196,6 +196,7 @@ export class NativeTableUIManager {
 
     rows.forEach(rowData => {
       const tr = document.createElement("tr");
+      tr.className = "even:bg-surface-alt hover:bg-accent-muted cursor-pointer transition-colors";
 
       // Click handler on row element itself
       tr.onclick = () => {
@@ -207,11 +208,12 @@ export class NativeTableUIManager {
 
       this.currentColumns.forEach(col => {
         const td = document.createElement("td");
+        td.className = "px-3 py-1.5 border-b border-r border-border whitespace-nowrap max-w-[320px] overflow-hidden text-ellipsis text-xs";
 
         if (col === "LocalId") {
           // Visual span for LocalId (styled like link, cursor is managed by hover style)
           const span = document.createElement("span");
-          span.className = `prop-table-express-id${this.isLoading ? " loading" : ""}`;
+          span.className = "prop-table-express-id cursor-pointer text-accent underline font-semibold inline-block" + (this.isLoading ? " cursor-not-allowed text-muted-2 no-underline pointer-events-none" : "");
           span.textContent = String(rowData[col] ?? "-");
           td.appendChild(span);
         } else {
@@ -253,11 +255,16 @@ export class NativeTableUIManager {
   /** Refresh cursor style on all expressID spans after loading state changes */
   private _updateExpressIdCursors(): void {
     if (!this.tableBody) return;
+    const loadingClasses = ["cursor-not-allowed", "text-muted-2", "no-underline", "pointer-events-none"];
+    const activeClasses = ["cursor-pointer", "text-accent", "underline"];
+    
     this.tableBody.querySelectorAll<HTMLSpanElement>(".prop-table-express-id").forEach(span => {
       if (this.isLoading) {
-        span.classList.add("loading");
+        span.classList.remove(...activeClasses);
+        span.classList.add(...loadingClasses);
       } else {
-        span.classList.remove("loading");
+        span.classList.remove(...loadingClasses);
+        span.classList.add(...activeClasses);
       }
     });
   }
@@ -346,9 +353,14 @@ export class NativeTableUIManager {
   /** Mark a row as selected (adds .selected class) */
   public selectRow(tr: HTMLTableRowElement): void {
     // Clear old selection
+    const selectedClasses = ["bg-accent-muted/55", "outline", "outline-1", "outline-accent", "-outline-offset-1"];
     this.tableBody?.querySelectorAll<HTMLTableRowElement>("tr.selected")
-      .forEach(r => r.classList.remove("selected"));
+      .forEach(r => {
+        r.classList.remove("selected");
+        r.classList.remove(...selectedClasses);
+      });
     tr.classList.add("selected");
+    tr.classList.add(...selectedClasses);
   }
 }
 
