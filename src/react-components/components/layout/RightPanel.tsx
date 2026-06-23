@@ -89,9 +89,7 @@ export function RightPanel({
         </div>
       ) : (
         /* Collapsed Icon Strip Indicator */
-        <div className="flex-1 flex flex-col items-center gap-4 py-4 text-muted overflow-y-auto">
-          <Icon name={icon} size={20} className="opacity-70 hover:opacity-100 transition-opacity" />
-        </div>
+        <div className="flex-1" />
       )}
 
       {/* Drag handle */}

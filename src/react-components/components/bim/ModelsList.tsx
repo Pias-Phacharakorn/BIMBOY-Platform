@@ -28,7 +28,10 @@ export function ModelsList({ searchQuery }: ModelsListProps) {
 
     // Apply layout styles to blend seamlessly
     table.style.width = "100%";
-    table.style.height = "auto";
+    table.style.maxHeight = "calc(100vh - 200px)";
+    table.style.border = "none";
+    table.style.backgroundColor = "transparent";
+    table.style.setProperty("--bim-ui_border", "transparent");
 
     containerRef.current.appendChild(table);
 
@@ -49,7 +52,7 @@ export function ModelsList({ searchQuery }: ModelsListProps) {
   return (
     <div
       ref={containerRef}
-      className="w-full max-h-[300px] overflow-y-auto"
+      className="w-full"
     />
   );
 }

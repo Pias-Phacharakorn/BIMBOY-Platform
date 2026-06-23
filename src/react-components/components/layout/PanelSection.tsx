@@ -73,7 +73,7 @@ export function PanelSection({
         ) : (
           /* Normal Title Mode */
           <div className="flex items-center gap-2 text-muted text-xs font-semibold tracking-wider uppercase">
-            {icon && <Icon name={icon} size={14} className="text-accent-2" />}
+            {icon && <Icon name={icon} size={14} className="text-white" />}
             <span>{label}</span>
           </div>
         )}

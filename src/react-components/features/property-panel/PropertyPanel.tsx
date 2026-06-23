@@ -74,7 +74,7 @@ export function PropertyPanel() {
     : propertyGroups;
 
   return (
-    <div className="flex flex-col text-xs w-full max-h-[85vh] min-h-0 bg-surface/10">
+    <div className="flex flex-col text-xs w-full max-h-[calc(100vh-170px)] min-h-0 bg-surface/10">
       
       {/* Navisworks Style Selection Pagination Toolbar */}
       <div className="flex items-center gap-3 py-1.5 px-4 bg-surface-alt/30 border-b border-border text-xs shrink-0 select-none justify-start">
