@@ -9,7 +9,7 @@ export interface ClipperPlaneState {
   enabled: boolean;
 }
 
-export class PiasClipper extends OBC.Component implements OBC.Disposable {
+export class ClipperCursor extends OBC.Component implements OBC.Disposable {
   static readonly uuid = "3c1e220a-8a56-42d4-a114-1e0f6cb7d934" as const;
   enabled = true;
   readonly onDisposed = new OBC.Event<string>();
@@ -35,10 +35,10 @@ export class PiasClipper extends OBC.Component implements OBC.Disposable {
     this._world = world;
     this._viewport = viewport;
 
-    components.add(PiasClipper.uuid, this);
+    components.add(ClipperCursor.uuid, this);
 
     this._setupGlobalListeners();
-    console.log("PiasClipper initialized with uuid: " + PiasClipper.uuid);
+    console.log("ClipperCursor initialized with uuid: " + ClipperCursor.uuid);
   }
 
   private _setupGlobalListeners() {
@@ -287,21 +287,20 @@ export class PiasClipper extends OBC.Component implements OBC.Disposable {
 
     this._updateMasterClipperState();
 
-    this.onDisposed.trigger(PiasClipper.uuid);
+    this.onDisposed.trigger(ClipperCursor.uuid);
     this.onDisposed.reset();
     this.onStateChanged.reset();
   }
 }
 
-// Expose setupClipper for initial setup mapping
-export const setupClipper = (
+// Expose setupClipperCursor for initial setup mapping
+export const setupClipperCursor = (
   components: OBC.Components,
   world: OBC.World,
   viewport: HTMLElement
 ) => {
-  const piasClipper = new PiasClipper(components, world, viewport);
+  const clipperCursor = new ClipperCursor(components, world, viewport);
   return () => {
-    piasClipper.dispose();
+    clipperCursor.dispose();
   };
 };
-

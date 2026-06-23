@@ -11,8 +11,10 @@ import {
   setupHoverer,
   setupItemsFinder,
   setupMinimap,
-  setupClipper,
-  setupSmartViews
+  setupClipperCursor,
+  setupSmartViews,
+  setupLengthMeasureCursor,
+  setupAreaMeasureCursor
 } from "./src";
 import { PropertyTable } from "../PropertyTable";
 import { SpotCoordinate } from "../SpotCoordinate";
@@ -34,8 +36,10 @@ export const setupComponents = async () => {
   setupHoverer(components, world)
   setupItemsFinder(components)
   setupMinimap(components, world)
-  setupClipper(components, world, viewport)
+  setupClipperCursor(components, world, viewport)
   setupSmartViews(components)
+  setupLengthMeasureCursor(components, world)
+  setupAreaMeasureCursor(components, world)
 
   
   new PropertyTable(components);
@@ -51,4 +55,4 @@ export const setupComponents = async () => {
   components.get(OBC.Viewpoints).world = world;
 
   return { components, viewport }
-}
+}

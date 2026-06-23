@@ -71,11 +71,19 @@ export class CursurSurface extends OBC.Component implements OBC.Disposable {
    */
   public setWorld(world: OBC.World | null) {
     if (this._world) {
-      this._world.scene.three.remove(this.group);
+      try {
+        this._world.scene.three.remove(this.group);
+      } catch (e) {
+        // Ignore error if world/scene is already disposed
+      }
     }
     this._world = world;
     if (this._world) {
-      this._world.scene.three.add(this.group);
+      try {
+        this._world.scene.three.add(this.group);
+      } catch (e) {
+        // Ignore error if world/scene is not initialized
+      }
     }
   }
 

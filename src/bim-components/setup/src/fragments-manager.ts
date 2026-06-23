@@ -28,6 +28,8 @@ export const setupFragmentsManager = (components: OBC.Components, world: OBC.Sim
     world.scene.three.add(model.object);
 
     // Set the grid height based on the BIM model's shared coordinate elevation height
+    // Ignore coordinate for now
+    /*
     try {
       const [, coordHeight] = await model.getCoordinates();
       if (coordHeight !== undefined && !isNaN(coordHeight)) {
@@ -40,6 +42,7 @@ export const setupFragmentsManager = (components: OBC.Components, world: OBC.Sim
     } catch (e) {
       console.warn("Could not retrieve coordinate height from model", e);
     }
+    */
 
     // This is extremely important, as it instructs the Fragments Manager
     // the model must be updated because the configuration changed.

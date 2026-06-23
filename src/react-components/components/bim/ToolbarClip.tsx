@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { Icon } from "@/react-components/components/ui";
-import { PiasClipper, ClipperPlaneState } from "@/bim-components/setup/src/clipper";
+import { ClipperCursor, ClipperPlaneState } from "@/bim-components/setup/src/clipper-cursor";
 import * as OBF from "@thatopen/components-front";
 
 export function ToolbarClip() {
@@ -26,10 +26,10 @@ export function ToolbarClip() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Sync PiasClipper states
+  // Sync ClipperCursor states
   useEffect(() => {
     if (!components) return;
-    const clipper = components.get(PiasClipper as any) as PiasClipper;
+    const clipper = components.get(ClipperCursor as any) as ClipperCursor;
 
     const syncState = () => {
       setPlanes([...clipper.planes]);
@@ -49,7 +49,7 @@ export function ToolbarClip() {
   // Keep clipper and highlighter states coordinated
   useEffect(() => {
     if (!components) return;
-    const clipper = components.get(PiasClipper as any) as PiasClipper;
+    const clipper = components.get(ClipperCursor as any) as ClipperCursor;
     const highlighter = components.get(OBF.Highlighter);
 
     const handleClipperState = () => {
@@ -65,10 +65,19 @@ export function ToolbarClip() {
     };
   }, [components, activeTool, setActiveTool]);
 
+  // Exit clipper placement mode automatically if another tool becomes active
+  useEffect(() => {
+    if (!components) return;
+    const clipper = components.get(ClipperCursor as any) as ClipperCursor;
+    if (activeTool !== "clip" && clipper.placing) {
+      clipper.exitPlacementMode();
+    }
+  }, [components, activeTool]);
+
   if (!components) return null;
 
   const handleEnterPlacement = () => {
-    const clipper = components.get(PiasClipper as any) as PiasClipper;
+    const clipper = components.get(ClipperCursor as any) as ClipperCursor;
     const highlighter = components.get(OBF.Highlighter);
 
     if (placing) {
@@ -83,23 +92,23 @@ export function ToolbarClip() {
   };
 
   const handleClearAll = () => {
-    const clipper = components.get(PiasClipper as any) as PiasClipper;
+    const clipper = components.get(ClipperCursor as any) as ClipperCursor;
     const ids = clipper.planes.map((p) => p.id);
     ids.forEach((id) => clipper.deletePlane(id));
   };
 
   const handleSelectPlane = (id: string) => {
-    const clipper = components.get(PiasClipper as any) as PiasClipper;
+    const clipper = components.get(ClipperCursor as any) as ClipperCursor;
     clipper.selectPlane(id);
   };
 
   const handleTogglePlane = (id: string, enabled: boolean) => {
-    const clipper = components.get(PiasClipper as any) as PiasClipper;
+    const clipper = components.get(ClipperCursor as any) as ClipperCursor;
     clipper.togglePlane(id, enabled);
   };
 
   const handleDeletePlane = (id: string) => {
-    const clipper = components.get(PiasClipper as any) as PiasClipper;
+    const clipper = components.get(ClipperCursor as any) as ClipperCursor;
     clipper.deletePlane(id);
   };
 
