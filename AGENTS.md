@@ -174,7 +174,7 @@ All other UI is **React + Tailwind only**.
 
 ## 🔬 BIM / ThatOpen Rules
 
-1. Read `.agent/ThatOpen_docs/` before implementing any OBC feature
+1. Use the `thatopen-docs-navigator` skill to navigate `.agents/ThatOpen_docs/` before implementing any OBC feature
 2. Check `.agent/skills/` for BUI event binding and component patterns
 3. Implement `OBC.Disposable`, use `OBC.Disposer` for all Three.js meshes
 4. Unbind all DOM events on `dispose()`
@@ -204,7 +204,6 @@ Changes to these require explicit developer approval:
 
 | Path                  | Reason                        |
 | --------------------- | ----------------------------- |
-| `src/bim-components/` | ThatOpen OBC components       |
 | `src/classes/`        | Core TS classes               |
 | `src/firebase/`       | Firebase SDK wrappers         |
 | `src/context/`        | Auth context                  |
@@ -218,7 +217,7 @@ Follow this strictly — in order:
 
 ### 1. Read before implementing
 
-- For any OBC/BIM feature: read `.agent/ThatOpen_docs/` first
+- For any OBC/BIM feature: use the `thatopen-docs-navigator` skill first to search `.agents/ThatOpen_docs/`
 - For BUI component patterns: read `.agent/skills/` first
 - Never assume API shapes from memory — OBC v3.4.x has breaking changes from v2
 

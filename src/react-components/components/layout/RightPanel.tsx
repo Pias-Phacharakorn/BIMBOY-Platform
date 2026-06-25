@@ -39,7 +39,7 @@ export function RightPanel({
       const newWidth = rect.right - e.clientX;
       const maxWidth = Math.min(600, window.innerWidth / 2);
 
-      if (newWidth > 48) {
+      if (newWidth > 20) {
         setIsOpen(true);
         if (newWidth < 200) {
           setWidth(newWidth);
@@ -48,7 +48,7 @@ export function RightPanel({
         }
       } else {
         setIsOpen(false);
-        setWidth(48);
+        setWidth(320); // Reset width state to default for next open
       }
     };
 
@@ -75,47 +75,56 @@ export function RightPanel({
   return (
     <div
       ref={panelRef}
-      style={{ width: isOpen ? `${width}px` : "48px" }}
-      className={`relative z-10 flex flex-col h-full border-l border-border bg-surface/94 backdrop-blur-md ${
+      style={{ width: isOpen ? `${width}px` : "0px" }}
+      className={`relative z-10 flex flex-col h-full flex-none bg-surface/94 backdrop-blur-md transition-[border-color] duration-150 ${
+        isOpen ? "border-l border-border" : "border-l-transparent"
+      } ${
         isDragging ? "" : "transition-[width] duration-180 ease-in-out"
       } ${className}`}
     >
-      {/* Content Area */}
-      {isOpen ? (
-        <div className="flex-1 overflow-y-auto">
-          <div className="w-full h-full flex flex-col">
-            {children}
+      {/* Content Area Wrapper to enable sliding and clip children */}
+      <div className="flex-1 overflow-hidden w-full h-full flex flex-col">
+        <div className="flex-1 overflow-y-auto min-w-[320px] h-full flex flex-col">
+          {children}
+        </div>
+      </div>
+
+      {/* Full-height drag target & hover highlight */}
+      {isOpen && (
+        <div
+          onMouseDown={startDrag}
+          className="absolute top-0 left-0 -ml-1.5 w-3 h-full cursor-col-resize z-20 group select-none"
+          title="Drag to resize"
+        >
+          {/* Glowing vertical line */}
+          <div className="absolute left-[5px] top-0 w-[2px] h-full bg-accent opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+          
+          {/* Centered Grip Pill */}
+          <div
+            className="absolute top-1/2 left-[5px] -translate-x-[6px] -translate-y-1/2 flex items-center justify-center pointer-events-none"
+          >
+            <div className="flex gap-[3px] py-1.5 px-1 bg-surface border border-border rounded shadow-md opacity-80 group-hover:opacity-100 transition-opacity">
+              <div className="w-[1.5px] h-3 bg-muted-2 rounded-full" />
+              <div className="w-[1.5px] h-3 bg-muted-2 rounded-full" />
+            </div>
           </div>
         </div>
-      ) : (
-        /* Collapsed Icon Strip Indicator */
-        <div className="flex-1" />
       )}
 
-      {/* Drag handle */}
-      <div
-        onMouseDown={startDrag}
-        className="absolute top-0 left-0 -ml-1 w-2 h-full cursor-col-resize z-20 group"
+      {/* Floating Toggle Button (positioned completely outside the panel border) */}
+      <button
+        onClick={() => {
+          if (!isOpen) {
+            setWidth(320); // Ensure it opens to default width
+          }
+          setIsOpen(!isOpen);
+        }}
+        className="absolute top-1/2 right-full -translate-y-1/2 z-30 flex items-center justify-center h-10 w-6 bg-surface border border-border border-r-0 rounded-l-lg shadow-lg cursor-pointer hover:bg-surface-alt transition-colors text-muted hover:text-fg select-none"
+        type="button"
+        title={isOpen ? "Collapse Panel" : "Expand Panel"}
       >
-        <div className="absolute left-0 top-0 w-[2px] h-full bg-accent opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-      </div>
-
-      {/* Footer Container (Standard 40px Height containing the collapse button) */}
-      <div className={`flex items-center h-[40px] border-t border-border bg-bg px-3.5 flex-none ${isOpen ? "justify-end" : "justify-center"}`}>
-        <button
-          onClick={() => {
-            if (!isOpen) {
-              setWidth(320); // Ensure it opens to default width
-            }
-            setIsOpen(!isOpen);
-          }}
-          className="flex items-center justify-center h-7 w-7 rounded hover:bg-surface-alt text-muted hover:text-fg transition-colors cursor-pointer"
-          type="button"
-          title={isOpen ? "Collapse Panel" : "Expand Panel"}
-        >
-          <Icon name={isOpen ? "PANEL_RIGHT_CLOSE" : "PANEL_RIGHT_OPEN"} size={16} />
-        </button>
-      </div>
+        <Icon name={isOpen ? "CHEVRON_RIGHT" : "CHEVRON_LEFT"} size={14} />
+      </button>
     </div>
   );
 }
