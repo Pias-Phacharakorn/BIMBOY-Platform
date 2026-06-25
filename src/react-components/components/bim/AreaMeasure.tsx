@@ -127,7 +127,7 @@ export function AreaMeasureList() {
       {polygons.length === 0 ? (
         <div className="text-xs text-muted italic px-4 pb-4">No measurements added</div>
       ) : (
-        <div className="flex flex-col gap-1 overflow-y-auto scroll-smooth px-2 pb-3 max-h-[160px]">
+        <div className="flex flex-col gap-1 overflow-y-auto scroll-smooth px-2 pb-3 max-h-[240px]">
           {polygons.map((poly, index) => {
             const isSelected = poly === selectedPolygon;
             const labelText = poly.label?.text || `${(poly.value || 0).toFixed(2)}m²`;

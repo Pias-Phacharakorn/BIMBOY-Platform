@@ -85,7 +85,7 @@ export function ToolbarMeasure() {
       </button>
 
       {isDropdownOpen && (
-        <div className="absolute right-full mr-2.5 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-2 text-left w-60 animate-in fade-in slide-in-from-right-1 duration-150">
+        <div className="absolute right-full mr-2.5 top-0 z-50 flex flex-col gap-2 text-left w-60 animate-in fade-in slide-in-from-right-1 duration-150">
 
           {/* ── Tools card ── */}
           <div className="rounded-xl bg-surface border border-border shadow-xl backdrop-blur-md flex flex-col gap-3.5 p-4">

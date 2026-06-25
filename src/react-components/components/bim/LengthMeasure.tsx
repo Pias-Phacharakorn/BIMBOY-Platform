@@ -128,7 +128,7 @@ export function LengthMeasureList() {
       {lines.length === 0 ? (
         <div className="text-xs text-muted italic px-4 pb-4">No measurements added</div>
       ) : (
-        <div className="flex flex-col gap-1 overflow-y-auto scroll-smooth px-2 pb-3 max-h-[160px]">
+        <div className="flex flex-col gap-1 overflow-y-auto scroll-smooth px-2 pb-3 max-h-[240px]">
           {lines.map((line, index) => {
             const isSelected = line === selectedLine;
             const labelText = line.label?.text || `${(line.value || 0).toFixed(2)}m`;
