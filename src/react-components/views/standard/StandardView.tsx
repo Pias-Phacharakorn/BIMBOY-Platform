@@ -1,19 +1,132 @@
 import { useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { AppShell, WorkspaceHeader } from "@/react-components/components/layout";
-import {
-  bepCards,
-  bepRules,
-  bimFacts,
-  cdeCards,
-  cdeTasks,
-  getProjectById,
-  namingCards,
-  namingRules,
-  standardFacts,
-  type StandardCard,
-  type StandardTabId,
-} from "@/static-data";
+import { useProject } from "@/react-components/features/projects/useProjects";
+import type { StandardCard, StandardTabId } from "@/types";
+
+const standardFacts = [
+  ["Project code", "HXP-II"],
+  ["Project name", "Hospital Expansion Phase II"],
+  ["Project owner", "City Health Authority"],
+  ["Project type", "Healthcare building"],
+  ["Consultant", "FEC, MITR"],
+];
+
+const bimFacts = [
+  ["BIM uses", "Design authoring, 3D coordination"],
+  ["BIM goals", "Eliminate major conflicts"],
+  ["Modeling / clash detection", "RVT2025 / Navisworks"],
+  ["Collaboration platform", "ACC project hub"],
+];
+
+const bepCards: StandardCard[] = [
+  {
+    kicker: "BIM uses",
+    title: "Design authoring and 3D coordination",
+    body: "Authoring discipline models remain separated until coordination sign-off. Published federations must include model version and package stage.",
+  },
+  {
+    kicker: "Model goal",
+    title: "Reduce major clashes before issue",
+    body: "Critical and high clashes require owner, response date, and linked report before the package can move to review.",
+  },
+  {
+    kicker: "Tools",
+    title: "RVT2025 / Navisworks / ACC",
+    body: "RVT is the authoring source, Navisworks is the coordination record, and ACC is the approved exchange platform.",
+  },
+];
+
+const bepRules = [
+  {
+    code: "01",
+    title: "Model origin and coordinates locked",
+    note: "Shared coordinates must be verified before first discipline upload.",
+    status: "Current",
+    tone: "ok" as const,
+  },
+  {
+    code: "02",
+    title: "Viewer fields mapped for ACC data pane",
+    note: "Use ExternalElementId first; Element ID is the fallback when mapping fails.",
+    status: "Review",
+    tone: "warn" as const,
+  },
+  {
+    code: "03",
+    title: "Clash reports issued weekly",
+    note: "MEP, structure, architecture, and specialist models must be included.",
+    status: "Current",
+    tone: "ok" as const,
+  },
+];
+
+const namingCards: StandardCard[] = [
+  {
+    kicker: "Pattern",
+    title: "HXP-ZZ-DR-A-0001-S2-P01",
+    body: "Every issued document must include project, originator, type, discipline, number, status, and revision.",
+  },
+  {
+    kicker: "Blocked state",
+    title: "Missing discipline code",
+    body: "Uploads without discipline, status, or revision are held in draft until corrected by the package owner.",
+  },
+  {
+    kicker: "Active rule set",
+    title: "ISO 19650 style control",
+    body: "Names are validated against the project matrix before document status can move to shared or published.",
+  },
+];
+
+const namingRules = [
+  { field: "Project code", example: "HXP", rule: "Must match active project code", status: "Valid", tone: "ok" as const },
+  { field: "Originator", example: "ARC", rule: "Approved company code only", status: "Valid", tone: "ok" as const },
+  { field: "Discipline", example: "A / S / M / E", rule: "Required before shared status", status: "Check", tone: "warn" as const },
+  { field: "Revision", example: "P01 / C02", rule: "Preliminary or contract sequence", status: "Valid", tone: "ok" as const },
+];
+
+const cdeCards: StandardCard[] = [
+  {
+    kicker: "Owner hub",
+    title: "Client review and approvals",
+    body: "SharePoint workspace for owner-facing packages, meeting records, and approval responses.",
+  },
+  {
+    kicker: "Design team hub",
+    title: "Consultant working exchange",
+    body: "Controlled folders for WIP packages, discipline comments, and returned review actions.",
+  },
+  {
+    kicker: "ACC model space",
+    title: "Federated model coordination",
+    body: "Approved source for model sharing, coordination views, issues, and Navisworks report records.",
+  },
+];
+
+const cdeTasks = [
+  {
+    category: "BIM",
+    detail: "Update underground model from 2D shop drawings this week",
+    responseBy: "MEP Base Building",
+    status: "Open",
+    tone: "warn" as const,
+  },
+  {
+    category: "BIM Design",
+    detail: "Confirm equipment placement in PoE and telco coordination zone",
+    responseBy: "MEP Data Hall",
+    status: "Closed",
+    tone: "ok" as const,
+  },
+  {
+    category: "Document",
+    detail: "Upload for-construction drawing package to shared CDE folder",
+    responseBy: "Document Control",
+    status: "Open",
+    tone: "warn" as const,
+  },
+];
 
 const tabLabels: Record<StandardTabId, string> = {
   bep: "BIM Execution Plan",
@@ -55,8 +168,29 @@ function StandardCardGrid({ cards }: { cards: StandardCard[] }) {
 
 export function StandardView() {
   const { projectId } = useParams({ strict: false });
-  const project = getProjectById(projectId);
+  const { data: project, isLoading } = useProject(projectId);
   const [activeTab, setActiveTab] = useState<StandardTabId>("bep");
+
+  if (isLoading) {
+    return (
+      <div className="flex w-screen h-screen items-center justify-center bg-bg text-fg">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-border border-t-accent rounded-full animate-spin" />
+          <span className="text-sm text-muted">Loading project standard...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="flex w-screen h-screen items-center justify-center bg-bg text-fg">
+        <div className="text-center p-6 border border-border bg-surface rounded-radius max-w-md">
+          <h2 className="text-lg font-bold mb-2">Project Not Found</h2>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AppShell project={project}>

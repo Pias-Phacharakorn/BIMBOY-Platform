@@ -1,19 +1,21 @@
 import { useMemo, useState } from "react";
 import { Icon, SearchBox } from "@/react-components/components/ui";
 import { ProjectCard } from "@/react-components/features/project-card";
-import { projects, type ProjectView } from "@/static-data";
+import { useProjects } from "@/react-components/features/projects/useProjects";
+import type { ProjectView } from "@/types";
 
 export function ProjectsView() {
   const [view, setView] = useState<ProjectView>("card");
   const [query, setQuery] = useState("");
+  const { data: dbProjects = [], isLoading, isError, error } = useProjects();
 
   const filteredProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) {
-      return projects;
+      return dbProjects;
     }
 
-    return projects.filter((project) => {
+    return dbProjects.filter((project) => {
       return [
         project.projectName,
         project.description,
@@ -25,7 +27,7 @@ export function ProjectsView() {
         .toLowerCase()
         .includes(normalizedQuery);
     });
-  }, [query]);
+  }, [dbProjects, query]);
 
   return (
     <div className="flex w-screen h-screen min-w-0 bg-[#090a0f] flex-col">
@@ -97,9 +99,23 @@ export function ProjectsView() {
         </div>
 
         <div className={view === "list" ? "flex flex-col gap-0 m-[0_32px_32px] p-0 overflow-hidden border border-border border-t-0 rounded-[0_0_8px_8px]" : "grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-6 p-8"}>
-          {filteredProjects.map((project) => (
-            <ProjectCard key={project.id} project={project} view={view} />
-          ))}
+          {isLoading ? (
+            <div className="col-span-full py-20 text-center text-muted">
+              Loading projects from Supabase...
+            </div>
+          ) : isError ? (
+            <div className="col-span-full py-20 text-center text-status-warn">
+              Error loading projects: {error?.message || "Unknown error"}
+            </div>
+          ) : filteredProjects.length === 0 ? (
+            <div className="col-span-full py-20 text-center text-muted">
+              No projects found.
+            </div>
+          ) : (
+            filteredProjects.map((project) => (
+              <ProjectCard key={project.id} project={project} view={view} />
+            ))
+          )}
         </div>
       </main>
     </div>

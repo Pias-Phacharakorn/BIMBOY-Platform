@@ -91,10 +91,8 @@ export class ProjectsManager {
   }
 }
 
-import { getProjectById as getProjectByIdFromStatic } from "../static-data";
-
 export const projectsManager = new ProjectsManager();
 
 export const getProjectById = (id?: string) => {
-  return getProjectByIdFromStatic(id);
+  return projectsManager.list.find((project) => project.id === id) ?? projectsManager.list[0];
 };

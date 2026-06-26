@@ -111,7 +111,7 @@ export class GisLayer2d {
 
   private _setMarkerPosition(value: Cartesian3) {
     if (!this._marker) {
-      throw new Error("Marker not set");
+      return;
     }
     (this._marker.position as any) = value;
   }

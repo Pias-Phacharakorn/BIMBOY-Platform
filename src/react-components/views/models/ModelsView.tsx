@@ -6,15 +6,38 @@ import { ViewportWrapper, ViewportRightToolbar, ViewportToolbar, ModelsList } fr
 import { GisPanel } from "@/react-components/features/gis";
 import { PropertyPanel } from "@/react-components/features/property-panel";
 import { PropertyTable } from "@/react-components/features/property-table/PropertyTable";
-import { getProjectById, workspaceTabs } from "@/static-data";
+import { useProject } from "@/react-components/features/projects/useProjects";
+
+const workspaceTabs = ["Models", "Queries", "Viewer", "Smart Views", "GIS"];
 
 export function ModelsView() {
   const { projectId } = useParams({ strict: false });
-  const project = getProjectById(projectId);
+  const { data: project, isLoading } = useProject(projectId);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("Models");
   const isQueriesTab = activeTab === "Queries";
   const isGisTab = activeTab === "GIS";
+
+  if (isLoading) {
+    return (
+      <div className="flex w-screen h-screen items-center justify-center bg-bg text-fg">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-border border-t-accent rounded-full animate-spin" />
+          <span className="text-sm text-muted">Loading project model...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="flex w-screen h-screen items-center justify-center bg-bg text-fg">
+        <div className="text-center p-6 border border-border bg-surface rounded-radius max-w-md">
+          <h2 className="text-lg font-bold mb-2">Project Not Found</h2>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AppShell project={project}>
@@ -37,7 +60,7 @@ export function ModelsView() {
         }
       />
       <div
-        className={activeTab === "Models" ? "flex flex-row flex-1 min-h-0 w-full" : "grid flex-1 min-h-0 w-full"}
+        className={activeTab === "Models" || isGisTab ? "flex flex-row flex-1 min-h-0 w-full" : "grid flex-1 min-h-0 w-full"}
         style={
           isQueriesTab
             ? {
@@ -45,13 +68,7 @@ export function ModelsView() {
                 gridTemplateRows: "1fr 0.8fr",
                 gridTemplateAreas: '"viewport propertypanel" "propertytable propertytable"',
               }
-            : isGisTab
-              ? {
-                  gridTemplateColumns: "1fr 360px",
-                  gridTemplateRows: "1fr",
-                  gridTemplateAreas: '"viewport gis"',
-                }
-              : undefined
+            : undefined
         }
       >
         <LeftPanel
@@ -66,9 +83,9 @@ export function ModelsView() {
 
         <section
           className={`h-full min-w-0 relative border border-border overflow-hidden bg-[#0d0e12] ${
-            activeTab === "Models" ? "flex-1" : ""
+            activeTab === "Models" || isGisTab ? "flex-1" : ""
           }`}
-          style={isQueriesTab || isGisTab ? { gridArea: "viewport" } : undefined}
+          style={isQueriesTab ? { gridArea: "viewport" } : undefined}
         >
           <ViewportWrapper />
           <ViewportRightToolbar />
@@ -105,9 +122,12 @@ export function ModelsView() {
         )}
 
         {isGisTab && (
-          <aside style={{ gridArea: "gis" }} className="h-full min-h-0 border-l border-border bg-surface">
+          <RightPanel
+            icon="EARTH"
+            defaultOpen={true}
+          >
             <GisPanel />
-          </aside>
+          </RightPanel>
         )}
 
         <div style={{ gridArea: "propertytable" }} className={isQueriesTab ? "w-full h-full min-h-0 border-t border-border" : "hidden"}>

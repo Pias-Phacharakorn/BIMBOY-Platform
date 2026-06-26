@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Icon, type AppIconName } from "@/react-components/components/ui";
-import type { AppProject } from "@/static-data";
+import type { AppProject } from "@/types";
 
 type WorkspaceRouteKey = "model" | "standard" | "clashes" | "documents" | "settings";
 

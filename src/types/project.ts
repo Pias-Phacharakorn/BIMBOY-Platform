@@ -80,3 +80,95 @@ export const ProjectFormSchema = ProjectSchema.pick({
   gisCoordinates: GisCoordinatesSchema.optional(),
 })
 export type ProjectFormData = z.infer<typeof ProjectFormSchema>
+
+// ─── UI Type Definitions (Migrated from static-data.ts) ──────────────────────
+import type { Project as ClassProject } from "@/classes/Project";
+
+export type ProjectView = "card" | "list";
+export type StandardTabId = "bep" | "naming" | "cde";
+export type BadgeTone = "ok" | "warn" | "danger" | "neutral";
+
+export interface ProjectDisplay {
+  code: string;
+  label: string;
+  estimatedCompletion: string;
+  startDateLabel: string;
+  finishDateLabel: string;
+  statusLabel: string;
+  statusTone: Extract<BadgeTone, "ok" | "warn" | "neutral">;
+  progress: number;
+  image: string;
+}
+
+export interface AppProject extends ClassProject {
+  display: ProjectDisplay;
+}
+
+export interface StatItem {
+  label: string;
+  value: string;
+  tone?: BadgeTone;
+}
+
+export interface ModelFile {
+  name: string;
+  loaded: boolean;
+}
+
+export interface ClashRecord {
+  id: string;
+  status: string;
+  statusTone: Extract<BadgeTone, "ok" | "warn">;
+  severity: string;
+  severityTone: BadgeTone;
+  disciplines: string;
+  assignedTo: string;
+  dateFound: string;
+}
+
+export interface DocumentRecord {
+  drawingNumber: string;
+  title: string;
+  revision: string;
+  status: "Approved" | "Pending" | "In Review";
+  owner: string;
+  dueDate: string;
+  overdue?: boolean;
+}
+
+export interface ProjectMemberUI {
+  email: string;
+  role: "Admin" | "Member";
+  status: "Active";
+}
+
+export interface StandardCard {
+  kicker: string;
+  title: string;
+  body: string;
+}
+
+export interface RuleItem {
+  code: string;
+  title: string;
+  note: string;
+  status: string;
+  tone: Extract<BadgeTone, "ok" | "warn">;
+}
+
+export interface NamingRule {
+  field: string;
+  example: string;
+  rule: string;
+  status: string;
+  tone: Extract<BadgeTone, "ok" | "warn">;
+}
+
+export interface CdeTask {
+  category: string;
+  detail: string;
+  responseBy: string;
+  status: string;
+  tone: Extract<BadgeTone, "ok" | "warn">;
+}
+

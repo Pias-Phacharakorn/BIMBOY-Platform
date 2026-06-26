@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
-import type { AppProject } from "@/static-data";
+import type { AppProject } from "@/types";
 
 interface AppShellProps {
   project: AppProject;

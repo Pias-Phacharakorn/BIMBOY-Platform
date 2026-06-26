@@ -1,6 +1,7 @@
 import { useParams } from "@tanstack/react-router";
 import { AppShell, WorkspaceHeader } from "@/react-components/components/layout";
-import { documentRecords, documentStats, getProjectById } from "@/static-data";
+import { useProject } from "@/react-components/features/projects/useProjects";
+import type { StatItem, DocumentRecord } from "@/types";
 
 const approvalClass = {
   Approved: "border-[oklch(70%_0.14_150_/_42%)] bg-[oklch(70%_0.14_150_/_13%)] text-status-ok",
@@ -8,9 +9,65 @@ const approvalClass = {
   "In Review": "border-[oklch(77%_0.14_76_/_42%)] bg-[oklch(77%_0.14_76_/_13%)] text-status-warn",
 };
 
+const documentStats: StatItem[] = [
+  { label: "Approved", value: "142", tone: "ok" },
+  { label: "Pending Review", value: "28", tone: "warn" },
+  { label: "Rejected / Revise", value: "5", tone: "danger" },
+  { label: "Overdue", value: "12", tone: "danger" },
+];
+
+const documentRecords: DocumentRecord[] = [
+  {
+    drawingNumber: "A-101-PL",
+    title: "Level 01 Floor Plan",
+    revision: "04",
+    status: "Approved",
+    owner: "Architect",
+    dueDate: "2024-06-01",
+  },
+  {
+    drawingNumber: "S-205-DT",
+    title: "Foundation Detail B",
+    revision: "02",
+    status: "Pending",
+    owner: "Engineer",
+    dueDate: "2024-05-10",
+    overdue: true,
+  },
+  {
+    drawingNumber: "M-401-SC",
+    title: "HVAC Schematic",
+    revision: "01",
+    status: "In Review",
+    owner: "MEP Lead",
+    dueDate: "2024-05-20",
+  },
+];
+
 export function DocumentsView() {
   const { projectId } = useParams({ strict: false });
-  const project = getProjectById(projectId);
+  const { data: project, isLoading } = useProject(projectId);
+
+  if (isLoading) {
+    return (
+      <div className="flex w-screen h-screen items-center justify-center bg-bg text-fg">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-border border-t-accent rounded-full animate-spin" />
+          <span className="text-sm text-muted">Loading project...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="flex w-screen h-screen items-center justify-center bg-bg text-fg">
+        <div className="text-center p-6 border border-border bg-surface rounded-radius max-w-md">
+          <h2 className="text-lg font-bold mb-2">Project Not Found</h2>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AppShell project={project}>

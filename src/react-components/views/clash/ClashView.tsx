@@ -1,6 +1,7 @@
 import { useParams } from "@tanstack/react-router";
 import { AppShell, WorkspaceHeader } from "@/react-components/components/layout";
-import { getProjectById, clashRecords, clashStats, type BadgeTone } from "@/static-data";
+import { useProject } from "@/react-components/features/projects/useProjects";
+import type { BadgeTone, StatItem, ClashRecord } from "@/types";
 
 const severityClass: Record<BadgeTone, string> = {
   ok: "bg-status-ok text-[oklch(70%_0.14_150_/_18%)]",
@@ -9,9 +10,70 @@ const severityClass: Record<BadgeTone, string> = {
   neutral: "bg-muted text-[oklch(68%_0.02_250_/_18%)]",
 };
 
+const clashStats: StatItem[] = [
+  { label: "Total Clashes", value: "1,284" },
+  { label: "Active / Unresolved", value: "842", tone: "danger" },
+  { label: "Critical Severity", value: "156" },
+  { label: "Avg. Resolution Time", value: "4.2d" },
+];
+
+const clashRecords: ClashRecord[] = [
+  {
+    id: "CL-482",
+    status: "Open",
+    statusTone: "warn",
+    severity: "Critical",
+    severityTone: "danger",
+    disciplines: "ARC vs MEP",
+    assignedTo: "J. Doe",
+    dateFound: "2024-05-12",
+  },
+  {
+    id: "CL-483",
+    status: "Resolved",
+    statusTone: "ok",
+    severity: "Low",
+    severityTone: "neutral",
+    disciplines: "STR vs MEP",
+    assignedTo: "A. Smith",
+    dateFound: "2024-05-11",
+  },
+  {
+    id: "CL-484",
+    status: "In Review",
+    statusTone: "warn",
+    severity: "High",
+    severityTone: "warn",
+    disciplines: "ARC vs STR",
+    assignedTo: "M. Ross",
+    dateFound: "2024-05-10",
+  },
+];
+
 export function ClashView() {
   const { projectId } = useParams({ strict: false });
-  const project = getProjectById(projectId);
+  const { data: project, isLoading } = useProject(projectId);
+
+  if (isLoading) {
+    return (
+      <div className="flex w-screen h-screen items-center justify-center bg-bg text-fg">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-border border-t-accent rounded-full animate-spin" />
+          <span className="text-sm text-muted">Loading project...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="flex w-screen h-screen items-center justify-center bg-bg text-fg">
+        <div className="text-center p-6 border border-border bg-surface rounded-radius max-w-md">
+          <h2 className="text-lg font-bold mb-2">Project Not Found</h2>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AppShell project={project}>
