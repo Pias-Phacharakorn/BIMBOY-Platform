@@ -210,16 +210,8 @@ export class NativeTableUIManager {
         const td = document.createElement("td");
         td.className = "px-3 py-1.5 border-b border-r border-border whitespace-nowrap max-w-[320px] overflow-hidden text-ellipsis text-xs";
 
-        if (col === "LocalId") {
-          // Visual span for LocalId (styled like link, cursor is managed by hover style)
-          const span = document.createElement("span");
-          span.className = "prop-table-express-id cursor-pointer text-accent underline font-semibold inline-block" + (this.isLoading ? " cursor-not-allowed text-muted-2 no-underline pointer-events-none" : "");
-          span.textContent = String(rowData[col] ?? "-");
-          td.appendChild(span);
-        } else {
-          const val = rowData[col];
-          td.textContent = val !== undefined && val !== null ? String(val) : "-";
-        }
+        const val = rowData[col];
+        td.textContent = val !== undefined && val !== null ? String(val) : "-";
 
         tr.appendChild(td);
       });

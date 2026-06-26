@@ -5,6 +5,7 @@ import { Icon } from "@/react-components/components/ui";
 import { useProject } from "@/react-components/features/projects/useProjects";
 import { ProjectSettingsForm } from "@/react-components/features/project-settings/ProjectSettingsForm";
 import { ProjectMembersSettings } from "@/react-components/features/project-members/ProjectMembersSettings";
+import { ProjectFolders } from "@/react-components/features/project-folders/ProjectFolders";
 
 export function SettingsView() {
   const { projectId } = useParams({ strict: false });
@@ -12,7 +13,7 @@ export function SettingsView() {
 
   // Tab switching state
   const [activeTab, setActiveTab] = useState("General");
-  const tabs = ["General", "Members"];
+  const tabs = ["General", "Members", "Folder"];
 
   // Edit toggles and loading feedbacks
   const [isEditing, setIsEditing] = useState(false);
@@ -87,7 +88,7 @@ export function SettingsView() {
       />
 
       <div className="relative flex-1 min-w-0 overflow-auto bg-gradient-to-b from-[oklch(12%_0.014_255)] to-[oklch(9.8%_0.012_255)]">
-        <div className="flex flex-col gap-6 w-full max-w-[1200px] p-6 md:p-8">
+        <div className="flex flex-col gap-6 w-full p-6 md:p-8">
           {activeTab === "General" && (
             <ProjectSettingsForm
               project={project}
@@ -99,6 +100,10 @@ export function SettingsView() {
 
           {activeTab === "Members" && (
             <ProjectMembersSettings projectId={project.id} />
+          )}
+
+          {activeTab === "Folder" && (
+            <ProjectFolders project={project} />
           )}
         </div>
       </div>
