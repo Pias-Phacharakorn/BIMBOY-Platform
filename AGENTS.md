@@ -237,7 +237,15 @@ import { cn } from "../../../lib/utils";
 
 ### 2. Plan before coding
 
-Use `grill-with-docs` skill to clarify requirements, stress-test the plan, and confirm layer placement. **Do not write code until the developer explicitly approves the plan.**
+Use `grill-with-docs` skill to clarify requirements, stress-test the plan, and confirm layer placement.
+
+Then use `plan-visualizer` skill to produce the implementation plan. **Every plan must include:**
+- 🔄 Current Flow diagram (ASCII)
+- ✅ Proposed Flow diagram (ASCII) — mark `[NEW]` `[MOD]` `[DEL]` and `★` the key change
+- ⚖️ Pros & Cons table
+- 📁 Files Changed list
+
+**Do not write code until the developer explicitly approves the plan.**
 
 ### 3. Execute
 

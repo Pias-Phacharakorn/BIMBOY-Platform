@@ -4,17 +4,20 @@ import { useUIStore } from "@/react-components/store/uiStore";
 import { Icon } from "@/react-components/components/ui";
 import * as OBC from "@thatopen/components";
 import { CloudModelModal } from "./CloudModelModal";
+import { cn } from "@/lib/utils";
 
 export function ToolbarLoadModel() {
   const { components } = useBimStore();
   const { isCloudModalOpen, setCloudModalOpen } = useUIStore();
-  const [isLoadOpen, setIsLoadOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsLoadOpen(false);
+        setIsOpen(false);
+        setIsLocalExpanded(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -22,6 +25,10 @@ export function ToolbarLoadModel() {
   }, []);
 
   if (!components) return null;
+
+  const closeDropdown = () => {
+    setIsOpen(false);
+  };
 
   const handleLoadFrag = () => {
     const input = document.createElement("input");
@@ -50,7 +57,7 @@ export function ToolbarLoadModel() {
     });
 
     input.click();
-    setIsLoadOpen(false);
+    closeDropdown();
   };
 
   const handleLoadIfc = () => {
@@ -83,54 +90,70 @@ export function ToolbarLoadModel() {
     });
 
     input.click();
-    setIsLoadOpen(false);
+    closeDropdown();
   };
 
-  const buttonClass =
-    "inline-flex items-center justify-center gap-2 min-h-8 py-1 px-2.5 border border-transparent rounded-radius bg-transparent cursor-pointer text-xs font-semibold hover:border-border hover:bg-surface-alt hover:text-fg transition-all duration-120 text-white";
+  const menuItemClass =
+    "w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-fg hover:bg-surface-raised hover:text-accent transition-colors duration-100 cursor-pointer select-none";
+
+  const subItemClass =
+    "w-full flex items-center gap-2.5 pl-7 pr-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-raised hover:text-fg transition-colors duration-100 cursor-pointer select-none";
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center">
       <div className="relative flex items-center" ref={dropdownRef}>
+        {/* Trigger Button */}
         <button
-          onClick={() => setIsLoadOpen(!isLoadOpen)}
-          className={buttonClass}
-          title="Load local model"
+          onClick={() => {
+            setIsOpen(!isOpen);
+          }}
+          className={cn(
+            "inline-flex items-center justify-center gap-2 min-h-8 py-1 px-2.5 border rounded-radius cursor-pointer text-xs font-semibold transition-all duration-120 text-white",
+            isOpen
+              ? "border-border bg-surface-alt text-fg"
+              : "border-transparent bg-transparent hover:border-border hover:bg-surface-alt hover:text-fg"
+          )}
+          title="Load model"
           type="button"
         >
-          <Icon name="ADD" size={20} />
+          <Icon name="ADD" size={14} />
           <span>Load Model</span>
         </button>
 
-        {isLoadOpen && (
-          <div className="absolute bottom-full mb-2 left-0 w-36 rounded-lg bg-surface border border-border shadow-lg z-50 overflow-hidden py-1 backdrop-blur-md animate-in fade-in slide-in-from-bottom-1 duration-150">
+        {/* Dropdown */}
+        {isOpen && (
+          <div className="absolute bottom-full mb-2 left-0 w-44 rounded-lg bg-surface border border-border shadow-xl z-50 overflow-hidden py-1 backdrop-blur-md animate-in fade-in slide-in-from-bottom-1 duration-150">
+            {/* Cloud Models */}
             <button
-              onClick={handleLoadFrag}
-              className="w-full text-left px-4 py-2 text-xs font-semibold text-fg hover:bg-surface-alt transition-colors hover:text-accent-2 cursor-pointer"
+              onClick={() => {
+                setCloudModalOpen(true);
+                closeDropdown();
+              }}
+              className={menuItemClass}
               type="button"
             >
-              Load FRAG
+              <Icon name="CLOUD" size={14} className="text-accent shrink-0" />
+              <span>Cloud Models</span>
             </button>
-            <button
-              onClick={handleLoadIfc}
-              className="w-full text-left px-4 py-2 text-xs font-semibold text-fg hover:bg-surface-alt transition-colors hover:text-accent-2 cursor-pointer"
-              type="button"
-            >
-              Load IFC
+
+            <div className="mx-3 my-0.5 border-t border-border/60" />
+
+            {/* Local Model — always expanded */}
+            <div className={cn(menuItemClass, "pointer-events-none opacity-60")}>
+              <Icon name="FOLDER" size={14} className="text-muted shrink-0" />
+              <span>Local Model</span>
+            </div>
+            <button onClick={handleLoadIfc} className={subItemClass} type="button">
+              <Icon name="FILE" size={13} className="text-muted-2 shrink-0" />
+              <span>Load IFC</span>
+            </button>
+            <button onClick={handleLoadFrag} className={subItemClass} type="button">
+              <Icon name="FILE" size={13} className="text-muted-2 shrink-0" />
+              <span>Load FRAG</span>
             </button>
           </div>
         )}
       </div>
-
-      <button
-        onClick={() => setCloudModalOpen(true)}
-        className={buttonClass}
-        title="Load cloud model from Supabase"
-        type="button"
-      >
-        <Icon name="CLOUD" size={20} />
-        <span>Cloud Models</span>
-      </button>
 
       {isCloudModalOpen && (
         <CloudModelModal onClose={() => setCloudModalOpen(false)} />

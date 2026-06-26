@@ -31,6 +31,8 @@ interface BimState {
   engineReady: boolean
   isModelLoading: boolean
   loadedModelIds: string[]
+  alignAngle: number
+  aligningDirection: 'front' | 'back' | 'left' | 'right' | null
 
   // Actions
   setBimData: (
@@ -47,6 +49,9 @@ interface BimState {
   setModelLoading: (loading: boolean) => void
   addLoadedModel: (modelId: string) => void
   removeLoadedModel: (modelId: string) => void
+  setAlignAngle: (angle: number) => void
+  setAligningDirection: (direction: 'front' | 'back' | 'left' | 'right' | null) => void
+  resetAlignment: () => void
   resetBimState: () => void
 }
 
@@ -62,6 +67,8 @@ const initialState = {
   engineReady: false,
   isModelLoading: false,
   loadedModelIds: [] as string[],
+  alignAngle: 0,
+  aligningDirection: null as 'front' | 'back' | 'left' | 'right' | null,
 }
 
 // ─── Zustand Store ────────────────────────────────────────────────────────────
@@ -102,6 +109,12 @@ export const useBimStore = create<BimState>()(
       set((state) => ({
         loadedModelIds: state.loadedModelIds.filter((id) => id !== modelId),
       })),
+
+    setAlignAngle: (angle) => set({ alignAngle: angle }),
+
+    setAligningDirection: (direction) => set({ aligningDirection: direction }),
+
+    resetAlignment: () => set({ alignAngle: 0, aligningDirection: null }),
 
     resetBimState: () => set(initialState),
   })),

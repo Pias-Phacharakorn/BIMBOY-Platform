@@ -14,6 +14,13 @@ export class MiniMapCameraManager {
   private _lastClickTime = 0;
   private _onUpdateTrigger?: () => void;
 
+  private _isDragging = false;
+  private _hasMoved = false;
+  private _startX = 0;
+  private _startY = 0;
+  private _startPanX = 0;
+  private _startPanZ = 0;
+
   constructor(
     parent: MiniMap,
     uiManager: MiniMapUIManager,
@@ -22,6 +29,81 @@ export class MiniMapCameraManager {
     this._parent = parent;
     this._uiManager = uiManager;
     this._cacheManager = cacheManager;
+    
+    this.setupEvents();
+  }
+
+  private setupEvents() {
+    const canvas = this._uiManager.mapCanvas;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0) return; // Only left click drags
+      this._isDragging = true;
+      this._hasMoved = false;
+      this._startX = e.clientX;
+      this._startY = e.clientY;
+      this._startPanX = this._cacheManager.panOffset.x;
+      this._startPanZ = this._cacheManager.panOffset.z;
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!this._isDragging) return;
+      const dx = e.clientX - this._startX;
+      const dy = e.clientY - this._startY;
+
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        this._hasMoved = true;
+      }
+
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      if (width === 0 || height === 0) return;
+
+      // Translate pixels dragged to world coordinates
+      const worldDx = (dx / width) * this._cacheManager.adjustedDim;
+      const worldDz = (dy / height) * this._cacheManager.adjustedDim;
+
+      // Rotate drag vector back to the unrotated camera coordinate space
+      const rotation = this._parent.rotation;
+      const rad = (-rotation * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+
+      const rx = -worldDx;
+      const rz = -worldDz;
+
+      const panDx = rx * cos - rz * sin;
+      const panDz = rx * sin + rz * cos;
+
+      this._cacheManager.panOffset.x = this._startPanX + panDx;
+      this._cacheManager.panOffset.z = this._startPanZ + panDz;
+
+      this._parent.forceUpdateCache();
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      this._isDragging = false;
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+
+      if (!this._hasMoved) {
+        this.handleMapClick(e);
+      }
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      // Zoom in/out relative to scroll direction
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
+      this._cacheManager.zoomScale = Math.max(0.15, Math.min(15.0, this._cacheManager.zoomScale * zoomFactor));
+      this._parent.forceUpdateCache();
+    };
+
+    canvas.addEventListener("mousedown", handleMouseDown);
+    canvas.addEventListener("wheel", handleWheel, { passive: false });
   }
 
   public get world() {
@@ -65,16 +147,35 @@ export class MiniMapCameraManager {
     percentX = Math.max(0, Math.min(1, percentX));
     percentZ = Math.max(0, Math.min(1, percentZ));
 
+    // Adjust visual positioning based on the map's current rotation
+    let visualX = percentX;
+    let visualZ = percentZ;
+    const rotation = this._parent.rotation;
+    if (rotation === 90) {
+      visualX = 1 - percentZ;
+      visualZ = percentX;
+    } else if (rotation === 180) {
+      visualX = 1 - percentX;
+      visualZ = 1 - percentZ;
+    } else if (rotation === 270) {
+      visualX = percentZ;
+      visualZ = 1 - percentX;
+    }
+
     // Move icon using top/left percentage
     const arrowStyle = this._uiManager.playerArrow.style;
-    arrowStyle.left = `${percentX * 100}%`;
-    arrowStyle.top = `${percentZ * 100}%`;
+    arrowStyle.left = `${visualX * 100}%`;
+    arrowStyle.top = `${visualZ * 100}%`;
 
     // Update arrow rotation (corrected to map 3D camera direction to 2D canvas coordinates)
     const direction = new THREE.Vector3();
     mainCam.getWorldDirection(direction);
     const angle = Math.atan2(direction.x, -direction.z);
-    arrowStyle.transform = `translate(-50%, -50%) rotate(${angle}rad)`;
+    
+    // Add map rotation to arrow direction (convert deg to rad)
+    const mapRotationRad = (rotation * Math.PI) / 180;
+    const finalAngle = angle + mapRotationRad;
+    arrowStyle.transform = `translate(-50%, -50%) rotate(${finalAngle}rad)`;
   };
 
   public handleMapClick(e: MouseEvent) {
@@ -94,9 +195,29 @@ export class MiniMapCameraManager {
     const height = canvas.clientHeight;
     if (width === 0 || height === 0) return;
 
+    // Calculate click coordinates relative to the canvas client rect (extremely robust during drags)
+    const rect = canvas.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
     // Translate coordinates from canvas display size (percentage 0 to 1)
-    const pctX = e.offsetX / width;
-    const pctZ = e.offsetY / height;
+    const pctX = offsetX / width;
+    const pctZ = offsetY / height;
+
+    // Map visual click coordinates back to original unrotated canvas coordinates
+    let originalPctX = pctX;
+    let originalPctZ = pctZ;
+    const rotation = this._parent.rotation;
+    if (rotation === 90) {
+      originalPctX = pctZ;
+      originalPctZ = 1 - pctX;
+    } else if (rotation === 180) {
+      originalPctX = 1 - pctX;
+      originalPctZ = 1 - pctZ;
+    } else if (rotation === 270) {
+      originalPctX = 1 - pctZ;
+      originalPctZ = pctX;
+    }
 
     const minX = this._cacheManager.mapMinX;
     const maxX = this._cacheManager.mapMaxX;
@@ -104,8 +225,8 @@ export class MiniMapCameraManager {
     const maxZ = this._cacheManager.mapMaxZ;
 
     // Convert to 3D world coordinate space using current boundaries
-    const clickX = minX + pctX * (maxX - minX);
-    const clickZ = minZ + pctZ * (maxZ - minZ);
+    const clickX = minX + originalPctX * (maxX - minX);
+    const clickZ = minZ + originalPctZ * (maxZ - minZ);
 
     const target = new THREE.Vector3();
     const position = new THREE.Vector3();

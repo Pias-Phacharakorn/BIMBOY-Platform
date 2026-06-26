@@ -20,6 +20,9 @@ export class MiniMapCacheManager {
   public mapMinZ = -50;
   public mapMaxZ = 50;
 
+  public panOffset = new THREE.Vector3(0, 0, 0);
+  public adjustedDim = 100;
+
   constructor(
     components: OBC.Components,
     mapContext: CanvasRenderingContext2D,
@@ -41,10 +44,23 @@ export class MiniMapCacheManager {
   public updateCache(world: OBC.World) {
     if (!world.renderer || !world.scene) return;
 
+    // Force update matrix world of scene to ensure latest positions are calculated
+    const scene = (world.scene as any).three || world.scene;
+    if (scene) {
+      try {
+        scene.updateMatrixWorld(true);
+      } catch (e) {}
+    }
+
     const fragments = this._components.get(OBC.FragmentsManager);
     const bbox = new THREE.Box3();
     
-    for (const [, model] of fragments.list) {
+    console.log("[MiniMapCacheManager] updateCache called. fragments.list.size:", fragments.list.size);
+    for (const [id, model] of fragments.list) {
+      try {
+        model.object.updateMatrixWorld(true);
+      } catch (e) {}
+      console.log(`[MiniMapCacheManager] checking model "${id}", object children count:`, model.object.children.length);
       bbox.expandByObject(model.object);
     }
 
@@ -52,51 +68,67 @@ export class MiniMapCacheManager {
     const size = new THREE.Vector3();
 
     if (bbox.isEmpty()) {
+      console.log("[MiniMapCacheManager] bounding box is empty, using fallback");
       // Default fallback bounds
       center.set(0, 0, 0);
       size.set(100, 100, 100);
     } else {
       bbox.getCenter(center);
       bbox.getSize(size);
+      console.log("[MiniMapCacheManager] bounding box computed:", bbox, "center:", center, "size:", size);
     }
 
     this.mapCenterY = center.y;
 
     const padding = 1.1; // 10% margin around the building
     const maxDim = Math.max(size.x, size.z, 10) * padding;
-    const adjustedDim = maxDim / this.zoomScale;
+    this.adjustedDim = maxDim / this.zoomScale;
+
+    const targetX = center.x + this.panOffset.x;
+    const targetZ = center.z + this.panOffset.z;
 
     // Update orthographic camera to frame the whole bounding box perfectly in a square
-    this._orthoCamera.left = -adjustedDim / 2;
-    this._orthoCamera.right = adjustedDim / 2;
-    this._orthoCamera.top = adjustedDim / 2;
-    this._orthoCamera.bottom = -adjustedDim / 2;
+    this._orthoCamera.left = -this.adjustedDim / 2;
+    this._orthoCamera.right = this.adjustedDim / 2;
+    this._orthoCamera.top = this.adjustedDim / 2;
+    this._orthoCamera.bottom = -this.adjustedDim / 2;
     // Set near/far planes wide enough to encompass everything
     this._orthoCamera.near = 0.1;
     this._orthoCamera.far = size.y + 1000;
     
     const camHeight = Math.max(bbox.max.y, center.y) + 500;
     this._orthoCamera.up.set(0, 0, -1); // Explicitly define "up" as North (-Z) before calling lookAt
-    this._orthoCamera.position.set(center.x, camHeight, center.z);
-    this._orthoCamera.lookAt(center.x, center.y, center.z);
+    this._orthoCamera.position.set(targetX, camHeight, targetZ);
+    this._orthoCamera.lookAt(targetX, center.y, targetZ);
     this._orthoCamera.updateProjectionMatrix();
 
     // Store map coordinate boundaries
-    this.mapMinX = center.x - adjustedDim / 2;
-    this.mapMaxX = center.x + adjustedDim / 2;
-    this.mapMinZ = center.z - adjustedDim / 2;
-    this.mapMaxZ = center.z + adjustedDim / 2;
+    this.mapMinX = targetX - this.adjustedDim / 2;
+    this.mapMaxX = targetX + this.adjustedDim / 2;
+    this.mapMinZ = targetZ - this.adjustedDim / 2;
+    this.mapMaxZ = targetZ + this.adjustedDim / 2;
 
     const renderer = (world.renderer as any).three || world.renderer;
-    const scene = (world.scene as any).three || world.scene;
 
     if (!renderer.getRenderTarget) return; 
 
     const currentRenderTarget = renderer.getRenderTarget();
     const currentClearColor = renderer.getClearColor(new THREE.Color());
     const currentClearAlpha = renderer.getClearAlpha();
+    
+    // Save current viewport and scissor states to prevent aspect-ratio clipping from active main window states
+    const currentViewport = new THREE.Vector4();
+    renderer.getViewport(currentViewport);
+    const currentScissor = new THREE.Vector4();
+    renderer.getScissor(currentScissor);
+    const currentScissorTest = renderer.getScissorTest();
 
     renderer.setRenderTarget(this._renderTarget);
+    
+    // Force renderer to fill the square render target texture completely
+    renderer.setViewport(0, 0, this._cacheResolution, this._cacheResolution);
+    renderer.setScissor(0, 0, this._cacheResolution, this._cacheResolution);
+    renderer.setScissorTest(false);
     renderer.setClearColor(0x000000, 0);
 
     // Render static top-down view of entire project
@@ -118,10 +150,20 @@ export class MiniMapCacheManager {
     
     this._mapContext.putImageData(imageData, 0, 0);
 
+    // Restore original renderer target and viewport/scissor states
     renderer.setRenderTarget(currentRenderTarget);
+    renderer.setViewport(currentViewport);
+    renderer.setScissor(currentScissor);
+    renderer.setScissorTest(currentScissorTest);
     renderer.setClearColor(currentClearColor, currentClearAlpha);
     
-    this.hasRendered = true;
+    // Only mark as rendered if we successfully rendered loaded models, or if there are no models to render.
+    // If there are models but the bounding box was empty, keep hasRendered = false so the next frame retries.
+    if (fragments.list.size === 0 || !bbox.isEmpty()) {
+      this.hasRendered = true;
+    } else {
+      this.hasRendered = false;
+    }
   }
 
   public dispose() {

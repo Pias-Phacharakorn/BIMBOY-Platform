@@ -47,6 +47,10 @@ export const appIcons = {
   PANEL_RIGHT_OPEN: "lucide:panel-right-open",
   CHEVRON_LEFT: "lucide:chevron-left",
   CHEVRON_RIGHT: "lucide:chevron-right",
+  CHEVRON_DOWN: "lucide:chevron-down",
+  FOLDER: "mdi:folder-outline",
+  FILE: "mdi:file-outline",
   SEARCH: "mdi:magnify",
+  ALIGN: "solar:compass-bold",
 };
 

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useBimStore } from "@/react-components/store/bimStore";
+import { useUIStore } from "@/react-components/store/uiStore";
 import { Icon } from "@/react-components/components/ui";
 import * as THREE from "three";
 import * as OBC from "@thatopen/components";
@@ -7,6 +8,7 @@ import * as OBF from "@thatopen/components-front";
 
 export function ToolbarSettings() {
   const { components, world } = useBimStore();
+  const { showMinimap, setShowMinimap } = useUIStore();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Viewport Settings States
@@ -72,7 +74,7 @@ export function ToolbarSettings() {
     if (!autoRotateRef.current.isRotating || !world) return;
     const camera = world.camera as any;
     if (camera?.controls) {
-      camera.controls.rotate(0.00125, 0, false);
+      camera.controls.rotate(0.005, 0, false);
     }
     autoRotateRef.current.animationFrameId = requestAnimationFrame(startRotationLoop);
   };
@@ -140,8 +142,8 @@ export function ToolbarSettings() {
     return () => {
       if (isSubscribed) {
         try {
-          fragments.list.onItemSet.delete(updateModelStatus);
-          fragments.list.onItemDeleted.delete(updateModelStatus);
+          fragments.list.onItemSet.remove(updateModelStatus);
+          fragments.list.onItemDeleted.remove(updateModelStatus);
         } catch (e) {}
       }
       if (autoRotateRef.current.isRotating) {
@@ -267,6 +269,17 @@ export function ToolbarSettings() {
               type="checkbox"
               checked={gridVisible}
               onChange={handleToggleGrid}
+              className="w-4.5 h-4.5 rounded border-border text-accent bg-transparent accent-accent cursor-pointer"
+            />
+          </div>
+
+          {/* Mini Map */}
+          <div className="flex items-center justify-between text-xs text-fg">
+            <span className="font-medium text-muted">Mini Map</span>
+            <input
+              type="checkbox"
+              checked={showMinimap}
+              onChange={(e) => setShowMinimap(e.target.checked)}
               className="w-4.5 h-4.5 rounded border-border text-accent bg-transparent accent-accent cursor-pointer"
             />
           </div>

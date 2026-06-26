@@ -7,6 +7,8 @@ interface UIState {
   setActiveLayout: (viewId: string, layout: string) => void
   isCloudModalOpen: boolean
   setCloudModalOpen: (open: boolean) => void
+  showMinimap: boolean
+  setShowMinimap: (show: boolean) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -19,4 +21,6 @@ export const useUIStore = create<UIState>((set) => ({
     })),
   isCloudModalOpen: false,
   setCloudModalOpen: (open) => set({ isCloudModalOpen: open }),
+  showMinimap: true,
+  setShowMinimap: (show) => set({ showMinimap: show }),
 }))

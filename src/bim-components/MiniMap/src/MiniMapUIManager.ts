@@ -6,8 +6,7 @@ export class MiniMapUIManager {
   public readonly playerArrow: HTMLDivElement;
 
   constructor(
-    cacheResolution: number,
-    onMapClick: (e: MouseEvent) => void
+    cacheResolution: number
   ) {
     // Initialize UI Elements
     this.uiContainer = document.createElement("div");
@@ -27,6 +26,7 @@ export class MiniMapUIManager {
     this.mapCanvas.style.top = "0";
     this.mapCanvas.style.left = "0";
     this.mapCanvas.style.objectFit = "contain";
+    this.mapCanvas.style.transition = "transform 0.3s ease-in-out"; // Smooth rotation!
     this.uiContainer.appendChild(this.mapCanvas);
 
     const ctx = this.mapCanvas.getContext("2d");
@@ -72,14 +72,17 @@ export class MiniMapUIManager {
     this.playerArrow.appendChild(cameraDot);
     this.uiContainer.appendChild(this.playerArrow);
 
-    // Canvas click listener to navigate 3D camera
-    this.mapCanvas.addEventListener("click", onMapClick);
+
 
     // Suppress double-click propagation to prevent conflicts
     this.mapCanvas.addEventListener("dblclick", (e) => {
       e.stopPropagation();
       e.preventDefault();
     });
+  }
+
+  public setRotation(rotation: number) {
+    this.mapCanvas.style.transform = `rotate(${rotation}deg)`;
   }
 
   public dispose() {

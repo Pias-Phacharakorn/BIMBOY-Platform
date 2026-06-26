@@ -11,6 +11,7 @@ export class MiniMap extends OBC.Component implements OBC.Disposable {
   readonly onCacheUpdated = new OBC.Event<void>();
 
   private _cacheResolution = 1024;
+  public rotation: 0 | 90 | 180 | 270 = 0;
 
   // Sub-managers
   public uiManager!: MiniMapUIManager;
@@ -21,9 +22,7 @@ export class MiniMap extends OBC.Component implements OBC.Disposable {
     super(components);
     components.add(MiniMap.uuid, this);
 
-    this.uiManager = new MiniMapUIManager(this._cacheResolution, (e) => {
-      this.cameraManager.handleMapClick(e);
-    });
+    this.uiManager = new MiniMapUIManager(this._cacheResolution);
 
     this.cacheManager = new MiniMapCacheManager(
       components,
@@ -56,6 +55,26 @@ export class MiniMap extends OBC.Component implements OBC.Disposable {
         this.updateCache();
       }
     });
+
+    try {
+      const fragments = this.components.get(OBC.FragmentsManager);
+      
+      const handleModelChange = () => {
+        this.cacheManager.hasRendered = false;
+      };
+
+      fragments.list.onItemSet.add(handleModelChange);
+      fragments.list.onItemDeleted.add(handleModelChange);
+
+      this.onDisposed.add(() => {
+        try {
+          fragments.list.onItemSet.remove(handleModelChange);
+          fragments.list.onItemDeleted.remove(handleModelChange);
+        } catch {}
+      });
+    } catch (e) {
+      console.warn("Failed to subscribe to FragmentsManager in MiniMap:", e);
+    }
   }
 
   public updateCache() {
@@ -81,6 +100,12 @@ export class MiniMap extends OBC.Component implements OBC.Disposable {
   public zoomOut() {
     this.cacheManager.zoomScale = Math.max(0.2, this.cacheManager.zoomScale - 0.25);
     this.forceUpdateCache();
+  }
+
+  public rotate() {
+    this.rotation = ((this.rotation + 90) % 360) as 0 | 90 | 180 | 270;
+    this.uiManager.setRotation(this.rotation);
+    this.cameraManager.update();
   }
 
   dispose() {

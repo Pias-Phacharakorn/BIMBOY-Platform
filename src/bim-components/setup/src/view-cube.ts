@@ -1,6 +1,7 @@
 // @ts-nocheck
 import * as THREE from "three";
 import * as OBC from "@thatopen/components";
+import { useBimStore } from "../../../react-components/store/bimStore";
 
 export const setupViewCube = (world: any, viewport: any, components?: OBC.Components) => {
   const viewCube = document.createElement("bim-view-cube") as any;
@@ -20,6 +21,13 @@ export const setupViewCube = (world: any, viewport: any, components?: OBC.Compon
     }
 
     viewCube._matrix.extractRotation(viewCube.camera.matrixWorldInverse);
+
+    const alignAngle = useBimStore.getState().alignAngle || 0;
+    if (alignAngle !== 0) {
+      const offsetMatrix = new THREE.Matrix4().makeRotationY(alignAngle);
+      viewCube._matrix.multiply(offsetMatrix);
+    }
+
     const { elements: t } = viewCube._matrix;
 
     const matrixStr = `matrix3d(
@@ -142,9 +150,28 @@ export const setupViewCube = (world: any, viewport: any, components?: OBC.Compon
 
     direction.normalize();
 
+    // Rotate camera view direction by current alignment angle around gravity (Y-axis)
+    const alignAngle = useBimStore.getState().alignAngle || 0;
+    if (alignAngle !== 0) {
+      direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), alignAngle);
+    }
+
     // Prevent gimbal lock / camera flipping on top/bottom views
     if (direction.x === 0 && direction.z === 0) {
       direction.z = 0.001; // Tiny offset to keep up vector math stable in camera-controls
+      direction.normalize();
+    }
+
+    // Normalize rotations first so we can read the correct, normalized camera azimuthAngle
+    controls.normalizeRotations();
+
+    // Adjust target direction near the theta boundary (negative Z-axis / Back direction)
+    // to prevent the camera from spinning 360-degrees on the PI / -PI boundary.
+    const currentAzimuth = controls.azimuthAngle;
+    const targetTheta = Math.atan2(direction.x, direction.z);
+    if (Math.abs(Math.abs(targetTheta) - Math.PI) < 0.05) {
+      const sign = currentAzimuth < 0 ? -1 : 1;
+      direction.x = sign * 0.0001;
       direction.normalize();
     }
 

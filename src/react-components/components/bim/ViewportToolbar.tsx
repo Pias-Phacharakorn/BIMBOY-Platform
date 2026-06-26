@@ -3,6 +3,7 @@ import { ToolbarLoadModel } from "./ToolbarLoadModel";
 import { ToolbarFocus } from "./ToolbarFocus";
 import { ToolbarShowAll } from "./ToolbarShowAll";
 import { ToolbarGhost } from "./ToolbarGhost";
+import { ToolbarAlign } from "./ToolbarAlign";
 import { ToolbarSettings } from "./ToolbarSettings";
 
 export function ViewportToolbar() {
@@ -17,6 +18,7 @@ export function ViewportToolbar() {
       <ToolbarFocus />
       <ToolbarShowAll />
       <ToolbarGhost />
+      <ToolbarAlign />
       <div className="w-[1px] h-4 bg-border" />
       <ToolbarSettings />
     </div>

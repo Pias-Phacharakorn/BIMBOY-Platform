@@ -6,6 +6,7 @@ interface RightPanelProps {
   children?: React.ReactNode;
   className?: string;
   defaultOpen?: boolean;
+  defaultWidth?: number;
 }
 
 export function RightPanel({
@@ -13,9 +14,10 @@ export function RightPanel({
   children,
   className = "",
   defaultOpen = true,
+  defaultWidth = 320,
 }: RightPanelProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-  const [width, setWidth] = useState(320);
+  const [width, setWidth] = useState(defaultWidth);
   const [isDragging, setIsDragging] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const widthRef = useRef(width);
@@ -44,11 +46,11 @@ export function RightPanel({
         if (newWidth < 200) {
           setWidth(newWidth);
         } else {
-          setWidth(Math.min(maxWidth, Math.max(320, newWidth)));
+          setWidth(Math.min(maxWidth, Math.max(defaultWidth, newWidth)));
         }
       } else {
         setIsOpen(false);
-        setWidth(320); // Reset width state to default for next open
+        setWidth(defaultWidth); // Reset width state to default for next open
       }
     };
 
@@ -57,9 +59,9 @@ export function RightPanel({
       const currentWidth = widthRef.current;
       if (currentWidth < 200) {
         setIsOpen(false);
-        setWidth(320); // Reset width state to default for next open
-      } else if (currentWidth < 320) {
-        setWidth(320); // Snap back to minimum
+        setWidth(defaultWidth); // Reset width state to default for next open
+      } else if (currentWidth < defaultWidth) {
+        setWidth(defaultWidth); // Snap back to minimum
       }
     };
 
@@ -70,7 +72,7 @@ export function RightPanel({
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isDragging]);
+  }, [isDragging, defaultWidth]);
 
   return (
     <div
@@ -84,7 +86,10 @@ export function RightPanel({
     >
       {/* Content Area Wrapper to enable sliding and clip children */}
       <div className="flex-1 overflow-hidden w-full h-full flex flex-col">
-        <div className="flex-1 overflow-y-auto min-w-[320px] h-full flex flex-col">
+        <div 
+          style={{ minWidth: isOpen ? `${defaultWidth}px` : undefined }} 
+          className="flex-1 overflow-y-auto h-full flex flex-col"
+        >
           {children}
         </div>
       </div>
@@ -115,7 +120,7 @@ export function RightPanel({
       <button
         onClick={() => {
           if (!isOpen) {
-            setWidth(320); // Ensure it opens to default width
+            setWidth(defaultWidth); // Ensure it opens to default width
           }
           setIsOpen(!isOpen);
         }}

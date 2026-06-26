@@ -125,6 +125,7 @@ export function ModelsView() {
           <RightPanel
             icon="EARTH"
             defaultOpen={true}
+            defaultWidth={400}
           >
             <GisPanel />
           </RightPanel>

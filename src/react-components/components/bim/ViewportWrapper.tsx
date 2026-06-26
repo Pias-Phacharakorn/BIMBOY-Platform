@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
+import * as THREE from "three";
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
-import { setupComponents } from "@/bim-components";
+import { setupComponents, CursurSurface } from "@/bim-components";
 import { setupViewCube } from "@/bim-components/setup/src/view-cube";
 import { useBimStore } from "@/react-components/store/bimStore";
+import { MiniMapOverlay } from "./MiniMapOverlay";
 
 interface ViewportWrapperProps {
   gridTemplate?: BUI.StatefullComponent<any>;
@@ -28,6 +30,133 @@ export function ViewportWrapper({
       gridRef.current.layout = activeTab;
     }
   }, [activeTab]);
+
+  // View alignment interaction handler
+  const {
+    aligningDirection,
+    setAligningDirection,
+    setAlignAngle,
+    components,
+    world,
+  } = useBimStore();
+
+  useEffect(() => {
+    if (!components || !world || !aligningDirection) return;
+
+    const viewportDom = world.renderer?.three.domElement;
+    if (!viewportDom) return;
+
+    const cursurSurface = components.get(CursurSurface);
+    cursurSurface.setWorld(world);
+
+    let raycastInProgress = false;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (raycastInProgress) return;
+      raycastInProgress = true;
+
+      const raycasters = components.get(OBC.Raycasters);
+      const raycaster = raycasters.get(world);
+      raycaster
+        .castRay()
+        .then((result) => {
+          if (
+            result &&
+            result.point &&
+            ((result as any).normal || (result.face && result.object))
+          ) {
+            const worldNormal = (result as any).normal
+              ? (result as any).normal.clone()
+              : result.face!.normal
+                  .clone()
+                  .transformDirection(result.object.matrixWorld)
+                  .normalize();
+
+            cursurSurface.update(result.point, worldNormal);
+          } else {
+            cursurSurface.hide();
+          }
+        })
+        .catch(() => {
+          cursurSurface.hide();
+        })
+        .finally(() => {
+          raycastInProgress = false;
+        });
+    };
+
+    const handleClick = async (e: MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+
+      const raycasters = components.get(OBC.Raycasters);
+      const raycaster = raycasters.get(world);
+      try {
+        const result = await raycaster.castRay();
+        if (
+          result &&
+          result.point &&
+          ((result as any).normal || (result.face && result.object))
+        ) {
+          const worldNormal = (result as any).normal
+            ? (result as any).normal.clone()
+            : result.face!.normal
+                .clone()
+                .transformDirection(result.object.matrixWorld)
+                .normalize();
+
+          // Horizontal alignment needs a non-vertical normal
+          if (Math.abs(worldNormal.y) < 0.99) {
+            const N_horiz = new THREE.Vector3(
+              worldNormal.x,
+              0,
+              worldNormal.z
+            ).normalize();
+            const theta = Math.atan2(N_horiz.x, N_horiz.z);
+
+            let targetAngle = theta;
+            if (aligningDirection === "back") {
+              targetAngle = theta + Math.PI;
+            } else if (aligningDirection === "left") {
+              targetAngle = theta - Math.PI / 2;
+            } else if (aligningDirection === "right") {
+              targetAngle = theta + Math.PI / 2;
+            }
+
+            // Normalize targetAngle to [-PI, PI]
+            targetAngle = Math.atan2(
+              Math.sin(targetAngle),
+              Math.cos(targetAngle)
+            );
+
+            setAlignAngle(targetAngle);
+            setAligningDirection(null);
+            cursurSurface.hide();
+
+            // Trigger ViewCube update dynamically by simulating camera control update event
+            const camera = world.camera as any;
+            if (camera?.controls) {
+              camera.controls.dispatchEvent({ type: "update" });
+            }
+          } else {
+            alert(
+              "Please select a vertical wall or vertical face to align horizontal directions."
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Alignment raycasting failed:", err);
+      }
+    };
+
+    viewportDom.addEventListener("mousemove", handleMouseMove);
+    viewportDom.addEventListener("click", handleClick, true);
+
+    return () => {
+      viewportDom.removeEventListener("mousemove", handleMouseMove);
+      viewportDom.removeEventListener("click", handleClick, true);
+      cursurSurface.hide();
+    };
+  }, [components, world, aligningDirection]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -147,14 +276,20 @@ export function ViewportWrapper({
 
   return (
     <div
-      ref={containerRef}
       className="viewport-container model-viewport"
-      style={{ width: "100%", height: "100%" }}
+      style={{ width: "100%", height: "100%", position: "relative" }}
       aria-label="BIM model viewport container"
     >
-      <div className="app-container" style={{ padding: "40px" }}>
-        Loading BIM Viewer...
+      <div
+        ref={containerRef}
+        className="w-full h-full"
+        style={{ width: "100%", height: "100%" }}
+      >
+        <div className="app-container" style={{ padding: "40px" }}>
+          Loading BIM Viewer...
+        </div>
       </div>
+      <MiniMapOverlay />
     </div>
   );
 }
