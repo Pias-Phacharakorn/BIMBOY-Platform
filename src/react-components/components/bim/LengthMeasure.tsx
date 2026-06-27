@@ -5,8 +5,8 @@ import { LengthMeasureCursor } from "@/bim-components/setup/src/length-measure-c
 import * as OBF from "@thatopen/components-front";
 
 interface LengthMeasureButtonProps {
-  activeType: "length" | "angle" | "area" | null;
-  setActiveType: (type: "length" | "angle" | "area" | null) => void;
+  activeType: "length" | "angle" | "area" | "surface" | null;
+  setActiveType: (type: "length" | "angle" | "area" | "surface" | null) => void;
 }
 
 export function LengthMeasureButton({ activeType, setActiveType }: LengthMeasureButtonProps) {

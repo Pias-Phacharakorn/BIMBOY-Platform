@@ -17,7 +17,6 @@ export function ToolbarLoadModel() {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
-        setIsLocalExpanded(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);

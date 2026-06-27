@@ -11,6 +11,7 @@ export * from "./smart-views"
 export * from "./hoverer"
 export * from "./length-measure-cursor"
 export * from "./area-measure-cursor"
+export * from "./surface-measure-cursor"
 
 
 

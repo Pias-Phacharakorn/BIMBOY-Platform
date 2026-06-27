@@ -3,13 +3,15 @@ import { useBimStore } from "@/react-components/store/bimStore";
 import { Icon } from "@/react-components/components/ui";
 import { LengthMeasureButton, LengthMeasureList } from "./LengthMeasure";
 import { AreaMeasureButton, AreaMeasureList } from "./AreaMeasure";
+import { SurfaceMeasureButton, SurfaceMeasureList } from "./SurfaceMeasure";
 import { LengthMeasureCursor } from "@/bim-components/setup/src/length-measure-cursor";
 import { AreaMeasureCursor } from "@/bim-components/setup/src/area-measure-cursor";
+import { SurfaceMeasureCursor } from "@/bim-components/setup/src/surface-measure-cursor";
 
 export function ToolbarMeasure() {
   const { components, world, activeTool } = useBimStore();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [activeType, setActiveType] = useState<"length" | "angle" | "area" | null>(null);
+  const [activeType, setActiveType] = useState<"length" | "angle" | "area" | "surface" | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Click outside to close dropdown, ignoring canvas clicks during active measurement
@@ -66,6 +68,20 @@ export function ToolbarMeasure() {
     };
   }, [components, world, activeTool, activeType]);
 
+  // Enable/disable the SurfaceMeasureCursor component based on tool state
+  useEffect(() => {
+    if (!components || !world) return;
+
+    const cursor = components.get(SurfaceMeasureCursor);
+    const active = activeTool === "measure" && activeType === "surface";
+
+    cursor.enabled = active;
+
+    return () => {
+      cursor.enabled = false;
+    };
+  }, [components, world, activeTool, activeType]);
+
   if (!components) return null;
 
   const isActive = activeTool === "measure";
@@ -106,6 +122,15 @@ export function ToolbarMeasure() {
 
               {/* Area Button */}
               <AreaMeasureButton activeType={activeType} setActiveType={setActiveType} />
+
+              {/* Surface — disabled */}
+              <div className="w-full flex items-center justify-between px-3 py-2 text-xs text-muted opacity-50 cursor-not-allowed font-semibold">
+                <div className="flex items-center gap-3">
+                  <Icon name="FOCUS" size={16} />
+                  <span>Surface</span>
+                </div>
+                <span className="text-[9px] uppercase tracking-wider bg-surface-alt border border-border px-1 py-0.5 rounded font-mono">Soon</span>
+              </div>
             </div>
           </div>
 
@@ -116,6 +141,10 @@ export function ToolbarMeasure() {
 
           {activeTool === "measure" && activeType === "area" && (
             <AreaMeasureList />
+          )}
+
+          {activeTool === "measure" && activeType === "surface" && (
+            <SurfaceMeasureList />
           )}
         </div>
       )}

@@ -14,7 +14,8 @@ import {
   setupClipperCursor,
   setupSmartViews,
   setupLengthMeasureCursor,
-  setupAreaMeasureCursor
+  setupAreaMeasureCursor,
+  setupSurfaceMeasureCursor
 } from "./src";
 import { PropertyTable } from "../PropertyTable";
 import { SpotCoordinate } from "../SpotCoordinate";
@@ -41,6 +42,7 @@ export const setupComponents = async () => {
   setupSmartViews(components)
   setupLengthMeasureCursor(components, world)
   setupAreaMeasureCursor(components, world)
+  setupSurfaceMeasureCursor(components, world)
 
   
   new PropertyTable(components);

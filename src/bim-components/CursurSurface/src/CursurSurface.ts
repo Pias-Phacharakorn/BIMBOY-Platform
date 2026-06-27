@@ -98,6 +98,24 @@ export class CursurSurface extends OBC.Component implements OBC.Disposable {
     const lookAtVector = this.group.position.clone().add(normal);
     this.group.lookAt(lookAtVector);
 
+    // 3. Update dynamic color based on the surface normal alignment
+    const absX = Math.abs(normal.x);
+    const absY = Math.abs(normal.y);
+    const absZ = Math.abs(normal.z);
+    const maxVal = Math.max(absX, absY, absZ);
+
+    let colorHex = 0xffffff;
+    if (maxVal === absX) {
+      colorHex = 0x00ff00; // X axis -> Green
+    } else if (maxVal === absY) {
+      colorHex = 0x0000ff; // Y axis -> Blue
+    } else if (maxVal === absZ) {
+      colorHex = 0xff0000; // Z axis -> Red
+    }
+
+    this.lineMat.color.setHex(colorHex);
+    this.circleMat.color.setHex(colorHex);
+
     this.group.visible = true;
   }
 

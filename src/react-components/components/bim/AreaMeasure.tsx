@@ -4,8 +4,8 @@ import { Icon } from "@/react-components/components/ui";
 import * as OBF from "@thatopen/components-front";
 
 interface AreaMeasureButtonProps {
-  activeType: "length" | "angle" | "area" | null;
-  setActiveType: (type: "length" | "angle" | "area" | null) => void;
+  activeType: "length" | "angle" | "area" | "surface" | null;
+  setActiveType: (type: "length" | "angle" | "area" | "surface" | null) => void;
 }
 
 export function AreaMeasureButton({ activeType, setActiveType }: AreaMeasureButtonProps) {
