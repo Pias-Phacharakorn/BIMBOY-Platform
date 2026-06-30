@@ -2,7 +2,7 @@
 import * as OBC from "@thatopen/components";
 import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
-import { CursurSurface } from "../../CursurSurface";
+import { CursorSurface } from "../../CursorSurface";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -272,8 +272,8 @@ export class SurfaceMeasureCursor extends OBC.Component implements OBC.Disposabl
 
   private _activate() {
     const canvas = this._world.renderer?.three?.domElement;
-    const cursurSurface = this._components.get(CursurSurface);
-    cursurSurface.setWorld(this._world);
+    const cursorSurface = this._components.get(CursorSurface);
+    cursorSurface.setWorld(this._world);
 
     let raycastInProgress = false;
 
@@ -295,7 +295,7 @@ export class SurfaceMeasureCursor extends OBC.Component implements OBC.Disposabl
               .transformDirection(result.object.matrixWorld)
               .normalize();
 
-            cursurSurface.update(result.point, normal);
+            cursorSurface.update(result.point, normal);
 
             // Extract coplanar face polygon
             const polygon = extractCoplanarFace(
@@ -312,12 +312,12 @@ export class SurfaceMeasureCursor extends OBC.Component implements OBC.Disposabl
               this._clearHoverMesh();
             }
           } else {
-            cursurSurface.hide();
+            cursorSurface.hide();
             this._clearHoverMesh();
           }
         })
         .catch(() => {
-          cursurSurface.hide();
+          cursorSurface.hide();
           this._clearHoverMesh();
         })
         .finally(() => {
@@ -363,8 +363,8 @@ export class SurfaceMeasureCursor extends OBC.Component implements OBC.Disposabl
 
   private _deactivate() {
     const canvas = this._world.renderer?.three?.domElement;
-    const cursurSurface = this._components.get(CursurSurface);
-    cursurSurface.hide();
+    const cursorSurface = this._components.get(CursorSurface);
+    cursorSurface.hide();
     this._clearHoverMesh();
 
     if (canvas) {

@@ -60,7 +60,7 @@ export function LengthMeasureList() {
     const measurer = components.get(OBF.LengthMeasurement);
 
     const syncLines = () => {
-      const list = [...measurer.list];
+      const list = [...measurer.list] as any[];
       setLines(list);
       setVisibilityMap(new Map(list.map((l) => [l, l.visible])));
       const selected = list.find((line) => line.isSelected) || null;
@@ -92,7 +92,7 @@ export function LengthMeasureList() {
   const handleSelectLine = (line: any) => {
     const measurer = components.get(OBF.LengthMeasurement);
     for (const l of measurer.list) {
-      l.isSelected = l === line;
+      (l as any).isSelected = l === line;
     }
     setSelectedLine(line.isSelected ? line : null);
     setLines([...measurer.list]);

@@ -59,7 +59,7 @@ export function AreaMeasureList() {
     const measurer = components.get(OBF.AreaMeasurement);
 
     const syncPolygons = () => {
-      const list = [...measurer.list];
+      const list = [...measurer.list] as any[];
       setPolygons(list);
       setVisibilityMap(new Map(list.map((p) => [p, p.visible])));
       const selected = list.find((poly) => poly.isSelected) || null;
@@ -91,7 +91,7 @@ export function AreaMeasureList() {
   const handleSelectPolygon = (poly: any) => {
     const measurer = components.get(OBF.AreaMeasurement);
     for (const p of measurer.list) {
-      p.isSelected = p === poly;
+      (p as any).isSelected = p === poly;
     }
     setSelectedPolygon(poly.isSelected ? poly : null);
     setPolygons([...measurer.list]);

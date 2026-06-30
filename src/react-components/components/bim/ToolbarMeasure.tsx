@@ -44,7 +44,7 @@ export function ToolbarMeasure() {
   useEffect(() => {
     if (!components || !world) return;
 
-    const cursor = components.get(LengthMeasureCursor);
+    const cursor = components.get(LengthMeasureCursor as any);
     const active = activeTool === "measure" && activeType === "length";
 
     cursor.enabled = active;
@@ -58,7 +58,7 @@ export function ToolbarMeasure() {
   useEffect(() => {
     if (!components || !world) return;
 
-    const cursor = components.get(AreaMeasureCursor);
+    const cursor = components.get(AreaMeasureCursor as any);
     const active = activeTool === "measure" && activeType === "area";
 
     cursor.enabled = active;
@@ -72,7 +72,7 @@ export function ToolbarMeasure() {
   useEffect(() => {
     if (!components || !world) return;
 
-    const cursor = components.get(SurfaceMeasureCursor);
+    const cursor = components.get(SurfaceMeasureCursor as any);
     const active = activeTool === "measure" && activeType === "surface";
 
     cursor.enabled = active;

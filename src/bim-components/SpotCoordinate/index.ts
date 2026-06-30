@@ -2,7 +2,7 @@
 import * as OBC from "@thatopen/components";
 import { Spot3DHelperManager } from "./src/Spot3DHelperManager";
 import { SpotLabelManager } from "./src/SpotLabelManager";
-import { CursurSurface } from "../CursurSurface";
+import { CursorSurface } from "../CursorSurface";
 
 export class SpotCoordinate extends OBC.Component implements OBC.Disposable {
   static readonly uuid = "9d273a21-4f81-4475-b6d8-21d9b3d0a273" as const;
@@ -86,9 +86,9 @@ export class SpotCoordinate extends OBC.Component implements OBC.Disposable {
 
     const viewport = this._world.renderer!.three.domElement;
 
-    // Initialize CursurSurface world
-    const cursurSurface = this.components.get(CursurSurface);
-    cursurSurface.setWorld(this._world);
+    // Initialize CursorSurface world
+    const cursorSurface = this.components.get(CursorSurface);
+    cursorSurface.setWorld(this._world);
 
     // Double-click handler to place coordinate labels
     this._spotClickListener = (e: MouseEvent) => {
@@ -100,24 +100,24 @@ export class SpotCoordinate extends OBC.Component implements OBC.Disposable {
     };
     viewport.addEventListener("dblclick", this._spotClickListener);
 
-    // Mousemove handler to update CursurSurface normal alignment
+    // Mousemove handler to update CursorSurface normal alignment
     let raycastInProgress = false;
     this._spotMoveListener = (e: MouseEvent) => {
       if (!this._world) return;
 
-      // Update CursurSurface asynchronously to prevent lag
+      // Update CursorSurface asynchronously to prevent lag
       if (!raycastInProgress) {
         raycastInProgress = true;
         const raycasters = this.components.get(OBC.Raycasters);
         const raycaster = raycasters.get(this._world);
-        const cursurSurface = this.components.get(CursurSurface);
+        const cursorSurface = this.components.get(CursorSurface);
         raycaster.castRay().then((result) => {
           if (result && result.point && ((result as any).normal || (result.face && result.object))) {
             const worldNormal = (result as any).normal 
               ? (result as any).normal.clone() 
               : result.face!.normal.clone().transformDirection(result.object.matrixWorld).normalize();
 
-            cursurSurface.update(result.point, worldNormal);
+            cursorSurface.update(result.point, worldNormal);
 
             const absY = Math.abs(worldNormal.y);
             if (absY > 0.85) {
@@ -134,13 +134,13 @@ export class SpotCoordinate extends OBC.Component implements OBC.Disposable {
               this._currentFillColor = "rgba(36, 166, 241, 0.12)";
             }
           } else {
-            cursurSurface.hide();
+            cursorSurface.hide();
             this._currentStrokeColor = "rgba(80, 160, 255, 0.95)";
             this._currentFillColor = "rgba(80, 160, 255, 0.12)";
           }
         }).catch((err) => {
           console.warn("Raycasting failed on mousemove", err);
-          cursurSurface.hide();
+          cursorSurface.hide();
         }).finally(() => {
           raycastInProgress = false;
         });
@@ -150,7 +150,7 @@ export class SpotCoordinate extends OBC.Component implements OBC.Disposable {
 
     // Mouseleave handler to hide overlays
     this._spotMouseLeaveListener = () => {
-      this.components.get(CursurSurface).hide();
+      this.components.get(CursorSurface).hide();
     };
     viewport.addEventListener("mouseleave", this._spotMouseLeaveListener);
 
@@ -185,7 +185,7 @@ export class SpotCoordinate extends OBC.Component implements OBC.Disposable {
       this._world.onCameraChanged.remove(this._spotCameraListener);
       this._spotCameraListener = null;
     }
-    this.components.get(CursurSurface).hide();
+    this.components.get(CursorSurface).hide();
 
     this._currentStrokeColor = "rgba(80, 160, 255, 0.95)";
     this._currentFillColor = "rgba(80, 160, 255, 0.12)";

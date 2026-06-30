@@ -2,7 +2,7 @@
 import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
 import * as THREE from "three";
-import { CursurSurface } from "../../CursurSurface";
+import { CursorSurface } from "../../CursorSurface";
 
 export class AreaMeasureCursor extends OBC.Component implements OBC.Disposable {
   static readonly uuid = "4d2b27d0-ff5d-4ea7-90d0-ecdfc812d8a7" as const;
@@ -48,14 +48,14 @@ export class AreaMeasureCursor extends OBC.Component implements OBC.Disposable {
 
   private async _activate() {
     const measurer = this._components.get(OBF.AreaMeasurement);
-    const cursurSurface = this._components.get(CursurSurface);
+    const cursorSurface = this._components.get(CursorSurface);
     const canvas = this._world.renderer?.three?.domElement;
 
     // 1. Enable and configure measurer
     measurer.world = this._world;
     measurer.color = new THREE.Color("#24a6f1");
     measurer.enabled = true;
-    cursurSurface.setWorld(this._world);
+    cursorSurface.setWorld(this._world);
 
     // 2. Setup Synchronous Picking meshes
     await this._setupPickingMeshes();
@@ -79,13 +79,13 @@ export class AreaMeasureCursor extends OBC.Component implements OBC.Disposable {
             const worldNormal = (result as any).normal
               ? (result as any).normal.clone()
               : result.face!.normal.clone().transformDirection(result.object.matrixWorld).normalize();
-            cursurSurface.update(result.point, worldNormal);
+            cursorSurface.update(result.point, worldNormal);
           } else {
-            cursurSurface.hide();
+            cursorSurface.hide();
           }
         })
         .catch(() => {
-          cursurSurface.hide();
+          cursorSurface.hide();
         })
         .finally(() => {
           raycastInProgress = false;
@@ -125,12 +125,12 @@ export class AreaMeasureCursor extends OBC.Component implements OBC.Disposable {
 
   private _deactivate() {
     const measurer = this._components.get(OBF.AreaMeasurement);
-    const cursurSurface = this._components.get(CursurSurface);
+    const cursorSurface = this._components.get(CursorSurface);
     const canvas = this._world.renderer?.three?.domElement;
 
     measurer.enabled = false;
     measurer.pickerMode = OBF.GraphicVertexPickerMode.DEFAULT;
-    cursurSurface.hide();
+    cursorSurface.hide();
 
     if (canvas) {
       if (this._viewportMouseMoveListener) {
@@ -153,8 +153,10 @@ export class AreaMeasureCursor extends OBC.Component implements OBC.Disposable {
     }
 
     // Clean meshes from world.meshes
+    const disposer = this._components.get(OBC.Disposer);
     for (const mesh of this._addedMeshes) {
       this._world.meshes.delete(mesh);
+      disposer.destroy(mesh);
     }
     this._addedMeshes = [];
   }

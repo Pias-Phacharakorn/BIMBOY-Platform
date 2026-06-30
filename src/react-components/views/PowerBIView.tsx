@@ -64,7 +64,8 @@ export function PowerBIView() {
               </p>
               {showSettings && (
                 <Link
-                  to={`/projects/${project.id}/settings`}
+                  to="/projects/$projectId/settings"
+                  params={{ projectId: project.id }}
                   search={{}}
                   className="inline-flex items-center justify-center gap-2 min-h-8 px-4 py-1.5 border border-border-strong rounded-radius bg-gradient-to-b from-surface-raised to-surface-alt text-fg cursor-pointer text-xs font-semibold no-underline hover:border-border hover:bg-surface-alt transition-colors duration-120"
                 >

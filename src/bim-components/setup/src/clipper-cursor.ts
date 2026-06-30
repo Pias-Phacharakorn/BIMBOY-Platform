@@ -1,7 +1,7 @@
 // @ts-nocheck
 import * as OBC from "@thatopen/components";
 import * as THREE from "three";
-import { CursurSurface } from "../../CursurSurface";
+import { CursorSurface } from "../../CursorSurface";
 
 export interface ClipperPlaneState {
   id: string;
@@ -179,9 +179,9 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     this.placing = true;
     this._viewport.style.cursor = "crosshair";
 
-    const cursurSurface = this._components.get(CursurSurface);
-    cursurSurface.setWorld(this._world);
-    console.log("CursurSurface world set");
+    const cursorSurface = this._components.get(CursorSurface);
+    cursorSurface.setWorld(this._world);
+    console.log("CursorSurface world set");
 
     const canvas = this._world.renderer!.three.domElement;
     let raycastInProgress = false;
@@ -201,13 +201,13 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
               ? (result as any).normal.clone() 
               : result.face!.normal.clone().transformDirection(result.object.matrixWorld).normalize();
             
-            cursurSurface.update(result.point, worldNormal);
+            cursorSurface.update(result.point, worldNormal);
           } else {
-            cursurSurface.hide();
+            cursorSurface.hide();
           }
         }).catch((err) => {
           console.log("Raycasting failed on hover: " + err.message);
-          cursurSurface.hide();
+          cursorSurface.hide();
         }).finally(() => {
           raycastInProgress = false;
         });
@@ -266,8 +266,8 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     this.placing = false;
     this._viewport.style.cursor = "";
 
-    const cursurSurface = this._components.get(CursurSurface);
-    cursurSurface.hide();
+    const cursorSurface = this._components.get(CursorSurface);
+    cursorSurface.hide();
 
     const canvas = this._world.renderer?.three?.domElement;
     if (canvas) {

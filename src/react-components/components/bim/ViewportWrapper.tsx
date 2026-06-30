@@ -3,7 +3,7 @@ import * as THREE from "three";
 import * as BUI from "@thatopen/ui";
 import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
-import { setupComponents, CursurSurface } from "@/bim-components";
+import { setupComponents, CursorSurface } from "@/bim-components";
 import { setupViewCube } from "@/bim-components/setup/src/view-cube";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { MiniMapOverlay } from "./MiniMapOverlay";
@@ -46,8 +46,8 @@ export function ViewportWrapper({
     const viewportDom = world.renderer?.three.domElement;
     if (!viewportDom) return;
 
-    const cursurSurface = components.get(CursurSurface);
-    cursurSurface.setWorld(world);
+    const cursorSurface = components.get(CursorSurface);
+    cursorSurface.setWorld(world);
 
     let raycastInProgress = false;
     const handleMouseMove = (e: MouseEvent) => {
@@ -71,13 +71,13 @@ export function ViewportWrapper({
                   .transformDirection(result.object.matrixWorld)
                   .normalize();
 
-            cursurSurface.update(result.point, worldNormal);
+            cursorSurface.update(result.point, worldNormal);
           } else {
-            cursurSurface.hide();
+            cursorSurface.hide();
           }
         })
         .catch(() => {
-          cursurSurface.hide();
+          cursorSurface.hide();
         })
         .finally(() => {
           raycastInProgress = false;
@@ -130,7 +130,7 @@ export function ViewportWrapper({
 
             setAlignAngle(targetAngle);
             setAligningDirection(null);
-            cursurSurface.hide();
+            cursorSurface.hide();
 
             // Trigger ViewCube update dynamically by simulating camera control update event
             const camera = world.camera as any;
@@ -154,7 +154,7 @@ export function ViewportWrapper({
     return () => {
       viewportDom.removeEventListener("mousemove", handleMouseMove);
       viewportDom.removeEventListener("click", handleClick, true);
-      cursurSurface.hide();
+      cursorSurface.hide();
     };
   }, [components, world, aligningDirection]);
 

@@ -2,7 +2,7 @@
 import * as THREE from "three";
 import * as OBC from "@thatopen/components";
 
-export class CursurSurface extends OBC.Component implements OBC.Disposable {
+export class CursorSurface extends OBC.Component implements OBC.Disposable {
   static readonly uuid = "ef2f4721-2a62-4212-9c3f-7e8e6ab20bf9" as const;
   enabled = true;
   readonly onDisposed = new OBC.Event<string>();
@@ -18,14 +18,14 @@ export class CursurSurface extends OBC.Component implements OBC.Disposable {
 
   constructor(components: OBC.Components) {
     super(components);
-    components.add(CursurSurface.uuid, this);
+    components.add(CursorSurface.uuid, this);
 
     this.group = new THREE.Group();
 
     // 1. Translucent circle disk (0.6 radius)
     const circleGeo = new THREE.CircleGeometry(0.6, 32);
     this.circleMat = new THREE.MeshBasicMaterial({
-      color: 0x00000,
+      color: 0x000000,
       transparent: true,
       opacity: 0.35,
       side: THREE.DoubleSide,
@@ -137,8 +137,7 @@ export class CursurSurface extends OBC.Component implements OBC.Disposable {
     this.lineMat.dispose();
     this.crosshair.geometry.dispose();
 
-    this.onDisposed.trigger(CursurSurface.uuid);
+    this.onDisposed.trigger(CursorSurface.uuid);
     this.onDisposed.reset();
   }
 }
-

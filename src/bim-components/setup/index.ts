@@ -19,7 +19,7 @@ import {
 } from "./src";
 import { PropertyTable } from "../PropertyTable";
 import { SpotCoordinate } from "../SpotCoordinate";
-import { CursurSurface } from "../CursurSurface";
+import { CursorSurface } from "../CursorSurface";
 import { GisLayers } from "../GisLayers";
 
 export const setupComponents = async () => {
@@ -29,7 +29,7 @@ export const setupComponents = async () => {
   const components = new OBC.Components();
   const { world, viewport } = createWorld(components)
 
-  new CursurSurface(components);
+  new CursorSurface(components);
 
   await setupIfcLoader(components)
   setupFragmentsManager(components, world)
