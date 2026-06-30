@@ -7,9 +7,10 @@ import { queryClient } from '@/lib/queryClient'
 // from the files in src/routes/. Never edit routeTree.gen.ts manually.
 export const router = createRouter({
   routeTree,
-  // Pass queryClient as router context so route loaders can use it
+  // Pass queryClient and auth as router context so route loaders can use them
   context: {
     queryClient,
+    auth: undefined!, // will be provided at runtime
   },
   defaultPreload: 'intent',
   defaultPreloadStaleTime: 0,

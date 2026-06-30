@@ -3,6 +3,7 @@ import { Icon, SearchBox } from "@/react-components/components/ui";
 import { ProjectCard } from "@/react-components/features/project-card";
 import { useProjects } from "@/react-components/features/projects/useProjects";
 import type { ProjectView } from "@/types";
+import { UserAccountDropdown } from "@/react-components/features/auth/UserAccountDropdown";
 
 export function ProjectsView() {
   const [view, setView] = useState<ProjectView>("card");
@@ -31,7 +32,7 @@ export function ProjectsView() {
 
   return (
     <div className="flex w-screen h-screen min-w-0 bg-[#090a0f] flex-col">
-      <header className="flex flex-none items-center justify-between gap-[18px] min-h-[58px] px-[clamp(14px,2vw,24px)] bg-[oklch(12.2%_0.014_255_/_92%)] border-b border-border backdrop-blur-md">
+      <header className="relative z-20 flex flex-none items-center justify-between gap-[18px] min-h-[58px] px-[clamp(14px,2vw,24px)] bg-[oklch(12.2%_0.014_255_/_92%)] border-b border-border backdrop-blur-md">
         <div className="flex items-center gap-2 text-fg font-semibold text-lg tracking-tight select-none">
           <div className="w-6 h-6 rounded-sm bg-gradient-to-br from-accent to-accent-2 shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_10px_26px_rgba(102,126,234,0.18)]" />
           BIM BOY
@@ -80,6 +81,8 @@ export function ProjectsView() {
           <button className="inline-flex items-center justify-center gap-2 min-h-8 px-3 py-1.5 border rounded-radius cursor-pointer text-xs font-semibold no-underline hover:-translate-y-[1px] active:translate-y-0 transition-all duration-120 border-[oklch(69%_0.15_252)] bg-gradient-to-b from-[oklch(70%_0.16_252)] to-[oklch(57%_0.16_252)] text-[oklch(99%_0.004_255)] hover:from-[oklch(73%_0.16_252)] hover:to-[oklch(60%_0.16_252)]" type="button">
             New Project
           </button>
+          <div className="w-[1px] h-5 bg-border mx-1" />
+          <UserAccountDropdown />
         </div>
       </header>
 

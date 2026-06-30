@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { UserAccountDropdown } from "@/react-components/features/auth/UserAccountDropdown";
 
 interface WorkspaceHeaderProps {
   title: string;
@@ -10,7 +11,7 @@ interface WorkspaceHeaderProps {
 
 export function WorkspaceHeader({ title, tabs, activeTab, onTabChange, actions }: WorkspaceHeaderProps) {
   return (
-    <header className="flex flex-none items-center justify-between gap-[18px] min-h-[58px] px-[clamp(14px,2vw,24px)] bg-[oklch(12.2%_0.014_255_/_92%)] border-b border-border backdrop-blur-md">
+    <header className="relative z-20 flex flex-none items-center justify-between gap-[18px] min-h-[58px] px-[clamp(14px,2vw,24px)] bg-[oklch(12.2%_0.014_255_/_92%)] border-b border-border backdrop-blur-md">
       <div className="flex items-center gap-4 min-w-0">
         <div className="flex-none text-[15px] font-semibold text-fg">{title}</div>
         {tabs ? (
@@ -32,8 +33,13 @@ export function WorkspaceHeader({ title, tabs, activeTab, onTabChange, actions }
           </div>
         ) : null}
       </div>
-      {actions ? <div className="flex items-center gap-3 min-w-0">{actions}</div> : null}
+      <div className="flex items-center gap-3 min-w-0">
+        {actions}
+        {actions ? <div className="w-[1px] h-4 bg-border/60 mx-1" /> : null}
+        <UserAccountDropdown />
+      </div>
     </header>
   );
 }
+
 

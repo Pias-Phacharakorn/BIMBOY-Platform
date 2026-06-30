@@ -10,6 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as HubSettingsRouteImport } from './routes/hub-settings'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
@@ -23,6 +25,16 @@ import { Route as ProjectsProjectIdClashesRouteImport } from './routes/projects/
 const ProjectsRoute = ProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HubSettingsRoute = HubSettingsRouteImport.update({
+  id: '/hub-settings',
+  path: '/hub-settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -77,6 +89,8 @@ const ProjectsProjectIdClashesRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/hub-settings': typeof HubSettingsRoute
+  '/login': typeof LoginRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/': typeof ProjectsIndexRoute
@@ -89,6 +103,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/hub-settings': typeof HubSettingsRoute
+  '/login': typeof LoginRoute
   '/projects': typeof ProjectsIndexRoute
   '/projects/$projectId/clashes': typeof ProjectsProjectIdClashesRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
@@ -100,6 +116,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/hub-settings': typeof HubSettingsRoute
+  '/login': typeof LoginRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/': typeof ProjectsIndexRoute
@@ -114,6 +132,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/hub-settings'
+    | '/login'
     | '/projects'
     | '/projects/$projectId'
     | '/projects/'
@@ -126,6 +146,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/hub-settings'
+    | '/login'
     | '/projects'
     | '/projects/$projectId/clashes'
     | '/projects/$projectId/documents'
@@ -136,6 +158,8 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/hub-settings'
+    | '/login'
     | '/projects'
     | '/projects/$projectId'
     | '/projects/'
@@ -149,6 +173,8 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  HubSettingsRoute: typeof HubSettingsRoute
+  LoginRoute: typeof LoginRoute
   ProjectsRoute: typeof ProjectsRouteWithChildren
 }
 
@@ -159,6 +185,20 @@ declare module '@tanstack/react-router' {
       path: '/projects'
       fullPath: '/projects'
       preLoaderRoute: typeof ProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hub-settings': {
+      id: '/hub-settings'
+      path: '/hub-settings'
+      fullPath: '/hub-settings'
+      preLoaderRoute: typeof HubSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -264,6 +304,8 @@ const ProjectsRouteWithChildren = ProjectsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  HubSettingsRoute: HubSettingsRoute,
+  LoginRoute: LoginRoute,
   ProjectsRoute: ProjectsRouteWithChildren,
 }
 export const routeTree = rootRouteImport

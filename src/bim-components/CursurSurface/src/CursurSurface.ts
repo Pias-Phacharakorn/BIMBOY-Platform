@@ -22,8 +22,8 @@ export class CursurSurface extends OBC.Component implements OBC.Disposable {
 
     this.group = new THREE.Group();
 
-    // 1. Translucent circle disk (0.8 radius)
-    const circleGeo = new THREE.CircleGeometry(0.8, 32);
+    // 1. Translucent circle disk (0.6 radius)
+    const circleGeo = new THREE.CircleGeometry(0.6, 32);
     this.circleMat = new THREE.MeshBasicMaterial({
       color: 0x00000,
       transparent: true,

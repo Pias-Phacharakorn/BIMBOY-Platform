@@ -52,5 +52,8 @@ export const appIcons = {
   FILE: "mdi:file-outline",
   SEARCH: "mdi:magnify",
   ALIGN: "solar:compass-bold",
+  GOOGLE: "logos:google-icon",
+  MICROSOFT: "logos:microsoft-icon",
+  LOGOUT: "mdi:logout",
 };
 

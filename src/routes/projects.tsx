@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { Outlet } from '@tanstack/react-router'
 
 // ─── Projects Layout Route ────────────────────────────────────────────────────
@@ -6,6 +6,16 @@ import { Outlet } from '@tanstack/react-router'
 // The AppShell (sidebar + header) lives here so it persists across
 // project sub-routes without remounting.
 export const Route = createFileRoute('/projects')({
+  beforeLoad: ({ context, location }) => {
+    if (!context.auth.isAuthenticated) {
+      throw redirect({
+        to: '/login',
+        search: {
+          redirect: location.href,
+        },
+      })
+    }
+  },
   component: ProjectsLayout,
 })
 
