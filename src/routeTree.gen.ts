@@ -18,7 +18,9 @@ import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projec
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects/$projectId/index'
 import { Route as ProjectsProjectIdStandardRouteImport } from './routes/projects/$projectId/standard'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects/$projectId/settings'
+import { Route as ProjectsProjectIdPowerbiRouteImport } from './routes/projects/$projectId/powerbi'
 import { Route as ProjectsProjectIdModelRouteImport } from './routes/projects/$projectId/model'
+import { Route as ProjectsProjectIdDrawingRouteImport } from './routes/projects/$projectId/drawing'
 import { Route as ProjectsProjectIdDocumentsRouteImport } from './routes/projects/$projectId/documents'
 import { Route as ProjectsProjectIdClashesRouteImport } from './routes/projects/$projectId/clashes'
 
@@ -69,11 +71,23 @@ const ProjectsProjectIdSettingsRoute =
     path: '/settings',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const ProjectsProjectIdPowerbiRoute =
+  ProjectsProjectIdPowerbiRouteImport.update({
+    id: '/powerbi',
+    path: '/powerbi',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdModelRoute = ProjectsProjectIdModelRouteImport.update({
   id: '/model',
   path: '/model',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
+const ProjectsProjectIdDrawingRoute =
+  ProjectsProjectIdDrawingRouteImport.update({
+    id: '/drawing',
+    path: '/drawing',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdDocumentsRoute =
   ProjectsProjectIdDocumentsRouteImport.update({
     id: '/documents',
@@ -96,7 +110,9 @@ export interface FileRoutesByFullPath {
   '/projects/': typeof ProjectsIndexRoute
   '/projects/$projectId/clashes': typeof ProjectsProjectIdClashesRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
+  '/projects/$projectId/drawing': typeof ProjectsProjectIdDrawingRoute
   '/projects/$projectId/model': typeof ProjectsProjectIdModelRoute
+  '/projects/$projectId/powerbi': typeof ProjectsProjectIdPowerbiRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId/standard': typeof ProjectsProjectIdStandardRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
@@ -108,7 +124,9 @@ export interface FileRoutesByTo {
   '/projects': typeof ProjectsIndexRoute
   '/projects/$projectId/clashes': typeof ProjectsProjectIdClashesRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
+  '/projects/$projectId/drawing': typeof ProjectsProjectIdDrawingRoute
   '/projects/$projectId/model': typeof ProjectsProjectIdModelRoute
+  '/projects/$projectId/powerbi': typeof ProjectsProjectIdPowerbiRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId/standard': typeof ProjectsProjectIdStandardRoute
   '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
@@ -123,7 +141,9 @@ export interface FileRoutesById {
   '/projects/': typeof ProjectsIndexRoute
   '/projects/$projectId/clashes': typeof ProjectsProjectIdClashesRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
+  '/projects/$projectId/drawing': typeof ProjectsProjectIdDrawingRoute
   '/projects/$projectId/model': typeof ProjectsProjectIdModelRoute
+  '/projects/$projectId/powerbi': typeof ProjectsProjectIdPowerbiRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId/standard': typeof ProjectsProjectIdStandardRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
@@ -139,7 +159,9 @@ export interface FileRouteTypes {
     | '/projects/'
     | '/projects/$projectId/clashes'
     | '/projects/$projectId/documents'
+    | '/projects/$projectId/drawing'
     | '/projects/$projectId/model'
+    | '/projects/$projectId/powerbi'
     | '/projects/$projectId/settings'
     | '/projects/$projectId/standard'
     | '/projects/$projectId/'
@@ -151,7 +173,9 @@ export interface FileRouteTypes {
     | '/projects'
     | '/projects/$projectId/clashes'
     | '/projects/$projectId/documents'
+    | '/projects/$projectId/drawing'
     | '/projects/$projectId/model'
+    | '/projects/$projectId/powerbi'
     | '/projects/$projectId/settings'
     | '/projects/$projectId/standard'
     | '/projects/$projectId'
@@ -165,7 +189,9 @@ export interface FileRouteTypes {
     | '/projects/'
     | '/projects/$projectId/clashes'
     | '/projects/$projectId/documents'
+    | '/projects/$projectId/drawing'
     | '/projects/$projectId/model'
+    | '/projects/$projectId/powerbi'
     | '/projects/$projectId/settings'
     | '/projects/$projectId/standard'
     | '/projects/$projectId/'
@@ -243,11 +269,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdSettingsRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/powerbi': {
+      id: '/projects/$projectId/powerbi'
+      path: '/powerbi'
+      fullPath: '/projects/$projectId/powerbi'
+      preLoaderRoute: typeof ProjectsProjectIdPowerbiRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/model': {
       id: '/projects/$projectId/model'
       path: '/model'
       fullPath: '/projects/$projectId/model'
       preLoaderRoute: typeof ProjectsProjectIdModelRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/drawing': {
+      id: '/projects/$projectId/drawing'
+      path: '/drawing'
+      fullPath: '/projects/$projectId/drawing'
+      preLoaderRoute: typeof ProjectsProjectIdDrawingRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
     '/projects/$projectId/documents': {
@@ -270,7 +310,9 @@ declare module '@tanstack/react-router' {
 interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdClashesRoute: typeof ProjectsProjectIdClashesRoute
   ProjectsProjectIdDocumentsRoute: typeof ProjectsProjectIdDocumentsRoute
+  ProjectsProjectIdDrawingRoute: typeof ProjectsProjectIdDrawingRoute
   ProjectsProjectIdModelRoute: typeof ProjectsProjectIdModelRoute
+  ProjectsProjectIdPowerbiRoute: typeof ProjectsProjectIdPowerbiRoute
   ProjectsProjectIdSettingsRoute: typeof ProjectsProjectIdSettingsRoute
   ProjectsProjectIdStandardRoute: typeof ProjectsProjectIdStandardRoute
   ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
@@ -279,7 +321,9 @@ interface ProjectsProjectIdRouteChildren {
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdClashesRoute: ProjectsProjectIdClashesRoute,
   ProjectsProjectIdDocumentsRoute: ProjectsProjectIdDocumentsRoute,
+  ProjectsProjectIdDrawingRoute: ProjectsProjectIdDrawingRoute,
   ProjectsProjectIdModelRoute: ProjectsProjectIdModelRoute,
+  ProjectsProjectIdPowerbiRoute: ProjectsProjectIdPowerbiRoute,
   ProjectsProjectIdSettingsRoute: ProjectsProjectIdSettingsRoute,
   ProjectsProjectIdStandardRoute: ProjectsProjectIdStandardRoute,
   ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,

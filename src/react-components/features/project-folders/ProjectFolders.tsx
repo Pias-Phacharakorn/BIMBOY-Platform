@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { AppProject } from "@/types";
+import { cn } from "@/lib/utils";
 import {
   Folder,
   FolderOpen,
@@ -18,6 +19,7 @@ import {
 
 interface ProjectFoldersProps {
   project: AppProject;
+  focusFolder?: string;
 }
 
 interface StorageFile {
@@ -31,9 +33,9 @@ interface StorageFile {
   };
 }
 
-export function ProjectFolders({ project }: ProjectFoldersProps) {
+export function ProjectFolders({ project, focusFolder }: ProjectFoldersProps) {
   const projectPath = `${project.projectnumber}_${project.projectName}`;
-  const subFolders = ["01_ifc", "02_frag", "03_ClashImport"];
+  const subFolders = ["01_ifc", "02_frag", "03_ClashImport", "04_Drawing"];
 
   // States
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
@@ -141,11 +143,15 @@ export function ProjectFolders({ project }: ProjectFoldersProps) {
   // Initial load
   useEffect(() => {
     if (project.id) {
-      subFolders.forEach((folder) => {
+      const foldersToLoad = focusFolder ? [focusFolder] : subFolders;
+      foldersToLoad.forEach((folder) => {
         fetchFolderFiles(folder);
       });
+      if (focusFolder) {
+        setExpandedFolders((prev) => ({ ...prev, [focusFolder]: true }));
+      }
     }
-  }, [project.id]);
+  }, [project.id, focusFolder]);
 
   // Handle File Upload
   const handleUpload = async (
@@ -222,37 +228,44 @@ export function ProjectFolders({ project }: ProjectFoldersProps) {
   return (
     <div className="flex flex-col gap-4 w-full text-fg">
       {/* Settings section header */}
-      <div className="flex flex-col gap-1 pb-4 border-b border-border">
-        <h3 className="text-base font-bold text-fg">Project Files Directory</h3>
-        <p className="text-xs text-muted">
-          Manage model geometry files and clash reports directly inside the project's cloud storage.
-        </p>
-      </div>
+      {!focusFolder && (
+        <div className="flex flex-col gap-1 pb-4 border-b border-border">
+          <h3 className="text-base font-bold text-fg">Project Files Directory</h3>
+          <p className="text-xs text-muted">
+            Manage model geometry files and clash reports directly inside the project's cloud storage.
+          </p>
+        </div>
+      )}
 
       {/* Directory Tree Card */}
       <div className="border border-border bg-[oklch(14.5%_0.014_255_/_94%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] rounded-radius overflow-hidden p-6 flex flex-col gap-2">
         {/* Root Directory Row */}
-        <div
-          className="flex items-center gap-2 py-2 px-3 rounded-radius hover:bg-surface-alt transition-colors duration-120 cursor-pointer select-none text-sm font-semibold"
-          onClick={() => toggleFolder(projectPath)}
-        >
-          {expandedFolders[projectPath] ? (
-            <ChevronDown className="w-4 h-4 text-muted shrink-0" />
-          ) : (
-            <ChevronRight className="w-4 h-4 text-muted shrink-0" />
-          )}
-          {expandedFolders[projectPath] ? (
-            <FolderOpen className="w-5 h-5 text-accent shrink-0" />
-          ) : (
-            <Folder className="w-5 h-5 text-accent shrink-0" />
-          )}
-          <span className="font-mono text-[13px]">{projectPath}</span>
-        </div>
+        {!focusFolder && (
+          <div
+            className="flex items-center gap-2 py-2 px-3 rounded-radius hover:bg-surface-alt transition-colors duration-120 cursor-pointer select-none text-sm font-semibold"
+            onClick={() => toggleFolder(projectPath)}
+          >
+            {expandedFolders[projectPath] ? (
+              <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-muted shrink-0" />
+            )}
+            {expandedFolders[projectPath] ? (
+              <FolderOpen className="w-5 h-5 text-accent shrink-0" />
+            ) : (
+              <Folder className="w-5 h-5 text-accent shrink-0" />
+            )}
+            <span className="font-mono text-[13px]">{projectPath}</span>
+          </div>
+        )}
 
         {/* Subdirectories */}
-        {expandedFolders[projectPath] && (
-          <div className="pl-6 border-l border-border/60 ml-5 flex flex-col gap-3 mt-1">
-            {subFolders.map((subFolder) => {
+        {(focusFolder || expandedFolders[projectPath]) && (
+          <div className={cn(
+            "flex flex-col gap-3 mt-1",
+            !focusFolder && "pl-6 border-l border-border/60 ml-5"
+          )}>
+            {(focusFolder ? [focusFolder] : subFolders).map((subFolder) => {
               const isExpanded = expandedFolders[subFolder];
               const folderFiles = files[subFolder] || [];
               const isLoading = loading[subFolder];
@@ -310,6 +323,8 @@ export function ProjectFolders({ project }: ProjectFoldersProps) {
                               ? ".ifc"
                               : subFolder === "02_frag"
                               ? ".frag"
+                              : subFolder === "04_Drawing"
+                              ? ".pdf,.dwg,.dxf"
                               : ".json,.bcf,.xml"
                           }
                           disabled={isUploading}

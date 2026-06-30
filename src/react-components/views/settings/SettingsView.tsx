@@ -7,6 +7,7 @@ import { useAuth } from "@/react-components/features/auth/useAuth";
 import { ProjectSettingsForm } from "@/react-components/features/project-settings/ProjectSettingsForm";
 import { ProjectMembersSettings } from "@/react-components/features/project-members/ProjectMembersSettings";
 import { ProjectFolders } from "@/react-components/features/project-folders/ProjectFolders";
+import { ProjectPowerBISettings } from "@/react-components/features/project-powerbi-settings/ProjectPowerBISettings";
 
 export function SettingsView() {
   const { projectId } = useParams({ strict: false });
@@ -16,7 +17,7 @@ export function SettingsView() {
 
   // Tab switching state
   const [activeTab, setActiveTab] = useState("General");
-  const tabs = ["General", "Members", "Folder"];
+  const tabs = ["General", "Members", "Folder", "PowerBI"];
 
   // Edit toggles and loading feedbacks
   const [isEditing, setIsEditing] = useState(false);
@@ -107,6 +108,10 @@ export function SettingsView() {
 
           {activeTab === "Folder" && (
             <ProjectFolders project={project} />
+          )}
+
+          {activeTab === "PowerBI" && (
+            <ProjectPowerBISettings project={project} />
           )}
         </div>
       </div>

@@ -37,11 +37,11 @@ export const ProjectMemberSchema = z.object({
   email: z.string().email(),
   role: z.enum(['owner', 'admin', 'coordinator', 'viewer']),
   avatarUrl: z.string().url().optional(),
-  joinedAt: z.any(), // Firestore Timestamp
+  joinedAt: z.any(), // Timestamp
 })
 export type ProjectMember = z.infer<typeof ProjectMemberSchema>
 
-// ─── Project (Firestore Document) ────────────────────────────────────────────
+// ─── Project Schema ──────────────────────────────────────────────────────────
 export const ProjectSchema = z.object({
   id: z.string(),
   name: z.string().min(1).max(120),
@@ -57,11 +57,11 @@ export const ProjectSchema = z.object({
   coverImageUrl: z.string().url().optional(),
   gisCoordinates: GisCoordinatesSchema.optional(),
   members: z.array(ProjectMemberSchema).default([]),
-  /** Firebase Storage path to the IFC/Fragment model file */
+  /** Storage path to the IFC/Fragment model file */
   modelPath: z.string().optional(),
-  /** Firestore collection path for sub-documents */
-  createdAt: z.any(), // Firestore Timestamp
-  updatedAt: z.any(), // Firestore Timestamp
+  /** Collection path for sub-documents */
+  createdAt: z.any(), // Timestamp
+  updatedAt: z.any(), // Timestamp
   createdBy: z.string(),
 })
 export type Project = z.infer<typeof ProjectSchema>

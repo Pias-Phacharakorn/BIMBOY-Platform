@@ -4,7 +4,7 @@ import { QueryClient } from '@tanstack/react-query'
 // Configured for BIM platform data characteristics:
 //  - staleTime: 60s — project/document lists don't change every second
 //  - gcTime: 5min — keep cached BIM data in memory for smooth navigation
-//  - retry: 2 — retry failed Firebase requests twice before showing error
+//  - retry: 2 — retry failed requests twice before showing error
 //  - refetchOnWindowFocus: false — BIM tools don't need background sync
 
 export const queryClient = new QueryClient({

@@ -173,6 +173,7 @@ export type Database = {
           start_date: string
           status: Database["public"]["Enums"]["project_status"]
           updated_at: string
+          powerbi_tabs: Json
         }
         Insert: {
           clash_folder_path?: string | null
@@ -194,6 +195,7 @@ export type Database = {
           start_date?: string
           status?: Database["public"]["Enums"]["project_status"]
           updated_at?: string
+          powerbi_tabs?: Json
         }
         Update: {
           clash_folder_path?: string | null
@@ -215,6 +217,7 @@ export type Database = {
           start_date?: string
           status?: Database["public"]["Enums"]["project_status"]
           updated_at?: string
+          powerbi_tabs?: Json
         }
         Relationships: [
           {
@@ -249,6 +252,7 @@ export type Database = {
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
           updated_at: string | null
+          powerbi_tabs: Json | null
         }
         Insert: {
           clash_folder_path?: string | null
@@ -270,6 +274,7 @@ export type Database = {
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
           updated_at?: string | null
+          powerbi_tabs?: Json | null
         }
         Update: {
           clash_folder_path?: string | null
@@ -291,6 +296,7 @@ export type Database = {
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
           updated_at?: string | null
+          powerbi_tabs?: Json | null
         }
         Relationships: [
           {

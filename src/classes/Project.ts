@@ -19,6 +19,7 @@ export interface IProject {
     hasModel: boolean
   }
   userRole?: UserRole
+  powerbiTabs?: { id: string; tabTitle: string; url: string }[]
 }
 
 export class Project implements IProject {
@@ -38,6 +39,7 @@ export class Project implements IProject {
     hasModel: boolean
   }
   userRole?: UserRole
+  powerbiTabs?: { id: string; tabTitle: string; url: string }[]
 
   // Class internals
   cost: number = 0

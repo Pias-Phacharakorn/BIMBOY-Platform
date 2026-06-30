@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Icon, type AppIconName } from "@/react-components/components/ui";
 import type { AppProject } from "@/types";
 
-type WorkspaceRouteKey = "model" | "standard" | "clashes" | "documents" | "settings";
+type WorkspaceRouteKey = "model" | "standard" | "clashes" | "documents" | "drawing" | "powerbi" | "settings";
 
 interface NavigationItem {
   key: WorkspaceRouteKey;
@@ -15,6 +15,8 @@ const navItems: NavigationItem[] = [
   { key: "standard", label: "Project Standard", icon: "TASK" },
   { key: "clashes", label: "Clash Detection", icon: "CLASH" },
   { key: "documents", label: "Document Status", icon: "SOURCE" },
+  { key: "drawing", label: "Drawing", icon: "DRAWING" },
+  { key: "powerbi", label: "PowerBI", icon: "POWERBI" },
   { key: "settings", label: "Settings", icon: "SETTINGS" },
 ];
 

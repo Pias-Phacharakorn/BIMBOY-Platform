@@ -50,6 +50,8 @@ export const appIcons = {
   CHEVRON_DOWN: "lucide:chevron-down",
   FOLDER: "mdi:folder-outline",
   FILE: "mdi:file-outline",
+  DRAWING: "mdi:floor-plan",
+  POWERBI: "simple-icons:powerbi",
   SEARCH: "mdi:magnify",
   ALIGN: "solar:compass-bold",
   GOOGLE: "logos:google-icon",

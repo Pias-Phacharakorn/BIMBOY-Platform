@@ -59,6 +59,7 @@ export function mapProjectRowToAppProject(row: ProjectRow): AppProject {
       rotation: row.rotation || 0,
       elevation: row.elevation || 0,
     },
+    powerbiTabs: (row.powerbi_tabs as any) || [],
     display: {
       code: row.project_name.slice(0, 3).toUpperCase(),
       label: row.project_number.toString(),

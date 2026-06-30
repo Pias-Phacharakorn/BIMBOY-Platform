@@ -45,7 +45,7 @@ Pair-programming with a **Senior Software Developer**. Expertise: BIM (IFC workf
 | Language          | TypeScript ^5.2 (`@/*` → `src/*` path alias)                      |
 | Date Utilities    | `date-fns`                                                        |
 
-> **Backend note:** Supabase is the sole backend. `src/firebase/` and `src/context/` are legacy wrappers — treat them as read-only reference code, never write new features against Firebase.
+> **Backend note:** Supabase is the sole backend.
 
 **Critical version constraint:** All ThatOpen libraries must stay on **v3.4.x**. Check peer deps (`three.js`, `web-ifc`) before any upgrade.
 
@@ -65,8 +65,6 @@ src/
 │   ├── SpotCoordinate/
 │   └── setup/               # World/engine bootstrap — singleton, do not edit
 ├── classes/                 # Pure TS domain classes (no React)
-├── context/                 # Legacy AuthContext — read-only
-├── firebase/                # Legacy Firebase SDK — read-only
 ├── integrations/
 │   └── supabase/            # ✅ Active backend — Supabase client + typed helpers
 ├── lib/                     # Shared utilities (cn, etc.)
@@ -270,4 +268,3 @@ Ask **one targeted question** with a concrete recommended option. Never make sil
 | No files directly in `react-components/` root         | Use `components/`, `features/`, `views/`, `store/`|
 | No OBC bootstrap inside React components              | Singleton world lives in `bim-components/setup/` |
 | No Supabase calls in `views/` or `components/`        | Data access is features' responsibility          |
-| No new Firebase code                                  | Supabase is the active backend                   |
