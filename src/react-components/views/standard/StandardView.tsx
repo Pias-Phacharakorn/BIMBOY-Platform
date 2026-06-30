@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { AppShell, WorkspaceHeader } from "@/react-components/components/layout";
-import { useProject } from "@/react-components/features/projects/useProjects";
+import { useProject, useIsProjectAdmin } from "@/react-components/features/projects/useProjects";
+import { useAuth } from "@/react-components/features/auth/useAuth";
 import type { StandardCard, StandardTabId } from "@/types";
 
 const standardFacts = [
@@ -169,6 +170,8 @@ function StandardCardGrid({ cards }: { cards: StandardCard[] }) {
 export function StandardView() {
   const { projectId } = useParams({ strict: false });
   const { data: project, isLoading } = useProject(projectId);
+  const { user, profile } = useAuth();
+  const showSettings = useIsProjectAdmin(project?.id, user?.id, profile?.hub_role === "hub_admin");
   const [activeTab, setActiveTab] = useState<StandardTabId>("bep");
 
   if (isLoading) {
@@ -193,7 +196,7 @@ export function StandardView() {
   }
 
   return (
-    <AppShell project={project}>
+    <AppShell project={project} showSettings={showSettings}>
       <WorkspaceHeader
         title="Project Standard"
         tabs={tabOrder.map((tab) => tabLabels[tab])}

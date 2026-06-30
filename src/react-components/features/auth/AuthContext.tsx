@@ -57,13 +57,39 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   useEffect(() => {
+    const hasOAuthParams =
+      window.location.search.includes("code=") ||
+      window.location.hash.includes("access_token=") ||
+      window.location.search.includes("error=");
+
+    let isWaitingForOAuth = hasOAuthParams;
+    let timeoutId: any = null;
+
+    if (hasOAuthParams) {
+      // Set a safety timeout to clear loading state in case the exchange fails or doesn't trigger onAuthStateChange
+      timeoutId = setTimeout(() => {
+        isWaitingForOAuth = false;
+        setIsLoading((loading) => {
+          if (loading) {
+            console.warn("OAuth exchange timed out. Stopping loading state.");
+            return false;
+          }
+          return loading;
+        });
+      }, 8000); // 8 seconds safety timeout
+    }
+
     // 1. Recover initial session
     supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
       setSession(initialSession);
       setUser(initialSession?.user ?? null);
       if (initialSession?.user) {
-        fetchProfile(initialSession.user.id).finally(() => setIsLoading(false));
-      } else {
+        isWaitingForOAuth = false;
+        fetchProfile(initialSession.user.id).finally(() => {
+          if (timeoutId) clearTimeout(timeoutId);
+          setIsLoading(false);
+        });
+      } else if (!hasOAuthParams) {
         setIsLoading(false);
       }
     });
@@ -75,17 +101,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(newSession);
       setUser(newSession?.user ?? null);
       if (newSession?.user) {
+        isWaitingForOAuth = false;
         setIsLoading(true);
         await fetchProfile(newSession.user.id);
+        if (timeoutId) clearTimeout(timeoutId);
         setIsLoading(false);
       } else {
         setProfile(null);
-        setIsLoading(false);
+        // Only set isLoading to false if we are not currently waiting for an OAuth callback exchange
+        if (!isWaitingForOAuth) {
+          if (timeoutId) clearTimeout(timeoutId);
+          setIsLoading(false);
+        }
       }
     });
 
     return () => {
       subscription.unsubscribe();
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, []);
 

@@ -187,6 +187,24 @@ export function useProjectMembers(projectId: string | null | undefined) {
 }
 
 /**
+ * Hook to check if a user is a project admin or global hub admin.
+ */
+export function useIsProjectAdmin(
+  projectId: string | null | undefined,
+  userId: string | null | undefined,
+  isHubAdmin: boolean
+) {
+  const { data: members = [] } = useProjectMembers(projectId);
+
+  if (!userId) return false;
+  if (isHubAdmin) return true;
+
+  return members.some(
+    (m) => m.uid === userId && m.role === "project_admin" && m.is_active
+  );
+}
+
+/**
  * Mutation hook to add a new project member.
  */
 export function useAddProjectMember() {

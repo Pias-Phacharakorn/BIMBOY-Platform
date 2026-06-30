@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { AppShell, WorkspaceHeader } from "@/react-components/components/layout";
 import { Icon } from "@/react-components/components/ui";
-import { useProject } from "@/react-components/features/projects/useProjects";
+import { useProject, useIsProjectAdmin } from "@/react-components/features/projects/useProjects";
+import { useAuth } from "@/react-components/features/auth/useAuth";
 import { ProjectSettingsForm } from "@/react-components/features/project-settings/ProjectSettingsForm";
 import { ProjectMembersSettings } from "@/react-components/features/project-members/ProjectMembersSettings";
 import { ProjectFolders } from "@/react-components/features/project-folders/ProjectFolders";
@@ -10,6 +11,8 @@ import { ProjectFolders } from "@/react-components/features/project-folders/Proj
 export function SettingsView() {
   const { projectId } = useParams({ strict: false });
   const { data: project, isLoading: isProjectLoading, isError: isProjectError, error: projectError } = useProject(projectId);
+  const { user, profile } = useAuth();
+  const showSettings = useIsProjectAdmin(project?.id, user?.id, profile?.hub_role === "hub_admin");
 
   // Tab switching state
   const [activeTab, setActiveTab] = useState("General");
@@ -45,7 +48,7 @@ export function SettingsView() {
   }
 
   return (
-    <AppShell project={project}>
+    <AppShell project={project} showSettings={showSettings}>
       <WorkspaceHeader
         title="Project Settings"
         tabs={tabs}

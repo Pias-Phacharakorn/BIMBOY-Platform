@@ -21,6 +21,6 @@ export const useUIStore = create<UIState>((set) => ({
     })),
   isCloudModalOpen: false,
   setCloudModalOpen: (open) => set({ isCloudModalOpen: open }),
-  showMinimap: true,
+  showMinimap: false,
   setShowMinimap: (show) => set({ showMinimap: show }),
 }))

@@ -1,6 +1,7 @@
 import { useParams } from "@tanstack/react-router";
 import { AppShell, WorkspaceHeader } from "@/react-components/components/layout";
-import { useProject } from "@/react-components/features/projects/useProjects";
+import { useProject, useIsProjectAdmin } from "@/react-components/features/projects/useProjects";
+import { useAuth } from "@/react-components/features/auth/useAuth";
 import type { StatItem, DocumentRecord } from "@/types";
 
 const approvalClass = {
@@ -47,6 +48,8 @@ const documentRecords: DocumentRecord[] = [
 export function DocumentsView() {
   const { projectId } = useParams({ strict: false });
   const { data: project, isLoading } = useProject(projectId);
+  const { user, profile } = useAuth();
+  const showSettings = useIsProjectAdmin(project?.id, user?.id, profile?.hub_role === "hub_admin");
 
   if (isLoading) {
     return (
@@ -70,7 +73,7 @@ export function DocumentsView() {
   }
 
   return (
-    <AppShell project={project}>
+    <AppShell project={project} showSettings={showSettings}>
       <WorkspaceHeader
         title="Document Status"
         tabs={["Tracking", "Approvals", "Revisions", "Sources"]}

@@ -5,9 +5,10 @@ import type { AppProject } from "@/types";
 interface AppShellProps {
   project: AppProject;
   children: ReactNode;
+  showSettings?: boolean;
 }
 
-export function AppShell({ project, children }: AppShellProps) {
+export function AppShell({ project, children, showSettings = false }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
@@ -24,7 +25,7 @@ export function AppShell({ project, children }: AppShellProps) {
 
   return (
     <div className="flex w-screen h-screen min-w-0 bg-[#090a0f]">
-      <Sidebar project={project} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
+      <Sidebar project={project} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} showSettings={showSettings} />
       <main className="flex flex-1 flex-col min-w-0 overflow-hidden">{children}</main>
     </div>
   );

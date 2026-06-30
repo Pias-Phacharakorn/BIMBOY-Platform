@@ -1,6 +1,7 @@
 import { useParams } from "@tanstack/react-router";
 import { AppShell, WorkspaceHeader } from "@/react-components/components/layout";
-import { useProject } from "@/react-components/features/projects/useProjects";
+import { useProject, useIsProjectAdmin } from "@/react-components/features/projects/useProjects";
+import { useAuth } from "@/react-components/features/auth/useAuth";
 import type { BadgeTone, StatItem, ClashRecord } from "@/types";
 
 const severityClass: Record<BadgeTone, string> = {
@@ -53,6 +54,8 @@ const clashRecords: ClashRecord[] = [
 export function ClashView() {
   const { projectId } = useParams({ strict: false });
   const { data: project, isLoading } = useProject(projectId);
+  const { user, profile } = useAuth();
+  const showSettings = useIsProjectAdmin(project?.id, user?.id, profile?.hub_role === "hub_admin");
 
   if (isLoading) {
     return (
@@ -76,7 +79,7 @@ export function ClashView() {
   }
 
   return (
-    <AppShell project={project}>
+    <AppShell project={project} showSettings={showSettings}>
       <WorkspaceHeader
         title="Clash Detection"
         tabs={["Dashboard", "Clash Reports", "Matrix", "History"]}
