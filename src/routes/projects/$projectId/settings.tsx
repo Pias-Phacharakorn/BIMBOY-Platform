@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { SettingsView } from '@/react-components/views/settings'
+import { SettingsView } from '@/react-components/views'
 import { projectsService } from '@/react-components/features/projects/projectsService'
 
 // ─── /projects/$projectId/settings ────────────────────────────────────────────

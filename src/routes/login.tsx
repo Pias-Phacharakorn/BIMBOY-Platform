@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { LoginView } from '@/react-components/views/auth/LoginView'
+import { LoginView } from '@/react-components/views'
 
 export const Route = createFileRoute('/login')({
   beforeLoad: ({ context }) => {

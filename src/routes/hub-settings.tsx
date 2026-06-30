@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
-import { HubSettingsView } from '@/react-components/views/settings';
+import { HubSettingsView } from '@/react-components/views';
 
 export const Route = createFileRoute('/hub-settings')({
   beforeLoad: ({ context, location }) => {

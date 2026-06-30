@@ -103,8 +103,8 @@ src/
 New file needed?
 │
 ├── Is it a custom OBC.Component subclass?       → bim-components/
-├── Has store hook / data fetch / useEffect?     → features/
-├── Has LAYOUTS config + tab switching?          → views/
+├── Has store hook / data fetch / useEffect?     → features/ (modular kebab-case subdirectories)
+├── Has LAYOUTS config + tab switching?          → views/ (flat files at views/ root; exported via index.ts)
 ├── Is it a route entry point?                   → routes/
 └── Pure UI, props only                          → components/
 ```
@@ -268,3 +268,6 @@ Ask **one targeted question** with a concrete recommended option. Never make sil
 | No files directly in `react-components/` root         | Use `components/`, `features/`, `views/`, `store/`|
 | No OBC bootstrap inside React components              | Singleton world lives in `bim-components/setup/` |
 | No Supabase calls in `views/` or `components/`        | Data access is features' responsibility          |
+| No root `features/index.ts` barrel file               | Avoids circular dependencies and slow HMR reload times |
+| No subdirectories under `views/`                      | All views must remain flat at the views/ root    |
+
