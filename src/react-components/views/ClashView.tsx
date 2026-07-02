@@ -1,8 +1,11 @@
+import { useMemo } from "react";
 import { useParams } from "@tanstack/react-router";
+import { format } from "date-fns";
 import { AppShell, WorkspaceHeader } from "@/react-components/components/layout";
 import { useProject, useIsProjectAdmin } from "@/react-components/features/projects/useProjects";
+import { useClashViewpoints } from "@/react-components/features/clash-dashboard/useClashViewpoints";
 import { useAuth } from "@/react-components/features/auth/useAuth";
-import type { BadgeTone, StatItem, ClashRecord } from "@/types";
+import type { BadgeTone, StatItem, ClashRecord, ClashItem } from "@/types";
 
 const severityClass: Record<BadgeTone, string> = {
   ok: "bg-status-ok text-[oklch(70%_0.14_150_/_18%)]",
@@ -11,51 +14,65 @@ const severityClass: Record<BadgeTone, string> = {
   neutral: "bg-muted text-[oklch(68%_0.02_250_/_18%)]",
 };
 
-const clashStats: StatItem[] = [
-  { label: "Total Clashes", value: "1,284" },
-  { label: "Active / Unresolved", value: "842", tone: "danger" },
-  { label: "Critical Severity", value: "156" },
-  { label: "Avg. Resolution Time", value: "4.2d" },
-];
+const statusLabelMap: Record<ClashItem["status"], string> = {
+  new: "New",
+  unresolved: "Unresolved",
+  resolved: "Resolved",
+  approved_as_note: "Approved as Note",
+};
 
-const clashRecords: ClashRecord[] = [
-  {
-    id: "CL-482",
-    status: "Open",
-    statusTone: "warn",
-    severity: "Critical",
-    severityTone: "danger",
-    disciplines: "ARC vs MEP",
-    assignedTo: "J. Doe",
-    dateFound: "2024-05-12",
-  },
-  {
-    id: "CL-483",
-    status: "Resolved",
-    statusTone: "ok",
-    severity: "Low",
-    severityTone: "neutral",
-    disciplines: "STR vs MEP",
-    assignedTo: "A. Smith",
-    dateFound: "2024-05-11",
-  },
-  {
-    id: "CL-484",
-    status: "In Review",
-    statusTone: "warn",
-    severity: "High",
-    severityTone: "warn",
-    disciplines: "ARC vs STR",
-    assignedTo: "M. Ross",
-    dateFound: "2024-05-10",
-  },
-];
+const statusToneMap: Record<ClashItem["status"], Extract<BadgeTone, "ok" | "warn">> = {
+  new: "warn",
+  unresolved: "warn",
+  resolved: "ok",
+  approved_as_note: "ok",
+};
+
+const typeLabelMap: Record<ClashItem["type"], string> = {
+  major: "Major",
+  minor: "Minor",
+  regulation: "Regulation",
+};
+
+const typeToneMap: Record<ClashItem["type"], BadgeTone> = {
+  major: "danger",
+  minor: "neutral",
+  regulation: "warn",
+};
+
+function mapClashItemToRecord(item: ClashItem): ClashRecord {
+  return {
+    id: item.guid.slice(0, 8),
+    status: statusLabelMap[item.status],
+    statusTone: statusToneMap[item.status],
+    severity: typeLabelMap[item.type],
+    severityTone: typeToneMap[item.type],
+    disciplines: item.path || "(root)",
+    assignedTo: "-",
+    dateFound: format(new Date(item.occurredAt), "yyyy-MM-dd"),
+  };
+}
 
 export function ClashView() {
   const { projectId } = useParams({ strict: false });
   const { data: project, isLoading } = useProject(projectId);
+  const { data: clashItems = [], isLoading: isLoadingClashes } = useClashViewpoints(project?.id);
   const { user, profile } = useAuth();
   const showSettings = useIsProjectAdmin(project?.id, user?.id, profile?.hub_role === "hub_admin");
+
+  const clashRecords = useMemo(() => clashItems.map(mapClashItemToRecord), [clashItems]);
+
+  const clashStats: StatItem[] = useMemo(() => {
+    const total = clashItems.length;
+    const active = clashItems.filter((c) => c.status === "new" || c.status === "unresolved").length;
+    const major = clashItems.filter((c) => c.type === "major").length;
+    return [
+      { label: "Total Clashes", value: total.toLocaleString() },
+      { label: "Active / Unresolved", value: active.toLocaleString(), tone: "danger" },
+      { label: "Major Severity", value: major.toLocaleString() },
+      { label: "Import Batches", value: new Set(clashItems.map((c) => c.reportId)).size.toLocaleString() },
+    ];
+  }, [clashItems]);
 
   if (isLoading) {
     return (
@@ -122,12 +139,22 @@ export function ClashView() {
                   <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">ID</th>
                   <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Status</th>
                   <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Severity</th>
-                  <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Disciplines</th>
+                  <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Path</th>
                   <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Assigned To</th>
                   <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Date Found</th>
                 </tr>
               </thead>
               <tbody>
+                {isLoadingClashes && (
+                  <tr>
+                    <td className="px-4 py-3 text-muted text-sm" colSpan={6}>Loading clashes...</td>
+                  </tr>
+                )}
+                {!isLoadingClashes && clashRecords.length === 0 && (
+                  <tr>
+                    <td className="px-4 py-3 text-muted text-sm" colSpan={6}>No clashes have been pushed for this project yet.</td>
+                  </tr>
+                )}
                 {clashRecords.map((record) => (
                   <tr className="hover:bg-[oklch(18%_0.02_255)] transition-colors duration-120" key={record.id}>
                     <td className="px-4 py-3 border-b border-border font-mono text-sm">{record.id}</td>
