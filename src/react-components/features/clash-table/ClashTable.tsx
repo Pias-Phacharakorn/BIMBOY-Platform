@@ -11,22 +11,22 @@ interface ClashTableProps {
 }
 
 const statusLabelMap: Record<ClashItem["status"], string> = {
-  new: "OPEN",
-  unresolved: "OPEN",
+  new: "NEW",
+  unresolved: "UNRESOLVED",
   resolved: "RESOLVED",
-  approved_as_note: "IN REVIEW",
+  approved_as_note: "APPROVED AS NOTE",
 };
 
 const typeLabelMap: Record<ClashItem["type"], string> = {
-  major: "Critical",
-  minor: "Low",
-  regulation: "High",
+  major: "MAJOR",
+  minor: "MINOR",
+  regulation: "REGULATION",
 };
 
 const typeDotClassMap: Record<ClashItem["type"], string> = {
   major: "bg-status-danger ring-status-danger/20",
-  minor: "bg-muted ring-muted/20",
-  regulation: "bg-status-warn ring-status-warn/20",
+  minor: "bg-status-warn ring-status-warn/20",
+  regulation: "bg-muted ring-muted/20",
 };
 
 interface Column {
@@ -79,6 +79,8 @@ export function ClashTable({ projectId }: ClashTableProps) {
     setCurrentPage,
     visibleColumns,
     toggleColumn,
+    columnWidths,
+    startResize,
     isSettingsOpen,
     setIsSettingsOpen,
     toggleSelectRow,
@@ -100,16 +102,18 @@ export function ClashTable({ projectId }: ClashTableProps) {
         return <span className="font-mono text-muted">#{item.seqId}</span>;
       case "title":
         return (
-          <span className="text-fg font-medium max-w-[220px] truncate inline-block align-middle" title={item.name}>
+          <span className="text-fg font-medium w-full truncate inline-block align-middle" title={item.name}>
             {item.name}
           </span>
         );
       case "status": {
         const statusLabel = statusLabelMap[item.status] || item.status;
         const statusToneClasses =
-          item.status === "resolved"
-            ? "border-[oklch(70%_0.14_150_/_42%)] bg-[oklch(70%_0.14_150_/_13%)] text-status-ok"
-            : "border-[oklch(77%_0.14_76_/_42%)] bg-[oklch(77%_0.14_76_/_13%)] text-status-warn";
+          item.status === "new"
+            ? "border-[oklch(63%_0.18_28_/_42%)] bg-[oklch(63%_0.18_28_/_13%)] text-status-danger"
+            : item.status === "unresolved"
+              ? "border-[oklch(77%_0.14_76_/_42%)] bg-[oklch(77%_0.14_76_/_13%)] text-status-warn"
+              : "border-[oklch(70%_0.14_150_/_42%)] bg-[oklch(70%_0.14_150_/_13%)] text-status-ok";
         return (
           <span
             className={`inline-flex items-center min-h-5 px-2.5 py-0.5 border rounded-full text-[10px] font-bold tracking-wider uppercase ${statusToneClasses}`}
@@ -141,7 +145,7 @@ export function ClashTable({ projectId }: ClashTableProps) {
         );
       case "path":
         return (
-          <span className="text-fg max-w-[150px] truncate inline-block align-middle" title={item.path || "(root)"}>
+          <span className="text-fg w-full truncate inline-block align-middle" title={item.path || "(root)"}>
             {item.path || "(root)"}
           </span>
         );
@@ -230,10 +234,10 @@ export function ClashTable({ projectId }: ClashTableProps) {
 
       {/* Table */}
       <div className="flex-1 min-h-0 overflow-auto">
-        <table className="w-full border-collapse text-fg text-[13px]">
+        <table className="table-fixed min-w-max w-full border-collapse text-fg text-[13px]">
           <thead>
             <tr className="border-b border-border-strong">
-              <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong w-10">
+              <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong" style={{ width: 40 }}>
                 <input
                   type="checkbox"
                   checked={allVisibleSelected}
@@ -244,12 +248,21 @@ export function ClashTable({ projectId }: ClashTableProps) {
               {COLUMNS.filter((col) => visibleColumns.has(col.key)).map((col) => (
                 <th
                   key={col.key}
-                  className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase"
+                  className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase relative"
+                  style={{ width: columnWidths[col.key] ? `${columnWidths[col.key]}px` : undefined }}
                 >
                   {col.label}
+                  <div
+                    className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-accent/40 active:bg-accent select-none z-10 transition-colors"
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      startResize(col.key, e);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
                 </th>
               ))}
-              <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong w-10 text-right relative">
+              <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-right relative" style={{ width: 50 }}>
                 <button
                   type="button"
                   className="flex items-center justify-center w-6 h-6 rounded text-muted hover:bg-[oklch(18%_0.02_255)] hover:text-fg transition-colors ml-auto"
@@ -319,7 +332,7 @@ export function ClashTable({ projectId }: ClashTableProps) {
                       />
                     </td>
                     {COLUMNS.filter((col) => visibleColumns.has(col.key)).map((col) => (
-                      <td key={col.key} className="px-4 py-3">
+                      <td key={col.key} className="px-4 py-3 truncate overflow-hidden whitespace-nowrap">
                         {renderCell(item, col.key)}
                       </td>
                     ))}

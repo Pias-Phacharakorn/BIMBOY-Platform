@@ -6,10 +6,11 @@ import { ViewportWrapper, ViewportRightToolbar, ViewportToolbar, ModelsList } fr
 import { GisPanel } from "@/react-components/features/gis";
 import { PropertyPanel } from "@/react-components/features/property-panel";
 import { PropertyTable } from "@/react-components/features/property-table/PropertyTable";
+import { ClashList, ClashPreview } from "@/react-components/features/clash-dashboard";
 import { useProject, useIsProjectAdmin } from "@/react-components/features/projects/useProjects";
 import { useAuth } from "@/react-components/features/auth/useAuth";
 
-const workspaceTabs = ["Models", "Queries", "Viewer", "Smart Views", "GIS"];
+const workspaceTabs = ["Models", "Queries", "Viewer", "Smart Views", "GIS", "Viewpoint"];
 
 export function ModelsView() {
   const { projectId } = useParams({ strict: false });
@@ -21,6 +22,8 @@ export function ModelsView() {
   const [activeTab, setActiveTab] = useState("Models");
   const isQueriesTab = activeTab === "Queries";
   const isGisTab = activeTab === "GIS";
+  const isViewpointTab = activeTab === "Viewpoint";
+  const isFlexLayout = activeTab === "Models" || isGisTab || isViewpointTab;
 
   if (isLoading) {
     return (
@@ -64,7 +67,7 @@ export function ModelsView() {
         }
       />
       <div
-        className={activeTab === "Models" || isGisTab ? "flex flex-row flex-1 min-h-0 w-full" : "grid flex-1 min-h-0 w-full"}
+        className={isFlexLayout ? "flex flex-row flex-1 min-h-0 w-full" : "grid flex-1 min-h-0 w-full"}
         style={
           isQueriesTab
             ? {
@@ -85,9 +88,17 @@ export function ModelsView() {
           </PanelSection>
         </LeftPanel>
 
+        {isViewpointTab && (
+          <LeftPanel icon="MODEL" defaultOpen={true}>
+            <PanelSection label="Viewpoints" icon="MODEL" defaultOpen={true} noPadding={true} fullHeight={true}>
+              <ClashList projectId={project.id} />
+            </PanelSection>
+          </LeftPanel>
+        )}
+
         <section
           className={`h-full min-w-0 relative border border-border overflow-hidden bg-[#0d0e12] ${
-            activeTab === "Models" || isGisTab ? "flex-1" : ""
+            isFlexLayout ? "flex-1" : ""
           }`}
           style={isQueriesTab ? { gridArea: "viewport" } : undefined}
         >
@@ -132,6 +143,16 @@ export function ModelsView() {
             defaultWidth={400}
           >
             <GisPanel />
+          </RightPanel>
+        )}
+
+        {isViewpointTab && (
+          <RightPanel icon="SETTINGS" defaultOpen={true}>
+            <PanelSection label="Clash Preview" icon="SETTINGS" defaultOpen={true} noPadding={true}>
+              <div className="p-4">
+                <ClashPreview projectId={project.id} />
+              </div>
+            </PanelSection>
           </RightPanel>
         )}
 

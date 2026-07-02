@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, type MouseEvent as ReactMouseEvent } from "react";
 import type { ClashItem } from "@/types";
 import { useDeleteClashViewpoints } from "../clash-dashboard/useClashViewpoints";
 
@@ -10,6 +10,18 @@ export function useClashTable(projectId: string, clashItems: ClashItem[]) {
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
     new Set(["id", "title", "status", "type", "assignedTo", "dueDate", "startDate"])
   );
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
+    id: 70,
+    title: 240,
+    status: 130,
+    type: 130,
+    assignedTo: 120,
+    dueDate: 120,
+    startDate: 120,
+    guid: 180,
+    path: 180,
+    createdBy: 130,
+  });
 
   const deleteMutation = useDeleteClashViewpoints();
 
@@ -64,6 +76,27 @@ export function useClashTable(projectId: string, clashItems: ClashItem[]) {
     } else {
       setSelectedRowIds(new Set());
     }
+  };
+
+  const startResize = (columnKey: string, e: ReactMouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = columnWidths[columnKey] ?? 120;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const newWidth = Math.max(50, startWidth + delta);
+      setColumnWidths((prev) => ({ ...prev, [columnKey]: newWidth }));
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
   };
 
   const toggleColumn = (col: string) => {
@@ -128,6 +161,8 @@ export function useClashTable(projectId: string, clashItems: ClashItem[]) {
     setCurrentPage,
     visibleColumns,
     toggleColumn,
+    columnWidths,
+    startResize,
     isSettingsOpen,
     setIsSettingsOpen,
     toggleSelectRow,
