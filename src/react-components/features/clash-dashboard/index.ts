@@ -1,2 +1,6 @@
 export * from './ClashDashboard'
 export * from './useClashDashboard'
+export * from './ClashPreview'
+export * from './ClashReportsTable'
+export * from './ClashMatrix'
+export * from './ClashHistory'

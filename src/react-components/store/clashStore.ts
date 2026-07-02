@@ -7,6 +7,16 @@ interface ClashState {
   setSelectedClashId: (id: string | null) => void
   filters: Record<string, any>
   setFilters: (filters: Record<string, any>) => void
+  activeTab: "Dashboard" | "Clash Reports" | "Matrix" | "History"
+  setActiveTab: (tab: "Dashboard" | "Clash Reports" | "Matrix" | "History") => void
+  selectedReportId: string | null
+  setSelectedReportId: (id: string | null) => void
+  quickFilters: {
+    onlyCritical: boolean
+    unassigned: boolean
+    arcVsMep: boolean
+  }
+  setQuickFilters: (filters: Partial<ClashState["quickFilters"]>) => void
 }
 
 export const useClashStore = create<ClashState>((set) => ({
@@ -16,4 +26,17 @@ export const useClashStore = create<ClashState>((set) => ({
   setSelectedClashId: (selectedClashId) => set({ selectedClashId }),
   filters: {},
   setFilters: (filters) => set({ filters }),
+  activeTab: "Dashboard",
+  setActiveTab: (activeTab) => set({ activeTab }),
+  selectedReportId: null,
+  setSelectedReportId: (selectedReportId) => set({ selectedReportId }),
+  quickFilters: {
+    onlyCritical: false,
+    unassigned: false,
+    arcVsMep: false,
+  },
+  setQuickFilters: (filters) =>
+    set((state) => ({
+      quickFilters: { ...state.quickFilters, ...filters },
+    })),
 }))

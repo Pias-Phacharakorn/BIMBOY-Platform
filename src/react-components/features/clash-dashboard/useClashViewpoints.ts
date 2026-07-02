@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clashService } from "./clashService";
 import type { ClashReportRow, ClashViewpointRow } from "./clashService";
 import type { ClashItem, ClashReport, ClashCamera } from "@/types";
@@ -85,5 +85,34 @@ export function useClashViewpoints(
       return rows.map(mapClashViewpointRowToClashItem);
     },
     enabled: !!projectId,
+  });
+}
+
+/**
+ * Hook to update a clash viewpoint's status/severity/metadata.
+ */
+export function useUpdateClashViewpoint() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      updates,
+    }: {
+      id: string;
+      updates: Partial<Omit<ClashViewpointRow, "id" | "project_id" | "report_id" | "guid">>;
+    }) => clashService.updateClashViewpoint(id, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: clashKeys.all });
+    },
+  });
+}
+
+export function useDeleteClashViewpoints() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => clashService.deleteClashViewpoints(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: clashKeys.all });
+    },
   });
 }

@@ -67,4 +67,39 @@ export const clashService = {
 
     return data || [];
   },
+
+  /**
+   * Updates a clash viewpoint's fields (e.g. status, type, comments, solution).
+   */
+  async updateClashViewpoint(
+    id: string,
+    updates: Partial<Omit<ClashViewpointRow, "id" | "project_id" | "report_id" | "guid">>
+  ): Promise<ClashViewpointRow> {
+    const { data, error } = await supabase
+      .from("clash_viewpoints")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`Error updating clash viewpoint ${id}:`, error);
+      throw error;
+    }
+
+    return data;
+  },
+
+  async deleteClashViewpoints(ids: string[]): Promise<void> {
+    if (!ids || ids.length === 0) return;
+    const { error } = await supabase
+      .from("clash_viewpoints")
+      .update({ is_deleted: true } as any)
+      .in("id", ids);
+
+    if (error) {
+      console.error(`Error deleting clash viewpoints:`, error);
+      throw error;
+    }
+  },
 };

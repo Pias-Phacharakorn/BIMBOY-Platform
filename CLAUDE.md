@@ -4,4 +4,4 @@
 
 `AGENTS.md` is the authoritative guide for this project — it defines project identity, tech stack, architecture rules, file placement, naming conventions, hard constraints, and the mandatory workflow (read → plan → execute). All rules and constraints in `AGENTS.md` apply and take precedence over general defaults.
 
-**Execution model:** Claude Code acts as orchestrator + code reviewer, not the code author. Actual feature code is written by **Gemini CLI** (`gemini -p "<spec>" --yolo`), invoked by Claude Code, then reviewed by Claude Code, then approved by the developer before merge. Full loop is defined in AGENTS.md → **🤝 Multi-Agent Workflow**.
+**Execution model:** Gemini acts as orchestrator + spec writer, not the direct code author. Gemini defines the task and writes the spec, then invokes **Claude Code CLI** (`claude -p "<spec>" --permission-mode bypassPermissions`) to think about the code and write/edit files. The developer approves the final diff before merge. Full loop is defined in AGENTS.md → **🤝 Multi-Agent Workflow**.

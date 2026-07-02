@@ -57,5 +57,8 @@ export const appIcons = {
   GOOGLE: "logos:google-icon",
   MICROSOFT: "logos:microsoft-icon",
   LOGOUT: "mdi:logout",
+  DELETE: "material-symbols:delete-rounded",
+  MAP_SPLIT: "material-symbols:layers-outline",
+  EXPORT: "material-symbols:export-notes-outline",
 };
 
