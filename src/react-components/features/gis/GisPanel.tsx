@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as OBC from "@thatopen/components";
 import * as BUI from "@thatopen/ui";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Save } from "lucide-react";
 import { GisLayers } from "@/bim-components";
+import { useUpdateProject } from "@/react-components/features/projects/useProjects";
+import { useProjectStore } from "@/react-components/store/projectStore";
 import { Icon } from "@/react-components/components/ui";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { cn } from "@/lib/utils";
@@ -36,6 +38,11 @@ const initialState: GisState = {
 
 export function GisPanel() {
   const { components } = useBimStore();
+  const { activeProjectId } = useProjectStore();
+  const updateProjectMutation = useUpdateProject();
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const mapHostRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<GisState>(initialState);
   const [isReady, setIsReady] = useState(false);
@@ -261,6 +268,34 @@ export function GisPanel() {
     setState((current) => ({ ...current, elevation }));
   };
 
+  const saveGisData = async () => {
+    if (!activeProjectId) {
+      setSaveError("No active project selected.");
+      setSaveState("error");
+      return;
+    }
+    setSaveState("saving");
+    setSaveError(null);
+    try {
+      await updateProjectMutation.mutateAsync({
+        id: activeProjectId,
+        project: {
+          longitude: state.longitude,
+          latitude: state.latitude,
+          rotation: state.rotation,
+          elevation: state.elevation,
+        },
+      });
+      setSaveState("success");
+      setTimeout(() => {
+        setSaveState("idle");
+      }, 2000);
+    } catch (err: any) {
+      setSaveError(err.message || "Failed to save GIS data.");
+      setSaveState("error");
+    }
+  };
+
   const resetView = () => {
     if (!components || !gisLayers) return;
     const camera = getCamera(components);
@@ -296,15 +331,26 @@ export function GisPanel() {
           <Icon name="EARTH" size={14} className="text-white" />
           <span>GIS Cesium</span>
         </div>
-        <button
-          className="inline-flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-alt text-muted transition-colors hover:border-border-strong hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
-          type="button"
-          onClick={resetView}
-          disabled={!isReady}
-          title="Reset GIS view"
-        >
-          <RotateCcw size={13} />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            className="inline-flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-alt text-muted transition-colors hover:border-border-strong hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
+            type="button"
+            onClick={saveGisData}
+            disabled={!isReady || !activeProjectId || saveState === "saving"}
+            title="Save GIS data to database"
+          >
+            <Save size={13} className={cn(saveState === "saving" && "animate-spin")} />
+          </button>
+          <button
+            className="inline-flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-alt text-muted transition-colors hover:border-border-strong hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
+            type="button"
+            onClick={resetView}
+            disabled={!isReady}
+            title="Reset GIS view"
+          >
+            <RotateCcw size={13} />
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
@@ -340,6 +386,18 @@ export function GisPanel() {
             3D Building
           </ToggleButton>
         </div>
+
+        {saveState === "success" && (
+          <div className="rounded border border-status-ok/30 bg-status-ok/10 px-3 py-2 text-[11px] text-status-ok">
+            GIS data saved.
+          </div>
+        )}
+
+        {saveError && (
+          <div className="rounded border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-[11px] text-status-danger">
+            {saveError}
+          </div>
+        )}
 
         {error && (
           <div className="rounded border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-[11px] text-status-danger">
