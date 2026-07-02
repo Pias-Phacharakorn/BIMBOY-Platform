@@ -23,6 +23,9 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 
+# Claude Code local overrides (may contain secrets via env)
+.claude/settings.local.json
+
 # Editor / IDE settings
 .vscode/*
 !.vscode/extensions.json
@@ -33,5 +36,5 @@ lerna-debug.log*
 *.sln
 *.sw?
 .DS_Store
-Thumbs.db
+Thumbs.db
 .vercel

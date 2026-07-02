@@ -37,16 +37,18 @@ export {
 export type {
   ClashReport,
   ClashItem,
-  ClashSeverity,
+  ClashType,
   ClashStatus,
-  ClashDiscipline,
+  ClashSourceFormat,
+  ClashCamera,
 } from './clash'
 export {
   ClashReportSchema,
   ClashItemSchema,
-  ClashSeveritySchema,
+  ClashTypeSchema,
   ClashStatusSchema,
-  ClashDisciplineSchema,
+  ClashSourceFormatSchema,
+  ClashCameraSchema,
 } from './clash'
 
 // Document types
