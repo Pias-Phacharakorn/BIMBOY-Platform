@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, type ReactNode } from "react";
+import React, { createContext, useState, useEffect, useRef, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
@@ -28,6 +28,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const devAutoLoginAttempted = useRef(false);
 
   const fetchProfile = async (uid: string, retries = 3): Promise<void> => {
     for (let i = 0; i < retries; i++) {
@@ -90,7 +91,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setIsLoading(false);
         });
       } else if (!hasOAuthParams) {
-        setIsLoading(false);
+        const devEmail = import.meta.env.DEV ? (import.meta.env as any).VITE_DEV_AUTO_LOGIN_EMAIL : undefined;
+        const devPassword = import.meta.env.DEV ? (import.meta.env as any).VITE_DEV_AUTO_LOGIN_PASSWORD : undefined;
+
+        if (devEmail && devPassword && !devAutoLoginAttempted.current) {
+          devAutoLoginAttempted.current = true;
+          loginWithEmail(devEmail, devPassword)
+            .catch((err) => {
+              console.warn("Dev auto-login failed:", err);
+              setIsLoading(false);
+            });
+        } else {
+          setIsLoading(false);
+        }
       }
     });
 
