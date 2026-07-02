@@ -70,6 +70,10 @@ export class SpotCoordinate extends OBC.Component implements OBC.Disposable {
     this.labelManager.clearSpotLabels();
   }
 
+  public get onLabelsChanged() {
+    return this.labelManager.onLabelsChanged;
+  }
+
   dispose() {
     this.enabled = false;
     this.helper3DManager.dispose();
@@ -84,7 +88,13 @@ export class SpotCoordinate extends OBC.Component implements OBC.Disposable {
       return;
     }
 
-    const viewport = this._world.renderer!.three.domElement;
+    const renderer = this._world.renderer;
+    if (!renderer || !renderer.three) {
+      console.warn("SpotCoordinate cannot be activated: renderer not available");
+      this._enabled = false;
+      return;
+    }
+    const viewport = renderer.three.domElement;
 
     // Initialize CursorSurface world
     const cursorSurface = this.components.get(CursorSurface);
@@ -160,29 +170,39 @@ export class SpotCoordinate extends OBC.Component implements OBC.Disposable {
         this.labelManager.updateLabelPositions(this._world);
       }
     };
-    this._world.camera.controls.addEventListener("update", this._spotCameraListener);
+
+    if (this._world.camera && this._world.camera.controls) {
+      this._world.camera.controls.addEventListener("update", this._spotCameraListener);
+    }
     this._world.onCameraChanged.add(this._spotCameraListener);
   }
 
   private _deactivate() {
     if (!this._world) return;
-    const viewport = this._world.renderer!.three.domElement;
+    const renderer = this._world.renderer;
+    const viewport = renderer && renderer.three ? renderer.three.domElement : null;
 
-    if (this._spotClickListener) {
-      viewport.removeEventListener("dblclick", this._spotClickListener);
-      this._spotClickListener = null;
-    }
-    if (this._spotMoveListener) {
-      viewport.removeEventListener("mousemove", this._spotMoveListener);
-      this._spotMoveListener = null;
-    }
-    if (this._spotMouseLeaveListener) {
-      viewport.removeEventListener("mouseleave", this._spotMouseLeaveListener);
-      this._spotMouseLeaveListener = null;
+    if (viewport) {
+      if (this._spotClickListener) {
+        viewport.removeEventListener("dblclick", this._spotClickListener);
+        this._spotClickListener = null;
+      }
+      if (this._spotMoveListener) {
+        viewport.removeEventListener("mousemove", this._spotMoveListener);
+        this._spotMoveListener = null;
+      }
+      if (this._spotMouseLeaveListener) {
+        viewport.removeEventListener("mouseleave", this._spotMouseLeaveListener);
+        this._spotMouseLeaveListener = null;
+      }
     }
     if (this._spotCameraListener) {
-      this._world.camera.controls.removeEventListener("update", this._spotCameraListener);
-      this._world.onCameraChanged.remove(this._spotCameraListener);
+      if (this._world.camera && this._world.camera.controls) {
+        this._world.camera.controls.removeEventListener("update", this._spotCameraListener);
+      }
+      if (this._world.onCameraChanged) {
+        this._world.onCameraChanged.remove(this._spotCameraListener);
+      }
       this._spotCameraListener = null;
     }
     this.components.get(CursorSurface).hide();

@@ -3,7 +3,14 @@ import * as THREE from "three";
 import * as OBC from "@thatopen/components";
 
 export class SpotLabelManager {
-  private _spotLabels: { element: HTMLDivElement; point: THREE.Vector3 }[] = [];
+  public readonly onLabelsChanged = new OBC.Event<void>();
+
+  private _spotLabels: {
+    id: string;
+    element: HTMLDivElement;
+    point: THREE.Vector3;
+    displayPoint: THREE.Vector3;
+  }[] = [];
 
   public get labels() {
     return this._spotLabels;
@@ -14,6 +21,15 @@ export class SpotLabelManager {
       label.element.remove();
     }
     this._spotLabels = [];
+    this.onLabelsChanged.trigger();
+  }
+
+  public deleteLabel(id: string) {
+    const idx = this._spotLabels.findIndex((item) => item.id === id);
+    if (idx === -1) return;
+    this._spotLabels[idx].element.remove();
+    this._spotLabels.splice(idx, 1);
+    this.onLabelsChanged.trigger();
   }
 
   public updateLabelPositions(world: OBC.World) {
@@ -67,11 +83,49 @@ export class SpotLabelManager {
     if (model && typeof model.getCoordinationMatrix === "function") {
       try {
         const matrix = await model.getCoordinationMatrix();
-        const inverseMatrix = new THREE.Matrix4().copy(matrix).invert();
-        displayPoint.copy(result.point).applyMatrix4(inverseMatrix);
+
+        // ── Coordinate system facts (verified from ThatOpen source) ─────────────
+        // • result.point  →  Three.js world space (Y-up, right-handed)
+        //   ThatOpen applies makeRotationX(-PI/2) to all geometry on load,
+        //   rotating IFC Z-up geometry into Three.js Y-up space.
+        //
+        // • getCoordinationMatrix() returns a matrix built from raw IFC data:
+        //   the IFC project origin (x,y,z) and IFC xDir/yDir vectors.
+        //   These are in IFC Z-up space — NO PI/2 rotation is baked in.
+        //
+        // • Navisworks displays coordinates in IFC project space (Z-up).
+        //
+        // ── Conversion pipeline ──────────────────────────────────────────────────
+        // Step 1: Convert result.point from Three.js Y-up → IFC Z-up (swizzle):
+        //   IFC.x =  THREE.x
+        //   IFC.y = -THREE.z   (Three.js -Z = IFC Y-north)
+        //   IFC.z =  THREE.y   (Three.js Y-up = IFC Z-up)
+        //
+        // Step 2: Apply inverse coordination matrix to get IFC project coords.
+        //   (coordination matrix maps IFC local → IFC project space)
+        // ─────────────────────────────────────────────────────────────────────────
+
+        // Step 1: swizzle Three.js Y-up → IFC Z-up
+        const ifcZUp = new THREE.Vector3(
+          result.point.x,
+          -result.point.z,
+          result.point.y,
+        );
+
+        // Step 2: apply coordination matrix to add back the IFC site origin
+        // (COORDINATE_TO_ORIGIN subtracts the origin during load; we re-add it)
+        ifcZUp.applyMatrix4(matrix);
+
+        // ifcZUp is now in IFC project coordinates (Z-up), matching Navisworks
+        displayPoint.copy(ifcZUp);
       } catch (err) {
-        console.warn("Failed to get or invert coordination matrix", err);
+        console.warn("Failed to get coordination matrix", err);
+        // Fallback: plain Three.js → IFC Z-up swizzle (no project offset)
+        displayPoint.set(result.point.x, -result.point.z, result.point.y);
       }
+    } else {
+      // No coordination matrix: just swizzle Three.js Y-up → IFC/Navisworks Z-up
+      displayPoint.set(result.point.x, -result.point.z, result.point.y);
     }
 
     const { x, y, z } = displayPoint;
@@ -136,6 +190,7 @@ export class SpotLabelManager {
       if (idx !== -1) {
         this._spotLabels.splice(idx, 1);
       }
+      this.onLabelsChanged.trigger();
     });
     label.appendChild(close);
 
@@ -143,9 +198,11 @@ export class SpotLabelManager {
     if (viewport.parentElement) {
       viewport.parentElement.appendChild(label);
     }
-    
-    this._spotLabels.push({ element: label, point: result.point });
+
+    const id = THREE.MathUtils.generateUUID();
+    this._spotLabels.push({ id, element: label, point: result.point, displayPoint: displayPoint.clone() });
     this.updateLabelPositions(world);
+    this.onLabelsChanged.trigger();
   }
 }
 

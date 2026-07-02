@@ -11,6 +11,7 @@ export type BimTool =
   | 'isolate'
   | 'hide'
   | 'section'
+  | 'coordinate'
   | null
 
 // ─── BIM Panel Enum ───────────────────────────────────────────────────────────

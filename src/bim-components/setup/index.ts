@@ -46,7 +46,8 @@ export const setupComponents = async () => {
 
   
   new PropertyTable(components);
-  new SpotCoordinate(components);
+  const spotCoordinate = new SpotCoordinate(components);
+  spotCoordinate.world = world;
   new GisLayers(components);
 
 

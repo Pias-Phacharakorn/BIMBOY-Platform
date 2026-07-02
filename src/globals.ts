@@ -60,5 +60,6 @@ export const appIcons = {
   DELETE: "material-symbols:delete-rounded",
   MAP_SPLIT: "material-symbols:layers-outline",
   EXPORT: "material-symbols:export-notes-outline",
+  COORDINATE: "solar:point-on-map-bold",
 };
 
