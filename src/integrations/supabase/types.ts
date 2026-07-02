@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -14,174 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      clash_reports: {
-        Row: {
-          id: string
-          project_id: string
-          name: string
-          source_format: Database["public"]["Enums"]["clash_source_format"]
-          total_count: number
-          major_count: number
-          minor_count: number
-          regulation_count: number
-          resolved_count: number
-          imported_by: string | null
-          imported_at: string
-          is_deleted: boolean
-        }
-        Insert: {
-          id?: string
-          project_id: string
-          name: string
-          source_format?: Database["public"]["Enums"]["clash_source_format"]
-          total_count?: number
-          major_count?: number
-          minor_count?: number
-          regulation_count?: number
-          resolved_count?: number
-          imported_by?: string | null
-          imported_at?: string
-          is_deleted?: boolean
-        }
-        Update: {
-          id?: string
-          project_id?: string
-          name?: string
-          source_format?: Database["public"]["Enums"]["clash_source_format"]
-          total_count?: number
-          major_count?: number
-          minor_count?: number
-          regulation_count?: number
-          resolved_count?: number
-          imported_by?: string | null
-          imported_at?: string
-          is_deleted?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "clash_reports_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "active_projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "clash_reports_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "clash_reports_imported_by_fkey"
-            columns: ["imported_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["uid"]
-          },
-        ]
-      }
-      clash_viewpoints: {
-        Row: {
-          id: string
-          project_id: string
-          report_id: string | null
-          guid: string
-          name: string
-          path: string | null
-          type: Database["public"]["Enums"]["clash_type"]
-          status: Database["public"]["Enums"]["clash_status"]
-          markup: string | null
-          solution: string | null
-          comments: string | null
-          image_url: string | null
-          plan_image_url: string | null
-          section_image_url: string | null
-          camera: Json | null
-          selection: Json | null
-          occurred_at: string
-          created_by: string | null
-          created_at: string
-          updated_at: string
-          is_deleted: boolean
-        }
-        Insert: {
-          id?: string
-          project_id: string
-          report_id?: string | null
-          guid: string
-          name: string
-          path?: string | null
-          type?: Database["public"]["Enums"]["clash_type"]
-          status?: Database["public"]["Enums"]["clash_status"]
-          markup?: string | null
-          solution?: string | null
-          comments?: string | null
-          image_url?: string | null
-          plan_image_url?: string | null
-          section_image_url?: string | null
-          camera?: Json | null
-          selection?: Json | null
-          occurred_at?: string
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-          is_deleted?: boolean
-        }
-        Update: {
-          id?: string
-          project_id?: string
-          report_id?: string | null
-          guid?: string
-          name?: string
-          path?: string | null
-          type?: Database["public"]["Enums"]["clash_type"]
-          status?: Database["public"]["Enums"]["clash_status"]
-          markup?: string | null
-          solution?: string | null
-          comments?: string | null
-          image_url?: string | null
-          plan_image_url?: string | null
-          section_image_url?: string | null
-          camera?: Json | null
-          selection?: Json | null
-          occurred_at?: string
-          created_by?: string | null
-          created_at?: string
-          updated_at?: string
-          is_deleted?: boolean
-        }
-        Relationships: [
-          {
-            foreignKeyName: "clash_viewpoints_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "active_projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "clash_viewpoints_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "clash_viewpoints_report_id_fkey"
-            columns: ["report_id"]
-            isOneToOne: false
-            referencedRelation: "clash_reports"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "clash_viewpoints_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["uid"]
-          },
-        ]
-      }
       audit_logs: {
         Row: {
           action: string
@@ -230,6 +62,174 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clash_reports: {
+        Row: {
+          id: string
+          imported_at: string
+          imported_by: string | null
+          is_deleted: boolean
+          major_count: number
+          minor_count: number
+          name: string
+          project_id: string
+          regulation_count: number
+          resolved_count: number
+          source_format: Database["public"]["Enums"]["clash_source_format"]
+          total_count: number
+        }
+        Insert: {
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          is_deleted?: boolean
+          major_count?: number
+          minor_count?: number
+          name: string
+          project_id: string
+          regulation_count?: number
+          resolved_count?: number
+          source_format?: Database["public"]["Enums"]["clash_source_format"]
+          total_count?: number
+        }
+        Update: {
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          is_deleted?: boolean
+          major_count?: number
+          minor_count?: number
+          name?: string
+          project_id?: string
+          regulation_count?: number
+          resolved_count?: number
+          source_format?: Database["public"]["Enums"]["clash_source_format"]
+          total_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clash_reports_imported_by_fkey"
+            columns: ["imported_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["uid"]
+          },
+          {
+            foreignKeyName: "clash_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "active_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clash_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clash_viewpoints: {
+        Row: {
+          camera: Json | null
+          comments: string | null
+          created_at: string
+          created_by: string | null
+          guid: string
+          id: string
+          image_url: string | null
+          is_deleted: boolean
+          markup: string | null
+          name: string
+          occurred_at: string
+          path: string | null
+          plan_image_url: string | null
+          project_id: string
+          report_id: string | null
+          section_image_url: string | null
+          selection: Json | null
+          solution: string | null
+          status: Database["public"]["Enums"]["clash_status"]
+          type: Database["public"]["Enums"]["clash_type"]
+          updated_at: string
+        }
+        Insert: {
+          camera?: Json | null
+          comments?: string | null
+          created_at?: string
+          created_by?: string | null
+          guid: string
+          id?: string
+          image_url?: string | null
+          is_deleted?: boolean
+          markup?: string | null
+          name: string
+          occurred_at?: string
+          path?: string | null
+          plan_image_url?: string | null
+          project_id: string
+          report_id?: string | null
+          section_image_url?: string | null
+          selection?: Json | null
+          solution?: string | null
+          status?: Database["public"]["Enums"]["clash_status"]
+          type?: Database["public"]["Enums"]["clash_type"]
+          updated_at?: string
+        }
+        Update: {
+          camera?: Json | null
+          comments?: string | null
+          created_at?: string
+          created_by?: string | null
+          guid?: string
+          id?: string
+          image_url?: string | null
+          is_deleted?: boolean
+          markup?: string | null
+          name?: string
+          occurred_at?: string
+          path?: string | null
+          plan_image_url?: string | null
+          project_id?: string
+          report_id?: string | null
+          section_image_url?: string | null
+          selection?: Json | null
+          solution?: string | null
+          status?: Database["public"]["Enums"]["clash_status"]
+          type?: Database["public"]["Enums"]["clash_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clash_viewpoints_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["uid"]
+          },
+          {
+            foreignKeyName: "clash_viewpoints_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "active_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clash_viewpoints_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clash_viewpoints_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "clash_reports"
             referencedColumns: ["id"]
           },
         ]
@@ -335,17 +335,17 @@ export type Database = {
           is_deleted: boolean
           latitude: number | null
           longitude: number | null
+          powerbi_tabs: Json
           project_name: string
           project_number: number
           rotation: number | null
           start_date: string
           status: Database["public"]["Enums"]["project_status"]
           updated_at: string
-          powerbi_tabs: Json
         }
         Insert: {
           clash_folder_path?: string | null
-          created_at?: string | null
+          created_at?: string
           created_by?: string | null
           description?: string | null
           elevation?: number | null
@@ -357,17 +357,17 @@ export type Database = {
           is_deleted?: boolean
           latitude?: number | null
           longitude?: number | null
+          powerbi_tabs?: Json
           project_name: string
           project_number: number
           rotation?: number | null
           start_date?: string
           status?: Database["public"]["Enums"]["project_status"]
           updated_at?: string
-          powerbi_tabs?: Json
         }
         Update: {
           clash_folder_path?: string | null
-          created_at?: string | null
+          created_at?: string
           created_by?: string | null
           description?: string | null
           elevation?: number | null
@@ -379,13 +379,13 @@ export type Database = {
           is_deleted?: boolean
           latitude?: number | null
           longitude?: number | null
+          powerbi_tabs?: Json
           project_name?: string
           project_number?: number
           rotation?: number | null
           start_date?: string
           status?: Database["public"]["Enums"]["project_status"]
           updated_at?: string
-          powerbi_tabs?: Json
         }
         Relationships: [
           {
@@ -420,7 +420,6 @@ export type Database = {
           start_date: string | null
           status: Database["public"]["Enums"]["project_status"] | null
           updated_at: string | null
-          powerbi_tabs: Json | null
         }
         Insert: {
           clash_folder_path?: string | null
@@ -442,7 +441,6 @@ export type Database = {
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
           updated_at?: string | null
-          powerbi_tabs?: Json | null
         }
         Update: {
           clash_folder_path?: string | null
@@ -464,7 +462,6 @@ export type Database = {
           start_date?: string | null
           status?: Database["public"]["Enums"]["project_status"] | null
           updated_at?: string | null
-          powerbi_tabs?: Json | null
         }
         Relationships: [
           {
@@ -490,12 +487,12 @@ export type Database = {
       }
     }
     Enums: {
+      clash_source_format: "navisworks" | "bcf" | "manual"
+      clash_status: "new" | "unresolved" | "resolved" | "approved_as_note"
+      clash_type: "major" | "minor" | "regulation"
       hub_role: "hub_admin" | "hub_member"
       project_role: "project_admin" | "project_member"
       project_status: "bidding" | "active" | "finished"
-      clash_type: "major" | "minor" | "regulation"
-      clash_status: "new" | "unresolved" | "resolved" | "approved_as_note"
-      clash_source_format: "navisworks" | "bcf" | "manual"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -623,12 +620,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      clash_source_format: ["navisworks", "bcf", "manual"],
+      clash_status: ["new", "unresolved", "resolved", "approved_as_note"],
+      clash_type: ["major", "minor", "regulation"],
       hub_role: ["hub_admin", "hub_member"],
       project_role: ["project_admin", "project_member"],
       project_status: ["bidding", "active", "finished"],
-      clash_type: ["major", "minor", "regulation"],
-      clash_status: ["new", "unresolved", "resolved", "approved_as_note"],
-      clash_source_format: ["navisworks", "bcf", "manual"],
     },
   },
 } as const
+

@@ -23,7 +23,7 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 
-# Claude Code local overrides (may contain secrets via env)
+# Claude Code local settings (contains secrets)
 .claude/settings.local.json
 
 # Editor / IDE settings
