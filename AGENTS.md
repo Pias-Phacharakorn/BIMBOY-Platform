@@ -217,12 +217,37 @@ import { cn } from "../../../lib/utils"
 - Use `plan-visualizer` skill for: current flow (ASCII) + proposed flow (mark `[NEW]`/`[MOD]`/`[DEL]`) + pros/cons + files
 - **Get explicit approval before coding**
 
-**3. Execute**
-- Use `caveman-code` skill for efficient, iterative coding
+**3. Execute — via Gemini CLI (mandatory)**
+- See **🤝 Multi-Agent Workflow** below. Claude Code does not write feature code directly — it specs the task, delegates to Gemini CLI, then reviews the diff.
+- Exception: small inline fixes to Gemini's diff (typo, missing import, minor logic slip) may be patched directly by Claude Code.
 
 **4. Uncertain?**
 - Ask one concrete question with a recommended option
 - Never assume state placement, data shape, or layer assignment
+
+## 🤝 Multi-Agent Workflow: Claude Code + Gemini CLI
+
+**Roles:**
+| Role | Responsibility |
+|------|-----------------|
+| Claude Code | Orchestrator + Code Reviewer — writes the spec, invokes Gemini CLI, reviews every diff |
+| Gemini CLI | Executor — writes/edits actual code, non-interactively |
+| Developer (you) | Final approver — reviews the diff and gives explicit go-ahead before commit/merge |
+
+**Loop (run for every new feature/task):**
+1. **Spec** — Claude Code analyzes the task and writes a spec for Gemini CLI: files to create/modify, requirements, coding conventions from this document, edge cases to watch for.
+2. **Delegate** — Claude Code invokes Gemini CLI non-interactively:
+   ```bash
+   gemini -p "<spec>" --yolo
+   ```
+3. **Review** — Claude Code runs `git diff` and checks the result against: spec compliance, bugs/logic errors, this document's conventions, security (injection, unsafe input), and performance.
+4. **Fix or re-loop** — Significant issues → re-invoke Gemini CLI with corrections. Minor issues → Claude Code patches directly and explains why.
+5. **Report & wait** — Claude Code presents the diff, a summary of what Gemini wrote vs. what Claude reviewed/fixed, and any risks. **No commit or merge without your explicit approval.**
+
+**Hard rules:**
+- All real feature code is written by Gemini CLI — not by Claude Code — except small inline fixes per step 4.
+- Work happens on a feature branch, never directly on `main`.
+- You always see the real `git diff` before approving.
 
 ## 🚫 Hard Constraints
 
