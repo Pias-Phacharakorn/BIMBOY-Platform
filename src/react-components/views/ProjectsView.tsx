@@ -2,12 +2,14 @@ import { useMemo, useState } from "react";
 import { Icon, SearchBox } from "@/react-components/components/ui";
 import { ProjectCard } from "@/react-components/features/project-card";
 import { useProjects } from "@/react-components/features/projects/useProjects";
+import { NewProjectModal } from "@/react-components/features/projects/NewProjectModal";
 import type { ProjectView } from "@/types";
 import { UserAccountDropdown } from "@/react-components/features/auth/UserAccountDropdown";
 
 export function ProjectsView() {
   const [view, setView] = useState<ProjectView>("card");
   const [query, setQuery] = useState("");
+  const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
   const { data: dbProjects = [], isLoading, isError, error } = useProjects();
 
   const filteredProjects = useMemo(() => {
@@ -78,7 +80,11 @@ export function ProjectsView() {
           <button className="inline-flex items-center justify-center gap-2 min-h-8 px-3 py-1.5 border border-border-strong rounded-radius bg-gradient-to-b from-surface-raised to-surface-alt text-fg cursor-pointer text-xs font-semibold no-underline hover:border-[oklch(50%_0.05_252)] hover:bg-[oklch(25%_0.026_255)] hover:-translate-y-[1px] active:translate-y-0 transition-all duration-120" type="button">
             Import
           </button>
-          <button className="inline-flex items-center justify-center gap-2 min-h-8 px-3 py-1.5 border rounded-radius cursor-pointer text-xs font-semibold no-underline hover:-translate-y-[1px] active:translate-y-0 transition-all duration-120 border-[oklch(69%_0.15_252)] bg-gradient-to-b from-[oklch(70%_0.16_252)] to-[oklch(57%_0.16_252)] text-[oklch(99%_0.004_255)] hover:from-[oklch(73%_0.16_252)] hover:to-[oklch(60%_0.16_252)]" type="button">
+          <button
+            className="inline-flex items-center justify-center gap-2 min-h-8 px-3 py-1.5 border rounded-radius cursor-pointer text-xs font-semibold no-underline hover:-translate-y-[1px] active:translate-y-0 transition-all duration-120 border-[oklch(69%_0.15_252)] bg-gradient-to-b from-[oklch(70%_0.16_252)] to-[oklch(57%_0.16_252)] text-[oklch(99%_0.004_255)] hover:from-[oklch(73%_0.16_252)] hover:to-[oklch(60%_0.16_252)]"
+            type="button"
+            onClick={() => setIsNewProjectOpen(true)}
+          >
             New Project
           </button>
           <div className="w-[1px] h-5 bg-border mx-1" />
@@ -121,6 +127,10 @@ export function ProjectsView() {
           )}
         </div>
       </main>
+
+      {isNewProjectOpen && (
+        <NewProjectModal onClose={() => setIsNewProjectOpen(false)} />
+      )}
     </div>
   );
 
