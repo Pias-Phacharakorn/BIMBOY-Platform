@@ -107,7 +107,7 @@ export function SettingsView() {
           )}
 
           {activeTab === "Folder" && (
-            <ProjectFolders project={project} />
+            <ProjectFolders project={project} isAdmin={showSettings} />
           )}
 
           {activeTab === "PowerBI" && (

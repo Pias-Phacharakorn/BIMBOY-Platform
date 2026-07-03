@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -397,6 +397,64 @@ export type Database = {
           },
         ]
       }
+      shop_drawings: {
+        Row: {
+          author: string | null
+          created_by: string | null
+          id: string
+          pdf_path: string
+          project_id: string
+          revision: number
+          sheet_name: string
+          sheet_no: string
+          uploaded_at: string
+        }
+        Insert: {
+          author?: string | null
+          created_by?: string | null
+          id?: string
+          pdf_path: string
+          project_id: string
+          revision?: number
+          sheet_name: string
+          sheet_no: string
+          uploaded_at?: string
+        }
+        Update: {
+          author?: string | null
+          created_by?: string | null
+          id?: string
+          pdf_path?: string
+          project_id?: string
+          revision?: number
+          sheet_name?: string
+          sheet_no?: string
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_drawings_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["uid"]
+          },
+          {
+            foreignKeyName: "shop_drawings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "active_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shop_drawings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       active_projects: {
@@ -629,4 +687,3 @@ export const Constants = {
     },
   },
 } as const
-

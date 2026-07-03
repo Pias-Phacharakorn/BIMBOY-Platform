@@ -1,14 +1,17 @@
+import { useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { AppShell, WorkspaceHeader } from "@/react-components/components/layout";
 import { useProject, useIsProjectAdmin } from "@/react-components/features/projects/useProjects";
 import { useAuth } from "@/react-components/features/auth/useAuth";
 import { ProjectFolders } from "@/react-components/features/project-folders/ProjectFolders";
+import { ShopDrawingTable } from "@/react-components/features/shop-drawings";
 
 export function DrawingView() {
   const { projectId } = useParams({ strict: false });
   const { data: project, isLoading } = useProject(projectId);
   const { user, profile } = useAuth();
   const showSettings = useIsProjectAdmin(project?.id, user?.id, profile?.hub_role === "hub_admin");
+  const [activeTab, setActiveTab] = useState("Folder");
 
   if (isLoading) {
     return (
@@ -35,13 +38,17 @@ export function DrawingView() {
     <AppShell project={project} showSettings={showSettings}>
       <WorkspaceHeader
         title="Drawing Directory"
-        tabs={["Folder"]}
-        activeTab="Folder"
+        tabs={["Folder", "Register"]}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
       />
       <div className="relative flex-1 min-w-0 overflow-auto bg-gradient-to-b from-[oklch(12%_0.014_255)] to-[oklch(9.8%_0.012_255)]">
-        <div className="flex flex-col gap-6 w-full p-6 md:p-8">
-          <ProjectFolders project={project} focusFolder="04_Drawing" />
-        </div>
+        {activeTab === "Folder" && (
+          <div className="flex flex-col gap-6 w-full p-6 md:p-8">
+            <ProjectFolders project={project} focusFolder="04_Drawing" isAdmin={showSettings} />
+          </div>
+        )}
+        {activeTab === "Register" && <ShopDrawingTable project={project} isAdmin={showSettings} />}
       </div>
     </AppShell>
   );
