@@ -38,3 +38,6 @@ lerna-debug.log*
 .DS_Store
 Thumbs.db
 .vercel
+
+# Local scratch / unrelated project, not part of this repo
+___QR Prompt Check/

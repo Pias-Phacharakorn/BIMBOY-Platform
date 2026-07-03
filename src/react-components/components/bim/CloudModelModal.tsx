@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { useProjectStore } from "@/react-components/store/projectStore";
 import { useProject } from "@/react-components/features/projects/useProjects";
-import { supabase } from "@/integrations/supabase/client";
-import * as OBC from "@thatopen/components";
+import { useCloudModelFiles, useLoadCloudModelBatch } from "@/react-components/features/cloud-models/useCloudModels";
+import type { CloudFragFile } from "@/react-components/features/cloud-models/cloudModelsService";
 import {
   Loader2,
   Search,
@@ -17,11 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-interface CloudFile {
-  name: string;
-  size: number;
-  updatedAt: string;
-  revitVersion: string;
+interface CloudFile extends CloudFragFile {
   checked: boolean;
 }
 
@@ -30,23 +26,31 @@ interface CloudModelModalProps {
 }
 
 export function CloudModelModal({ onClose }: CloudModelModalProps) {
-  const { components, setModelLoading } = useBimStore();
+  const { components } = useBimStore();
   const { activeProjectId } = useProjectStore();
   const { data: project, isLoading: isProjectLoading } = useProject(activeProjectId);
+  const loadedModelIds = useBimStore((s) => s.loadedModelIds);
+  const loadFiles = useLoadCloudModelBatch();
 
-  // States
-  const [files, setFiles] = useState<CloudFile[]>([]);
-  const [isFetchingFiles, setIsFetchingFiles] = useState(false);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const projectPath = project ? `${project.projectnumber}_${project.projectName}` : "";
+  const prefix = project ? `${projectPath}/02_frag` : "";
+
+  const {
+    data: cloudFiles = [],
+    isLoading: isFetchingFiles,
+    error: fetchErrorObj,
+  } = useCloudModelFiles(prefix, !!project);
+  const fetchError = fetchErrorObj instanceof Error ? fetchErrorObj.message : null;
+
+  // Local checked-state layered on top of the queried file list
+  const [checkedNames, setCheckedNames] = useState<Set<string>>(new Set());
+  const files: CloudFile[] = useMemo(
+    () => cloudFiles.map((f) => ({ ...f, checked: checkedNames.has(f.name) })),
+    [cloudFiles, checkedNames]
+  );
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortAscending, setSortAscending] = useState(true);
-
-  // Loading models state
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadStatuses, setDownloadStatuses] = useState<
-    Record<string, "pending" | "loading" | "done" | "error">
-  >({});
 
   // Helper: Format bytes
   const formatBytes = (bytes: number, decimals = 2) => {
@@ -69,83 +73,16 @@ export function CloudModelModal({ onClose }: CloudModelModalProps) {
     });
   };
 
-  const projectPath = project ? `${project.projectnumber}_${project.projectName}` : "";
-  const prefix = project ? `${projectPath}/02_frag` : "";
-
-  // Fetch files from Supabase Storage
-  useEffect(() => {
-    if (!project) return;
-
-    async function loadFiles() {
-      setIsFetchingFiles(true);
-      setFetchError(null);
-      try {
-        const { data, error } = await supabase.storage
-          .from("project-files")
-          .list(prefix, {
-            sortBy: { column: "name", order: "asc" },
-            limit: 100,
-          });
-
-        if (error) throw error;
-
-        const mappedFiles: CloudFile[] = (data || [])
-          .filter(
-            (item) =>
-              item.name !== ".emptyFolderPlaceholder" &&
-              item.name.toLowerCase().endsWith(".frag")
-          )
-          .map((item) => {
-            // Find Revit version fallback by filename regex
-            let revitVersion = "";
-            if (item.metadata) {
-              const metaObj = item.metadata as any;
-              if (metaObj.customMetadata) {
-                for (const key of Object.keys(metaObj.customMetadata)) {
-                  if (key.toLowerCase().includes("revit")) {
-                    revitVersion = metaObj.customMetadata[key];
-                  }
-                }
-              }
-            }
-            if (!revitVersion) {
-              const match = item.name.match(/_R(\d{2})/i);
-              if (match) {
-                revitVersion = "20" + match[1];
-              }
-            }
-
-            return {
-              name: item.name,
-              size: item.metadata?.size || 0,
-              updatedAt: item.updated_at || item.created_at || "",
-              revitVersion,
-              checked: false,
-            };
-          });
-
-        setFiles(mappedFiles);
-      } catch (err: any) {
-        console.error("Failed to load files from Supabase:", err);
-        setFetchError(err.message || "Failed to fetch files from storage.");
-      } finally {
-        setIsFetchingFiles(false);
-      }
-    }
-
-    loadFiles();
-  }, [project, prefix]);
-
   // Handle ESC key close
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isDownloading) {
+      if (e.key === "Escape") {
         onClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, isDownloading]);
+  }, [onClose]);
 
   // Filter & Sort
   const filteredAndSortedFiles = useMemo(() => {
@@ -162,190 +99,71 @@ export function CloudModelModal({ onClose }: CloudModelModalProps) {
   const selectedFiles = useMemo(() => files.filter((f) => f.checked), [files]);
   const hasSelection = selectedFiles.length > 0;
 
-  // Toggle selection
-  const handleToggleFile = (name: string) => {
-    setFiles((prev) =>
-      prev.map((f) => (f.name === name ? { ...f, checked: !f.checked } : f))
-    );
+  // Toggle selection (already-loaded files can't be toggled — see "Loaded" badge in the list)
+  const handleToggleFile = (name: string, modelId: string) => {
+    if (loadedModelIds.includes(modelId)) return;
+    setCheckedNames((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
   };
 
-  // Bulk actions
+  // Bulk actions (skip files already loaded in the viewer)
+  const selectableNames = useMemo(
+    () => files.filter((f) => !loadedModelIds.includes(f.modelId)).map((f) => f.name),
+    [files, loadedModelIds]
+  );
+
   const handleCheckAll = () => {
-    setFiles((prev) => prev.map((f) => ({ ...f, checked: true })));
+    setCheckedNames(new Set(selectableNames));
   };
 
   const handleUncheckAll = () => {
-    setFiles((prev) => prev.map((f) => ({ ...f, checked: false })));
+    setCheckedNames(new Set());
   };
 
   const handleToggleAll = () => {
-    setFiles((prev) => prev.map((f) => ({ ...f, checked: !f.checked })));
+    setCheckedNames((prev) =>
+      prev.size === selectableNames.length ? new Set() : new Set(selectableNames)
+    );
   };
 
-  // Download & load models in parallel batch of 5
+  // Delegate to the shared batch loader (CloudModelLoadingModal shows progress globally);
+  // close this file-picker modal immediately so the loading modal takes over.
   const handleLoadSelected = async () => {
     if (!components || selectedFiles.length === 0) return;
-
-    setIsDownloading(true);
-    setModelLoading(true);
-
-    const initialStatuses: Record<string, "pending" | "loading" | "done" | "error"> = {};
-    selectedFiles.forEach((f) => {
-      initialStatuses[f.name] = "pending";
-    });
-    setDownloadStatuses(initialStatuses);
-
-    const fragments = components.get(OBC.FragmentsManager);
-    const MAX_PARALLEL = 5;
-    let hasError = false;
-
-    // Process in batches
-    for (let i = 0; i < selectedFiles.length; i += MAX_PARALLEL) {
-      const batch = selectedFiles.slice(i, i + MAX_PARALLEL);
-      await Promise.all(
-        batch.map(async (fileItem) => {
-          setDownloadStatuses((prev) => ({ ...prev, [fileItem.name]: "loading" }));
-          const fullPath = `${prefix}/${fileItem.name}`;
-          try {
-            const { data, error } = await supabase.storage
-              .from("project-files")
-              .download(fullPath);
-
-            if (error) throw error;
-            if (!data) throw new Error("No data returned");
-
-            const buffer = await data.arrayBuffer();
-            const model = await fragments.core.load(new Uint8Array(buffer), {
-              modelId: fileItem.name.replace(/\.frag$/i, ""),
-            });
-
-            if (model) {
-              (model as any).name = fileItem.name;
-            }
-
-            setDownloadStatuses((prev) => ({ ...prev, [fileItem.name]: "done" }));
-          } catch (err) {
-            console.error(`Failed to load cloud model "${fileItem.name}":`, err);
-            setDownloadStatuses((prev) => ({ ...prev, [fileItem.name]: "error" }));
-            hasError = true;
-          }
-        })
-      );
-    }
-
-    setModelLoading(false);
-
-    // If no errors, auto close modal after 1s. Otherwise let user see the status.
-    if (!hasError) {
-      setTimeout(() => {
-        onClose();
-      }, 1000);
-    }
+    onClose();
+    await loadFiles(selectedFiles, prefix, components);
   };
-
-  // Stats
-  const completedCount = Object.values(downloadStatuses).filter(
-    (s) => s === "done" || s === "error"
-  ).length;
 
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
-      onClick={() => {
-        if (!isDownloading) onClose();
-      }}
+      onClick={onClose}
     >
       <div
         className="w-[500px] max-w-full max-h-[85vh] flex flex-col bg-surface border border-border rounded-radius shadow-xl overflow-hidden animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        {isDownloading ? (
-          /* DOWNLOAD PROGRESS PANEL */
-          <div className="flex flex-col items-center justify-center p-8 gap-6 text-fg">
-            <div className="relative flex items-center justify-center">
-              <Loader2 className="w-12 h-12 text-accent animate-spin" />
-              <span className="absolute text-[10px] font-bold">
-                {completedCount}/{selectedFiles.length}
-              </span>
-            </div>
-            <div className="text-center">
-              <h3 className="text-sm font-bold">Loading Cloud Models</h3>
-              <p className="text-xs text-muted mt-1">
-                Please wait while models are loaded into the viewport.
-              </p>
-            </div>
-
-            <div className="w-full max-h-[250px] overflow-y-auto border border-border rounded-radius bg-surface-alt p-3 flex flex-col gap-2">
-              {selectedFiles.map((file) => {
-                const status = downloadStatuses[file.name] || "pending";
-                return (
-                  <div
-                    key={file.name}
-                    className="flex items-center justify-between text-xs py-1 border-b border-border last:border-0"
-                  >
-                    <span className="truncate max-w-[75%] font-medium text-fg">
-                      {file.name}
-                    </span>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {status === "pending" && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted-2/20 text-muted font-semibold">
-                          Pending
-                        </span>
-                      )}
-                      {status === "loading" && (
-                        <div className="flex items-center gap-1 text-accent font-semibold text-[10px]">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Downloading</span>
-                        </div>
-                      )}
-                      {status === "done" && (
-                        <span className="flex items-center gap-0.5 text-status-ok font-semibold text-[10px]">
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Ready</span>
-                        </span>
-                      )}
-                      {status === "error" && (
-                        <span className="flex items-center gap-0.5 text-status-danger font-semibold text-[10px]">
-                          <AlertCircle className="w-3.5 h-3.5" />
-                          <span>Failed</span>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {completedCount === selectedFiles.length &&
-              Object.values(downloadStatuses).includes("error") && (
-                <button
-                  onClick={onClose}
-                  className="w-full min-h-9 py-2 px-4 rounded-radius bg-surface-raised border border-border hover:bg-surface-alt font-semibold text-xs text-fg transition-all cursor-pointer"
-                >
-                  Close & View Viewer
-                </button>
-              )}
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 bg-surface-raised border-b border-border">
+          <div className="flex items-center gap-2">
+            <FolderOpen className="w-4 h-4 text-accent" />
+            <span className="text-xs font-bold text-fg">
+              Cloud Models
+            </span>
           </div>
-        ) : (
-          /* FILE SELECTOR PANEL */
-          <>
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 bg-surface-raised border-b border-border">
-              <div className="flex items-center gap-2">
-                <FolderOpen className="w-4 h-4 text-accent" />
-                <span className="text-xs font-bold text-fg">
-                  Cloud Models
-                </span>
-              </div>
-              <button
-                onClick={onClose}
-                className="p-1 rounded-radius hover:bg-surface-alt text-muted hover:text-fg transition-all cursor-pointer"
-                type="button"
-                aria-label="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-radius hover:bg-surface-alt text-muted hover:text-fg transition-all cursor-pointer"
+            type="button"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
 
             {/* Filter Bar */}
             <div className="flex items-center gap-2 p-3 border-b border-border bg-surface">
@@ -396,43 +214,59 @@ export function CloudModelModal({ onClose }: CloudModelModalProps) {
                   </span>
                 </div>
               ) : (
-                filteredAndSortedFiles.map((file) => (
-                  <div
-                    key={file.name}
-                    className={cn(
-                      "flex items-center justify-between p-2.5 rounded-radius border border-border hover:border-accent bg-surface-alt/30 transition-all cursor-pointer select-none",
-                      file.checked && "border-accent bg-accent/5"
-                    )}
-                    onClick={() => handleToggleFile(file.name)}
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <input
-                        type="checkbox"
-                        checked={file.checked}
-                        onChange={() => {}}
-                        className="w-3.5 h-3.5 accent-accent shrink-0 pointer-events-none"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-fg truncate">
-                          {file.name.replace(/\.frag$/i, "")}
-                        </p>
-                        <div className="flex items-center gap-2 text-[10px] text-muted mt-0.5">
-                          <span>{formatBytes(file.size)}</span>
-                          <span>•</span>
-                          <span>{formatDate(file.updatedAt)}</span>
-                          {file.revitVersion && (
-                            <>
-                              <span>•</span>
-                              <span className="px-1 py-0.25 rounded bg-accent-muted text-accent font-medium">
-                                Revit {file.revitVersion}
-                              </span>
-                            </>
-                          )}
+                filteredAndSortedFiles.map((file) => {
+                  const isLoaded = loadedModelIds.includes(file.modelId);
+                  return (
+                    <div
+                      key={file.name}
+                      className={cn(
+                        "flex items-center justify-between p-2.5 rounded-radius border border-border bg-surface-alt/30 transition-all select-none",
+                        file.checked && "border-accent bg-accent/5",
+                        isLoaded ? "opacity-60 cursor-default" : "hover:border-accent cursor-pointer"
+                      )}
+                      onClick={() => handleToggleFile(file.name, file.modelId)}
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {isLoaded ? (
+                          <Check className="w-3.5 h-3.5 text-status-ok shrink-0" />
+                        ) : (
+                          <input
+                            type="checkbox"
+                            checked={file.checked}
+                            onChange={() => {}}
+                            className="w-3.5 h-3.5 accent-accent shrink-0 pointer-events-none"
+                          />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-fg truncate">
+                            {file.name.replace(/\.frag$/i, "")}
+                          </p>
+                          <div className="flex items-center gap-2 text-[10px] text-muted mt-0.5">
+                            <span>{formatBytes(file.size)}</span>
+                            <span>•</span>
+                            <span>{formatDate(file.updatedAt)}</span>
+                            {file.revitVersion && (
+                              <>
+                                <span>•</span>
+                                <span className="px-1 py-0.25 rounded bg-accent-muted text-accent font-medium">
+                                  Revit {file.revitVersion}
+                                </span>
+                              </>
+                            )}
+                            {isLoaded && (
+                              <>
+                                <span>•</span>
+                                <span className="px-1 py-0.25 rounded bg-status-ok/15 text-status-ok font-medium">
+                                  Loaded
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -469,19 +303,17 @@ export function CloudModelModal({ onClose }: CloudModelModalProps) {
             {/* Footer Submit Button */}
             <div className="p-3 bg-surface-raised border-t border-border">
               <button
-                disabled={!hasSelection || isDownloading}
+                disabled={!hasSelection}
                 onClick={handleLoadSelected}
                 className={cn(
                   "w-full min-h-9 py-2 px-4 rounded-radius bg-accent hover:opacity-90 font-bold text-xs text-white transition-all cursor-pointer flex items-center justify-center gap-1.5",
-                  (!hasSelection || isDownloading) && "opacity-50 cursor-not-allowed bg-muted"
+                  !hasSelection && "opacity-50 cursor-not-allowed bg-muted"
                 )}
                 type="button"
               >
                 <span>Load Models</span>
               </button>
             </div>
-          </>
-        )}
       </div>
     </div>,
     document.body

@@ -17,6 +17,13 @@ export type BimTool =
 // ─── BIM Panel Enum ───────────────────────────────────────────────────────────
 export type BimPanel = 'properties' | 'tree' | 'minimap' | 'smartviews' | null
 
+// ─── Cloud Model Loading Progress ─────────────────────────────────────────────
+export type LoadingFileStatus = 'pending' | 'loading' | 'done' | 'error'
+export interface LoadingFile {
+  name: string
+  status: LoadingFileStatus
+}
+
 // ─── BIM Store State ──────────────────────────────────────────────────────────
 interface BimState {
   // Core ThatOpen Engine References
@@ -31,6 +38,7 @@ interface BimState {
   activePanel: BimPanel
   engineReady: boolean
   isModelLoading: boolean
+  loadingFiles: LoadingFile[]
   loadedModelIds: string[]
   alignAngle: number
   aligningDirection: 'front' | 'back' | 'left' | 'right' | null
@@ -48,8 +56,11 @@ interface BimState {
   setActivePanel: (panel: BimPanel) => void
   setEngineReady: (ready: boolean) => void
   setModelLoading: (loading: boolean) => void
+  setLoadingFiles: (files: LoadingFile[]) => void
+  updateLoadingFileStatus: (name: string, status: LoadingFileStatus) => void
   addLoadedModel: (modelId: string) => void
   removeLoadedModel: (modelId: string) => void
+  resetLoadedModels: () => void
   setAlignAngle: (angle: number) => void
   setAligningDirection: (direction: 'front' | 'back' | 'left' | 'right' | null) => void
   resetAlignment: () => void
@@ -67,6 +78,7 @@ const initialState = {
   activePanel: null as BimPanel,
   engineReady: false,
   isModelLoading: false,
+  loadingFiles: [] as LoadingFile[],
   loadedModelIds: [] as string[],
   alignAngle: 0,
   aligningDirection: null as 'front' | 'back' | 'left' | 'right' | null,
@@ -99,6 +111,15 @@ export const useBimStore = create<BimState>()(
 
     setModelLoading: (loading) => set({ isModelLoading: loading }),
 
+    setLoadingFiles: (files) => set({ loadingFiles: files }),
+
+    updateLoadingFileStatus: (name, status) =>
+      set((state) => ({
+        loadingFiles: state.loadingFiles.map((f) =>
+          f.name === name ? { ...f, status } : f
+        ),
+      })),
+
     addLoadedModel: (modelId) =>
       set((state) => ({
         loadedModelIds: state.loadedModelIds.includes(modelId)
@@ -110,6 +131,8 @@ export const useBimStore = create<BimState>()(
       set((state) => ({
         loadedModelIds: state.loadedModelIds.filter((id) => id !== modelId),
       })),
+
+    resetLoadedModels: () => set({ loadedModelIds: [] }),
 
     setAlignAngle: (angle) => set({ alignAngle: angle }),
 

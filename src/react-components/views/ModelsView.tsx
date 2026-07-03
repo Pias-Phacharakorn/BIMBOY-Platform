@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { AppShell, WorkspaceHeader, LeftPanel, RightPanel, PanelSection } from "@/react-components/components/layout";
 import { Icon } from "@/react-components/components/ui";
-import { ViewportWrapper, ViewportRightToolbar, ViewportToolbar, ModelsList } from "@/react-components/components/bim";
+import { ViewportWrapper, ViewportRightToolbar, ViewportToolbar, ModelsList, CloudModelLoadingModal } from "@/react-components/components/bim";
 import { GisPanel } from "@/react-components/features/gis";
 import { PropertyPanel } from "@/react-components/features/property-panel";
 import { PropertyTable } from "@/react-components/features/property-table/PropertyTable";
 import { ClashList, ClashPreview } from "@/react-components/features/clash-dashboard";
 import { useProject, useIsProjectAdmin } from "@/react-components/features/projects/useProjects";
 import { useAuth } from "@/react-components/features/auth/useAuth";
+import { useAutoLoadCloudModels } from "@/react-components/features/cloud-models/useAutoLoadCloudModels";
 
 const workspaceTabs = ["Models", "Queries", "Viewer", "Smart Views", "GIS", "Viewpoint"];
 
@@ -16,6 +17,7 @@ export function ModelsView() {
   const { projectId } = useParams({ strict: false });
   const { data: project, isLoading } = useProject(projectId);
   const { user, profile } = useAuth();
+  useAutoLoadCloudModels(projectId);
   const showSettings = useIsProjectAdmin(project?.id, user?.id, profile?.hub_role === "hub_admin");
 
   const [modelSearchQuery, setModelSearchQuery] = useState("");
@@ -105,6 +107,7 @@ export function ModelsView() {
           <ViewportWrapper />
           <ViewportRightToolbar />
           <ViewportToolbar />
+          <CloudModelLoadingModal />
         </section>
 
         <RightPanel
