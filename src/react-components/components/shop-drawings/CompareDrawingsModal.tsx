@@ -123,6 +123,16 @@ export function CompareDrawingsModal({ isOpen, onClose, drawingNo, versions }: C
     }
   }, [isOpen, versionsWithPdf]);
 
+  // Esc quits compare mode
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   const versionA = versionsWithPdf.find((v) => v.id === versionAId);
   const versionB = versionsWithPdf.find((v) => v.id === versionBId);
 
@@ -171,84 +181,71 @@ export function CompareDrawingsModal({ isOpen, onClose, drawingNo, versions }: C
           </button>
         </div>
 
+        <div className="grid grid-cols-2 gap-4 px-4 py-3 bg-surface-raised border-b border-border flex-none">
+          <div className="flex gap-2">
+            <label className="flex flex-col gap-1 text-xs text-muted flex-1">
+              Newer revision
+              <select
+                value={versionAId}
+                onChange={(e) => setVersionAId(e.target.value)}
+                className="h-9 px-3 text-xs bg-surface-alt border border-border rounded-radius text-fg focus:outline-none focus:border-accent transition-colors"
+              >
+                {versionsWithPdf.map((v) => (
+                  <option key={v.id} value={v.id} disabled={v.id === versionBId}>
+                    Rev {v.currentRevision}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted w-20">
+              Page
+              <select
+                value={sideA.page}
+                onChange={(e) => sideA.setPage(Number(e.target.value))}
+                className="h-9 px-2 text-xs bg-surface-alt border border-border rounded-radius text-fg focus:outline-none focus:border-accent transition-colors"
+              >
+                {Array.from({ length: sideA.numPages }, (_, i) => i + 1).map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="flex gap-2">
+            <label className="flex flex-col gap-1 text-xs text-muted flex-1">
+              Older revision
+              <select
+                value={versionBId}
+                onChange={(e) => setVersionBId(e.target.value)}
+                className="h-9 px-3 text-xs bg-surface-alt border border-border rounded-radius text-fg focus:outline-none focus:border-accent transition-colors"
+              >
+                {versionsWithPdf.map((v) => (
+                  <option key={v.id} value={v.id} disabled={v.id === versionAId}>
+                    Rev {v.currentRevision}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted w-20">
+              Page
+              <select
+                value={sideB.page}
+                onChange={(e) => sideB.setPage(Number(e.target.value))}
+                className="h-9 px-2 text-xs bg-surface-alt border border-border rounded-radius text-fg focus:outline-none focus:border-accent transition-colors"
+              >
+                {Array.from({ length: sideB.numPages }, (_, i) => i + 1).map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+
         <div className="flex flex-col gap-3 p-4 flex-1 min-h-0">
-          <div className="grid grid-cols-2 gap-4 flex-none">
-            <div className="flex gap-2">
-              <label className="flex flex-col gap-1 text-xs text-muted flex-1">
-                Newer revision
-                <select
-                  value={versionAId}
-                  onChange={(e) => setVersionAId(e.target.value)}
-                  className="h-9 px-3 text-xs bg-surface-alt border border-border rounded-radius text-fg focus:outline-none focus:border-accent transition-colors"
-                >
-                  {versionsWithPdf.map((v) => (
-                    <option key={v.id} value={v.id} disabled={v.id === versionBId}>
-                      Rev {v.currentRevision}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-muted w-20">
-                Page
-                <select
-                  value={sideA.page}
-                  onChange={(e) => sideA.setPage(Number(e.target.value))}
-                  className="h-9 px-2 text-xs bg-surface-alt border border-border rounded-radius text-fg focus:outline-none focus:border-accent transition-colors"
-                >
-                  {Array.from({ length: sideA.numPages }, (_, i) => i + 1).map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="flex gap-2">
-              <label className="flex flex-col gap-1 text-xs text-muted flex-1">
-                Older revision
-                <select
-                  value={versionBId}
-                  onChange={(e) => setVersionBId(e.target.value)}
-                  className="h-9 px-3 text-xs bg-surface-alt border border-border rounded-radius text-fg focus:outline-none focus:border-accent transition-colors"
-                >
-                  {versionsWithPdf.map((v) => (
-                    <option key={v.id} value={v.id} disabled={v.id === versionAId}>
-                      Rev {v.currentRevision}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-muted w-20">
-                Page
-                <select
-                  value={sideB.page}
-                  onChange={(e) => sideB.setPage(Number(e.target.value))}
-                  className="h-9 px-2 text-xs bg-surface-alt border border-border rounded-radius text-fg focus:outline-none focus:border-accent transition-colors"
-                >
-                  {Array.from({ length: sideB.numPages }, (_, i) => i + 1).map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-center gap-2 flex-none">
-            <button type="button" onClick={handleZoomOut} disabled={zoomLevel <= 0.5} className="p-1 rounded-radius hover:bg-surface-alt text-muted hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer" title="Zoom out">
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <span className="text-[11px] text-muted w-10 text-center">{Math.round(zoomLevel * 100)}%</span>
-            <button type="button" onClick={handleZoomIn} disabled={zoomLevel >= 3} className="p-1 rounded-radius hover:bg-surface-alt text-muted hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer" title="Zoom in">
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-            <button type="button" onClick={handleZoomReset} className="p-1 rounded-radius hover:bg-surface-alt text-muted hover:text-fg transition-all cursor-pointer" title="Reset zoom">
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
           {loading && (
             <div className="flex items-center justify-center gap-2 flex-1 text-muted text-sm">
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -263,15 +260,23 @@ export function CompareDrawingsModal({ isOpen, onClose, drawingNo, versions }: C
           )}
 
           {!loading && !error && sideA.preview && sideB.preview && (
-            <div className="flex flex-col gap-2 flex-1 min-h-0">
-              <p className="text-[11px] text-muted flex-none">
-                Drag the <span className="font-semibold">⟨⟩ handle</span> to slide the comparison. Drag anywhere else to pan.
-              </p>
-              <div className="flex-1 min-h-0">
-                <PdfSliderCompare imageA={sideA.preview} imageB={sideB.preview} zoomLevel={zoomLevel} height="100%" />
-              </div>
+            <div className="flex-1 min-h-0">
+              <PdfSliderCompare imageA={sideA.preview} imageB={sideB.preview} zoomLevel={zoomLevel} height="100%" />
             </div>
           )}
+        </div>
+
+        <div className="flex items-center justify-center gap-2 px-4 py-2 bg-surface-raised border-t border-border flex-none">
+          <button type="button" onClick={handleZoomOut} disabled={zoomLevel <= 0.5} className="p-1 rounded-radius hover:bg-surface-alt text-muted hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer" title="Zoom out">
+            <ZoomOut className="w-3.5 h-3.5" />
+          </button>
+          <span className="text-[11px] text-muted w-10 text-center">{Math.round(zoomLevel * 100)}%</span>
+          <button type="button" onClick={handleZoomIn} disabled={zoomLevel >= 3} className="p-1 rounded-radius hover:bg-surface-alt text-muted hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer" title="Zoom in">
+            <ZoomIn className="w-3.5 h-3.5" />
+          </button>
+          <button type="button" onClick={handleZoomReset} className="p-1 rounded-radius hover:bg-surface-alt text-muted hover:text-fg transition-all cursor-pointer" title="Reset zoom">
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </div>,

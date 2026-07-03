@@ -41,3 +41,4 @@ Thumbs.db
 
 # Local scratch / unrelated project, not part of this repo
 ___QR Prompt Check/
+.env*

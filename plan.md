@@ -177,6 +177,20 @@ Follow-up from a screenshot review: the Move button from 6.2 rendered awkwardly 
 
 Implementation: `PdfSliderCompare.tsx` — swapped which element owns which pointer handlers. The container's `onPointerDown/Move/Up` now drive panning (`handlePanPointerDown` etc., using `container.setPointerCapture`); a new `40px` invisible wrapper `div` positioned exactly at the handle's location owns `onPointerDown/Move/Up` for sliding (`handleSlidePointerDown` etc., with `e.stopPropagation()` so a press on the handle never also triggers the container's pan handler). `CompareDrawingsModal.tsx` — zoom button cluster relocated from the header into a new centered `flex-none` row.
 
+## Phase 6.4 — Compare Revisions layout pass (shipped)
+
+Follow-up from a screenshot review, resolved via `/grill-with-docs`:
+
+1. **Selector row moved up into its own header-styled strip** directly below the title bar (same `bg-surface-raised` treatment), not merged into the same flex row as the title/close.
+2. **Zoom controls moved to a footer row** at the bottom of the flex column, below the slider — normal document flow, not a fixed/floating overlay.
+3. **Instruction paragraph removed entirely** — no replacement text; the handle-vs-pan behavior itself is unchanged (cursor-only affordance from Phase 6.3 still applies).
+
+Implementation: purely a `CompareDrawingsModal.tsx` layout reorder — the revision/page selector `grid` moved from inside the padded content area to a new `bg-surface-raised border-b` strip right after the header; the zoom button cluster moved from before the slider to a new `bg-surface-raised border-t` strip after it. No changes to `PdfSliderCompare.tsx` or any interaction logic.
+
+## Phase 6.5 — Esc quits Compare mode (shipped)
+
+Added a `keydown` listener (window-scoped, attached only while `isOpen`) in `CompareDrawingsModal.tsx` that calls `onClose()` on `Escape`, matching the close-button behavior.
+
 ---
 
-**Status:** Phases 1–6.3 all shipped and verified (`tsc --noEmit`, `vite build` clean after each phase; `mcp__supabase__get_advisors` clean after Phase 2/3 — no new security lints from the `shop_drawings` table).
+**Status:** Phases 1–6.5 all shipped and verified (`tsc --noEmit`, `vite build` clean after each phase; `mcp__supabase__get_advisors` clean after Phase 2/3 — no new security lints from the `shop_drawings` table).
