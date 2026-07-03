@@ -31,6 +31,7 @@ interface ProjectFoldersProps {
   project: AppProject;
   focusFolder?: string;
   isAdmin?: boolean;
+  large?: boolean;
 }
 
 interface StorageFile {
@@ -46,7 +47,7 @@ interface StorageFile {
 
 const DRAWING_FOLDER = "04_Drawing";
 
-export function ProjectFolders({ project, focusFolder, isAdmin = false }: ProjectFoldersProps) {
+export function ProjectFolders({ project, focusFolder, isAdmin = false, large = false }: ProjectFoldersProps) {
   const projectPath = `${project.projectnumber}_${project.projectName}`;
   const subFolders = ["01_ifc", "02_frag", "03_ClashImport", DRAWING_FOLDER];
 
@@ -190,13 +191,14 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false }: Projec
   // Get file icon based on extension
   const getFileIcon = (fileName: string) => {
     const ext = fileName.split(".").pop()?.toLowerCase();
+    const iconSize = large ? "w-8 h-8" : "w-4 h-4";
     if (ext === "ifc") {
-      return <FileBox className="w-4 h-4 text-[oklch(74%_0.13_195)] shrink-0" />;
+      return <FileBox className={cn(iconSize, "text-[oklch(74%_0.13_195)] shrink-0")} />;
     }
     if (ext === "frag") {
-      return <FileCode className="w-4 h-4 text-accent shrink-0" />;
+      return <FileCode className={cn(iconSize, "text-accent shrink-0")} />;
     }
-    return <FileText className="w-4 h-4 text-muted shrink-0" />;
+    return <FileText className={cn(iconSize, "text-muted shrink-0")} />;
   };
 
   // Fetch files for a specific folder
@@ -347,6 +349,28 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false }: Projec
     }
   };
 
+  const sz = {
+    icon3: large ? "w-7 h-7" : "w-3.5 h-3.5",
+    icon4: large ? "w-8 h-8" : "w-4 h-4",
+    icon5: large ? "w-10 h-10" : "w-5 h-5",
+    rowPad: large ? "py-3 px-6" : "py-1.5 px-3",
+    rootRowPad: large ? "py-4 px-6" : "py-2 px-3",
+    gap2: large ? "gap-4" : "gap-2",
+    gap1_5: large ? "gap-3" : "gap-1.5",
+    gap3: large ? "gap-6" : "gap-3",
+    gap4: large ? "gap-8" : "gap-4",
+    text13: large ? "text-[26px]" : "text-[13px]",
+    text12_5: large ? "text-[25px]" : "text-[12.5px]",
+    text10: large ? "text-[20px]" : "text-[10px]",
+    textXs: large ? "text-2xl" : "text-xs",
+    textSm: large ? "text-xl" : "text-sm",
+    badgePad: large ? "px-3 py-1" : "px-1.5 py-0.5",
+    btnPad: large ? "p-2" : "p-1",
+    indent: large ? "pl-12 ml-8" : "pl-6 ml-4",
+    rootIndent: large ? "pl-12 ml-10" : "pl-6 ml-5",
+    cardPad: large ? "p-12" : "p-6",
+  };
+
   return (
     <div className="flex flex-col gap-4 w-full text-fg">
       {/* Settings section header */}
@@ -360,32 +384,33 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false }: Projec
       )}
 
       {/* Directory Tree Card */}
-      <div className="border border-border bg-[oklch(14.5%_0.014_255_/_94%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] rounded-radius overflow-hidden p-6 flex flex-col gap-2">
+      <div className={cn("border border-border bg-[oklch(14.5%_0.014_255_/_94%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] rounded-radius overflow-hidden flex flex-col", sz.cardPad, sz.gap2)}>
         {/* Root Directory Row */}
         {!focusFolder && (
           <div
-            className="flex items-center gap-2 py-2 px-3 rounded-radius hover:bg-surface-alt transition-colors duration-120 cursor-pointer select-none text-sm font-semibold"
+            className={cn("flex items-center rounded-radius hover:bg-surface-alt transition-colors duration-120 cursor-pointer select-none font-semibold", sz.gap2, sz.rootRowPad, sz.textSm)}
             onClick={() => toggleFolder(projectPath)}
           >
             {expandedFolders[projectPath] ? (
-              <ChevronDown className="w-4 h-4 text-muted shrink-0" />
+              <ChevronDown className={cn(sz.icon4, "text-muted shrink-0")} />
             ) : (
-              <ChevronRight className="w-4 h-4 text-muted shrink-0" />
+              <ChevronRight className={cn(sz.icon4, "text-muted shrink-0")} />
             )}
             {expandedFolders[projectPath] ? (
-              <FolderOpen className="w-5 h-5 text-accent shrink-0" />
+              <FolderOpen className={cn(sz.icon5, "text-accent shrink-0")} />
             ) : (
-              <Folder className="w-5 h-5 text-accent shrink-0" />
+              <Folder className={cn(sz.icon5, "text-accent shrink-0")} />
             )}
-            <span className="font-mono text-[13px]">{projectPath}</span>
+            <span className={cn("font-mono", sz.text13)}>{projectPath}</span>
           </div>
         )}
 
         {/* Subdirectories */}
         {(focusFolder || expandedFolders[projectPath]) && (
           <div className={cn(
-            "flex flex-col gap-3 mt-1",
-            !focusFolder && "pl-6 border-l border-border/60 ml-5"
+            "flex flex-col mt-1",
+            sz.gap3,
+            !focusFolder && cn("border-l border-border/60", sz.rootIndent)
           )}>
             {(focusFolder ? [focusFolder] : subFolders).map((subFolder) => {
               const isDrawingFolder = subFolder === DRAWING_FOLDER;
@@ -399,42 +424,42 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false }: Projec
               return (
                 <div key={subFolder} className="flex flex-col gap-1">
                   {/* Folder Row */}
-                  <div className="flex items-center justify-between py-1.5 px-3 rounded-radius hover:bg-surface-alt/70 transition-colors duration-120 group">
+                  <div className={cn("flex items-center justify-between rounded-radius hover:bg-surface-alt/70 transition-colors duration-120 group", sz.rowPad)}>
                     <div
-                      className="flex items-center gap-2 cursor-pointer select-none text-[13px] font-medium flex-1"
+                      className={cn("flex items-center cursor-pointer select-none font-medium flex-1", sz.gap2, sz.text13)}
                       onClick={() => toggleFolder(subFolder)}
                     >
                       {isExpanded ? (
-                        <ChevronDown className="w-3.5 h-3.5 text-muted shrink-0" />
+                        <ChevronDown className={cn(sz.icon3, "text-muted shrink-0")} />
                       ) : (
-                        <ChevronRight className="w-3.5 h-3.5 text-muted shrink-0" />
+                        <ChevronRight className={cn(sz.icon3, "text-muted shrink-0")} />
                       )}
                       {isExpanded ? (
-                        <FolderOpen className="w-4 h-4 text-accent-2 shrink-0" />
+                        <FolderOpen className={cn(sz.icon4, "text-accent-2 shrink-0")} />
                       ) : (
-                        <Folder className="w-4 h-4 text-accent-2 shrink-0" />
+                        <Folder className={cn(sz.icon4, "text-accent-2 shrink-0")} />
                       )}
                       <span className="font-mono">{subFolder}</span>
-                      <span className="text-[10px] bg-surface-raised px-1.5 py-0.5 rounded-full text-muted border border-border">
+                      <span className={cn("bg-surface-raised rounded-full text-muted border border-border", sz.text10, sz.badgePad)}>
                         {isLoading ? "..." : itemCount}
                       </span>
                     </div>
 
                     {/* Actions (always visible on hover or mobile) */}
-                    <div className="flex items-center gap-2">
+                    <div className={cn("flex items-center", sz.gap2)}>
                       <button
-                        className="p-1 rounded-radius hover:bg-surface-raised text-muted hover:text-fg transition-colors duration-120 shrink-0"
+                        className={cn("rounded-radius hover:bg-surface-raised text-muted hover:text-fg transition-colors duration-120 shrink-0", sz.btnPad)}
                         onClick={() => (isDrawingFolder ? fetchShopDrawings() : fetchFolderFiles(subFolder))}
                         disabled={isLoading}
                         title="Refresh"
                         type="button"
                       >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-accent" : ""}`} />
+                        <RefreshCw className={cn(sz.icon3, isLoading ? "animate-spin text-accent" : "")} />
                       </button>
 
                       {isDrawingFolder && isAdmin && (
                         <button
-                          className="p-1 rounded-radius hover:bg-surface-raised text-muted hover:text-accent transition-colors duration-120 shrink-0"
+                          className={cn("rounded-radius hover:bg-surface-raised text-muted hover:text-accent transition-colors duration-120 shrink-0", sz.btnPad)}
                           onClick={(e) => {
                             e.stopPropagation();
                             setAddDrawingOpen(true);
@@ -442,16 +467,16 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false }: Projec
                           title="Add new drawing"
                           type="button"
                         >
-                          <Plus className="w-3.5 h-3.5" />
+                          <Plus className={sz.icon3} />
                         </button>
                       )}
 
                       {!isDrawingFolder && (
-                        <label className="p-1 rounded-radius hover:bg-surface-raised text-muted hover:text-fg transition-colors duration-120 shrink-0 cursor-pointer">
+                        <label className={cn("rounded-radius hover:bg-surface-raised text-muted hover:text-fg transition-colors duration-120 shrink-0 cursor-pointer", sz.btnPad)}>
                           {isUploading ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+                            <Loader2 className={cn(sz.icon3, "animate-spin text-accent")} />
                           ) : (
-                            <Upload className="w-3.5 h-3.5" />
+                            <Upload className={sz.icon3} />
                           )}
                           <input
                             type="file"
@@ -473,22 +498,22 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false }: Projec
 
                   {/* Files List in Subfolder */}
                   {isExpanded && isDrawingFolder && (
-                    <div className="pl-6 border-l border-border/40 ml-4 flex flex-col gap-1.5 mt-1">
+                    <div className={cn("border-l border-border/40 flex flex-col mt-1", sz.indent, sz.gap1_5)}>
                       {isLoading && groupedShopDrawings.length === 0 && (
-                        <div className="flex items-center gap-2 py-2 text-xs text-muted">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+                        <div className={cn("flex items-center py-2 text-muted", sz.gap2, sz.textXs)}>
+                          <Loader2 className={cn(sz.icon3, "animate-spin text-accent")} />
                           <span>Loading shop drawings...</span>
                         </div>
                       )}
 
                       {error && (
-                        <div className="text-xs text-status-danger py-1 px-2 border border-status-danger/20 bg-status-danger/10 rounded-radius">
+                        <div className={cn("text-status-danger py-1 px-2 border border-status-danger/20 bg-status-danger/10 rounded-radius", sz.textXs)}>
                           {error}
                         </div>
                       )}
 
                       {!isLoading && !error && groupedShopDrawings.length === 0 && (
-                        <div className="text-xs text-muted-2 py-2 px-3 italic">
+                        <div className={cn("text-muted-2 py-2 px-3 italic", sz.textXs)}>
                           No shop drawings yet — add one from the Register tab.
                         </div>
                       )}
@@ -501,33 +526,35 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false }: Projec
 
                         return (
                           <div key={sheet.sheetNo} className="flex flex-col gap-1">
-                            <div className="flex items-center justify-between py-1.5 px-3 rounded-radius hover:bg-surface-alt/70 transition-colors duration-120 group">
+                            <div className={cn("flex items-center justify-between rounded-radius hover:bg-surface-alt/70 transition-colors duration-120 group", sz.rowPad)}>
                               <div
-                                className="flex items-center gap-2 cursor-pointer select-none text-[13px] font-medium flex-1 min-w-0"
+                                className={cn("flex items-center cursor-pointer select-none font-medium flex-1 min-w-0", sz.gap2, sz.text13)}
                                 onClick={() => toggleSheet(sheet.sheetNo)}
                               >
                                 {isSheetExpanded ? (
-                                  <ChevronDown className="w-3.5 h-3.5 text-muted shrink-0" />
+                                  <ChevronDown className={cn(sz.icon3, "text-muted shrink-0")} />
                                 ) : (
-                                  <ChevronRight className="w-3.5 h-3.5 text-muted shrink-0" />
+                                  <ChevronRight className={cn(sz.icon3, "text-muted shrink-0")} />
                                 )}
                                 {isSheetExpanded ? (
-                                  <FolderOpen className="w-4 h-4 text-accent-2 shrink-0" />
+                                  <FolderOpen className={cn(sz.icon4, "text-accent-2 shrink-0")} />
                                 ) : (
-                                  <Folder className="w-4 h-4 text-accent-2 shrink-0" />
+                                  <Folder className={cn(sz.icon4, "text-accent-2 shrink-0")} />
                                 )}
                                 <span className="font-mono truncate">{sheetLabel}</span>
-                                <span className="text-[10px] bg-surface-raised px-1.5 py-0.5 rounded-full text-muted border border-border shrink-0">
+                                <span className={cn("bg-surface-raised rounded-full text-muted border border-border shrink-0", sz.text10, sz.badgePad)}>
                                   {sheet.versions.length}
                                 </span>
                               </div>
 
                               <button
-                                className={`p-1 rounded-radius transition-colors duration-120 shrink-0 ${
+                                className={cn(
+                                  "rounded-radius transition-colors duration-120 shrink-0",
+                                  sz.btnPad,
                                   sheet.versions.length >= 2
                                     ? "hover:bg-surface-raised text-muted hover:text-accent cursor-pointer"
                                     : "text-muted/40 cursor-not-allowed"
-                                }`}
+                                )}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (sheet.versions.length >= 2) setCompareSheet(sheet);
@@ -536,12 +563,12 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false }: Projec
                                 title={sheet.versions.length >= 2 ? "Compare revisions" : "Need at least 2 revisions to compare"}
                                 type="button"
                               >
-                                <GitCompareArrows className="w-3.5 h-3.5" />
+                                <GitCompareArrows className={sz.icon3} />
                               </button>
 
                               {isAdmin && (
                                 <button
-                                  className="p-1 rounded-radius hover:bg-surface-raised text-muted hover:text-accent transition-colors duration-120 shrink-0"
+                                  className={cn("rounded-radius hover:bg-surface-raised text-muted hover:text-accent transition-colors duration-120 shrink-0", sz.btnPad)}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setUploadTarget(latestInSheet);
@@ -549,44 +576,44 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false }: Projec
                                   title="Upload PDF / Add Revision"
                                   type="button"
                                 >
-                                  <Upload className="w-3.5 h-3.5" />
+                                  <Upload className={sz.icon3} />
                                 </button>
                               )}
                             </div>
 
                             {isSheetExpanded && (
-                              <div className="pl-6 border-l border-border/40 ml-4 flex flex-col gap-1.5 mt-1">
+                              <div className={cn("border-l border-border/40 flex flex-col mt-1", sz.indent, sz.gap1_5)}>
                                 {sheet.versions.map((row) => {
                                   const fileLabel = `${row.sheet_no}-${row.sheet_name}-Rev${row.revision}`;
                                   return (
                                     <div
                                       key={row.id}
-                                      className="flex items-center justify-between py-1.5 px-3 rounded-radius hover:bg-surface-raised/40 transition-colors duration-120 group/file border border-transparent hover:border-border/30"
+                                      className={cn("flex items-center justify-between rounded-radius hover:bg-surface-raised/40 transition-colors duration-120 group/file border border-transparent hover:border-border/30", sz.rowPad)}
                                     >
                                       <button
                                         type="button"
                                         onClick={() => setViewerTarget(row)}
-                                        className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer hover:text-accent transition-colors duration-120"
+                                        className={cn("flex items-center min-w-0 flex-1 text-left cursor-pointer hover:text-accent transition-colors duration-120", sz.gap2)}
                                         title={`View ${fileLabel}`}
                                       >
-                                        <FileText className="w-4 h-4 text-muted shrink-0" />
-                                        <span className="text-[12.5px] font-medium truncate font-mono">
+                                        <FileText className={cn(sz.icon4, "text-muted shrink-0")} />
+                                        <span className={cn("font-medium truncate font-mono", sz.text12_5)}>
                                           {fileLabel}
                                         </span>
                                       </button>
 
-                                      <div className="flex items-center gap-4 shrink-0">
-                                        <span className="text-[10px] text-muted-2 font-mono hidden lg:inline">
+                                      <div className={cn("flex items-center shrink-0", sz.gap4)}>
+                                        <span className={cn("text-muted-2 font-mono hidden lg:inline", sz.text10)}>
                                           {formatDate(row.uploaded_at)}
                                         </span>
 
                                         <button
-                                          className="p-1 rounded-radius hover:bg-surface-raised text-muted hover:text-accent transition-colors duration-120"
+                                          className={cn("rounded-radius hover:bg-surface-raised text-muted hover:text-accent transition-colors duration-120", sz.btnPad)}
                                           onClick={() => handleDownloadShopDrawing(row)}
                                           title="Download file"
                                           type="button"
                                         >
-                                          <Download className="w-3.5 h-3.5" />
+                                          <Download className={sz.icon3} />
                                         </button>
                                       </div>
                                     </div>
@@ -601,22 +628,22 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false }: Projec
                   )}
 
                   {isExpanded && !isDrawingFolder && (
-                    <div className="pl-6 border-l border-border/40 ml-4 flex flex-col gap-1.5 mt-1">
+                    <div className={cn("border-l border-border/40 flex flex-col mt-1", sz.indent, sz.gap1_5)}>
                       {isLoading && folderFiles.length === 0 && (
-                        <div className="flex items-center gap-2 py-2 text-xs text-muted">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+                        <div className={cn("flex items-center py-2 text-muted", sz.gap2, sz.textXs)}>
+                          <Loader2 className={cn(sz.icon3, "animate-spin text-accent")} />
                           <span>Loading files...</span>
                         </div>
                       )}
 
                       {error && (
-                        <div className="text-xs text-status-danger py-1 px-2 border border-status-danger/20 bg-status-danger/10 rounded-radius">
+                        <div className={cn("text-status-danger py-1 px-2 border border-status-danger/20 bg-status-danger/10 rounded-radius", sz.textXs)}>
                           {error}
                         </div>
                       )}
 
                       {!isLoading && !error && folderFiles.length === 0 && (
-                        <div className="text-xs text-muted-2 py-2 px-3 italic">
+                        <div className={cn("text-muted-2 py-2 px-3 italic", sz.textXs)}>
                           Empty folder
                         </div>
                       )}
@@ -624,40 +651,40 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false }: Projec
                       {folderFiles.map((file) => (
                         <div
                           key={file.name}
-                          className="flex items-center justify-between py-1.5 px-3 rounded-radius hover:bg-surface-raised/40 transition-colors duration-120 group/file border border-transparent hover:border-border/30"
+                          className={cn("flex items-center justify-between rounded-radius hover:bg-surface-raised/40 transition-colors duration-120 group/file border border-transparent hover:border-border/30", sz.rowPad)}
                         >
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div className={cn("flex items-center min-w-0 flex-1", sz.gap2)}>
                             {getFileIcon(file.name)}
-                            <span className="text-[12.5px] font-medium truncate font-mono text-fg" title={file.name}>
+                            <span className={cn("font-medium truncate font-mono text-fg", sz.text12_5)} title={file.name}>
                               {file.name}
                             </span>
                           </div>
 
                           {/* File details and action icons */}
-                          <div className="flex items-center gap-4 shrink-0">
-                            <span className="text-[10px] text-muted-2 font-mono hidden md:inline">
+                          <div className={cn("flex items-center shrink-0", sz.gap4)}>
+                            <span className={cn("text-muted-2 font-mono hidden md:inline", sz.text10)}>
                               {formatBytes(file.metadata?.size)}
                             </span>
-                            <span className="text-[10px] text-muted-2 font-mono hidden lg:inline">
+                            <span className={cn("text-muted-2 font-mono hidden lg:inline", sz.text10)}>
                               {formatDate(file.updated_at)}
                             </span>
 
-                            <div className="flex items-center gap-1.5">
+                            <div className={cn("flex items-center", sz.gap1_5)}>
                               <button
-                                className="p-1 rounded-radius hover:bg-surface-raised text-muted hover:text-accent transition-colors duration-120"
+                                className={cn("rounded-radius hover:bg-surface-raised text-muted hover:text-accent transition-colors duration-120", sz.btnPad)}
                                 onClick={() => handleDownload(subFolder, file.name)}
                                 title="Download file"
                                 type="button"
                               >
-                                <Download className="w-3.5 h-3.5" />
+                                <Download className={sz.icon3} />
                               </button>
                               <button
-                                className="p-1 rounded-radius hover:bg-surface-raised text-muted hover:text-status-danger transition-colors duration-120"
+                                className={cn("rounded-radius hover:bg-surface-raised text-muted hover:text-status-danger transition-colors duration-120", sz.btnPad)}
                                 onClick={() => handleDelete(subFolder, file.name)}
                                 title="Delete file"
                                 type="button"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className={sz.icon3} />
                               </button>
                             </div>
                           </div>

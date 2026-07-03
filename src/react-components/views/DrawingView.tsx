@@ -45,7 +45,7 @@ export function DrawingView() {
       <div className="relative flex-1 min-w-0 overflow-auto bg-gradient-to-b from-[oklch(12%_0.014_255)] to-[oklch(9.8%_0.012_255)]">
         {activeTab === "Folder" && (
           <div className="flex flex-col gap-6 w-full p-6 md:p-8">
-            <ProjectFolders project={project} focusFolder="04_Drawing" isAdmin={showSettings} />
+            <ProjectFolders project={project} focusFolder="04_Drawing" isAdmin={showSettings} large />
           </div>
         )}
         {activeTab === "Register" && <ShopDrawingTable project={project} isAdmin={showSettings} />}
