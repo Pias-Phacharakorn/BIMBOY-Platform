@@ -4,7 +4,7 @@ import { useArSession } from "./useArSession";
 
 export function ArViewerPanel() {
   const overlayRef = useRef<HTMLDivElement>(null);
-  const { status, isSupported, start, exit } = useArSession(overlayRef);
+  const { status, isSupported, error, start, exit } = useArSession(overlayRef);
   const sessionActive = status === "active";
 
   return (
@@ -44,9 +44,9 @@ export function ArViewerPanel() {
                 {status === "requesting" ? "Starting AR..." : "Enter AR"}
               </button>
               {status === "error" && (
-                <p className="text-xs text-red-400">
-                  Couldn't start the AR session. Check camera permissions and
-                  try again.
+                <p className="text-xs text-red-400 break-words">
+                  Couldn't start the AR session
+                  {error ? `: ${error}` : ". Check camera permissions and try again."}
                 </p>
               )}
             </>

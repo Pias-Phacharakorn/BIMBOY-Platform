@@ -7,6 +7,7 @@ export function useArSession(overlayRef: RefObject<HTMLElement>) {
   const world = useBimStore((state) => state.world);
   const [status, setStatus] = useState<ArSessionStatus>("idle");
   const [isSupported, setIsSupported] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,11 +28,17 @@ export function useArSession(overlayRef: RefObject<HTMLElement>) {
 
     const onStatusChanged = (nextStatus: ArSessionStatus) => {
       setStatus(nextStatus);
+      if (nextStatus !== "error") setError(null);
+    };
+    const onError = (message: string) => {
+      setError(message);
     };
     arSession.onStatusChanged.add(onStatusChanged);
+    arSession.onError.add(onError);
 
     return () => {
       arSession.onStatusChanged.remove(onStatusChanged);
+      arSession.onError.remove(onError);
     };
   }, [components, world]);
 
@@ -45,5 +52,5 @@ export function useArSession(overlayRef: RefObject<HTMLElement>) {
     void components.get(ArSession).exit();
   }, [components]);
 
-  return { status, isSupported, start, exit };
+  return { status, isSupported, error, start, exit };
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "@tanstack/react-router";
+import { useParams, useNavigate } from "@tanstack/react-router";
 import { AppShell, WorkspaceHeader, LeftPanel, RightPanel, PanelSection } from "@/react-components/components/layout";
 import { Icon } from "@/react-components/components/ui";
 import { ViewportWrapper, ViewportRightToolbar, ViewportToolbar, ModelsList, CloudModelLoadingModal } from "@/react-components/components/bim";
@@ -7,7 +7,10 @@ import { GisPanel } from "@/react-components/features/gis";
 import { PropertyPanel } from "@/react-components/features/property-panel";
 import { PropertyTable } from "@/react-components/features/property-table/PropertyTable";
 import { ClashList, ClashPreview } from "@/react-components/features/clash-dashboard";
-import { ArViewerPanel } from "@/react-components/features/ar-viewer";
+// AR runs on a standalone full-screen /ar page (single WebGL context, no OBC engine).
+// Clicking the "AR" tab navigates there — see onTabChange below.
+// The custom ArSession/ArViewerPanel/useArSession approach is kept in the repo but
+// dormant (not imported) for the later "real BIM model in AR" step.
 import { useProject, useIsProjectAdmin } from "@/react-components/features/projects/useProjects";
 import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useAutoLoadCloudModels } from "@/react-components/features/cloud-models/useAutoLoadCloudModels";
@@ -16,6 +19,7 @@ const workspaceTabs = ["Models", "Queries", "Viewer", "Smart Views", "GIS", "Vie
 
 export function ModelsView() {
   const { projectId } = useParams({ strict: false });
+  const navigate = useNavigate();
   const { data: project, isLoading } = useProject(projectId);
   const { user, profile } = useAuth();
   useAutoLoadCloudModels(projectId);
@@ -26,8 +30,20 @@ export function ModelsView() {
   const isQueriesTab = activeTab === "Queries";
   const isGisTab = activeTab === "GIS";
   const isViewpointTab = activeTab === "Viewpoint";
-  const isArTab = activeTab === "AR";
-  const isFlexLayout = activeTab === "Models" || isGisTab || isViewpointTab || isArTab;
+  const isFlexLayout = activeTab === "Models" || isGisTab || isViewpointTab;
+
+  // The "AR" tab escapes ModelsView entirely: it navigates to the standalone
+  // full-screen /ar page instead of swapping panels here, so the WebXR session
+  // runs without the OBC engine's competing WebGL context.
+  const handleTabChange = (tab: string) => {
+    if (tab === "AR") {
+      if (project) {
+        navigate({ to: "/ar/$projectId", params: { projectId: project.id } });
+      }
+      return;
+    }
+    setActiveTab(tab);
+  };
 
   if (isLoading) {
     return (
@@ -56,7 +72,7 @@ export function ModelsView() {
         title="BIM Model"
         tabs={workspaceTabs}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         actions={
           <>
             <div className="flex items-center gap-2 p-[4px_12px] border border-border bg-surface/94 rounded-[20px] cursor-pointer text-xs font-medium text-fg hover:bg-surface-alt transition-colors duration-120">
@@ -110,7 +126,6 @@ export function ModelsView() {
           <ViewportRightToolbar />
           <ViewportToolbar />
           <CloudModelLoadingModal />
-          {isArTab && <ArViewerPanel />}
         </section>
 
         <RightPanel

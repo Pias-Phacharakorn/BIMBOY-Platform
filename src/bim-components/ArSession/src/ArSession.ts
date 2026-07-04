@@ -30,10 +30,12 @@ export class ArSession extends OBC.Component implements OBC.Disposable {
 
   readonly onDisposed = new OBC.Event<string>();
   readonly onStatusChanged = new OBC.Event<ArSessionStatus>();
+  readonly onError = new OBC.Event<string>();
 
   private _enabled = false;
   private _world: OBC.World | null = null;
   private _status: ArSessionStatus = "idle";
+  private _lastError: string | null = null;
 
   private _session: XRSession | null = null;
   private _hitTestSource: any | null = null;
@@ -97,6 +99,10 @@ export class ArSession extends OBC.Component implements OBC.Disposable {
     return this._status;
   }
 
+  get lastError() {
+    return this._lastError;
+  }
+
   set world(world: OBC.World | null) {
     this._world = world;
   }
@@ -141,10 +147,23 @@ export class ArSession extends OBC.Component implements OBC.Disposable {
       });
 
       this._session = session;
+      // Attach cleanup listeners immediately so that if a later step throws,
+      // ending the session below still runs full teardown via _onSessionEnd.
+      session.addEventListener("select", this._onSelect);
+      session.addEventListener("end", this._onSessionEnd);
+
       this._suspendNormalRendering(world);
 
+      const gl = renderer.getContext() as any;
+      if (typeof gl.makeXRCompatible === "function") {
+        await gl.makeXRCompatible();
+      }
+
       renderer.xr.enabled = true;
-      renderer.xr.setReferenceSpaceType("local-floor");
+      // Default 'local' reference space — every immersive-ar device supports it
+      // unconditionally. 'local-floor' would need to be negotiated as a feature
+      // at requestSession() time, and isn't needed since placement comes from
+      // the hit-test pose rather than an assumed floor height.
       await renderer.xr.setSession(session);
 
       this._preparePlacementGroup(world.scene.three);
@@ -155,15 +174,21 @@ export class ArSession extends OBC.Component implements OBC.Disposable {
         space: this._viewerSpace,
       });
 
-      session.addEventListener("select", this._onSelect);
-      session.addEventListener("end", this._onSessionEnd);
-
       renderer.setAnimationLoop(this._onXRFrame);
 
       this._setStatus("active");
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       console.error("Failed to start AR session", err);
+      this._lastError = message;
+
+      const session = this._session;
       await this._teardown();
+      if (session) {
+        await session.end().catch(() => {});
+      }
+
+      this.onError.trigger(message);
       this._setStatus("error");
     }
   }
@@ -179,6 +204,7 @@ export class ArSession extends OBC.Component implements OBC.Disposable {
     this.onDisposed.trigger(ArSession.uuid);
     this.onDisposed.reset();
     this.onStatusChanged.reset();
+    this.onError.reset();
   }
 
   private _setStatus(status: ArSessionStatus) {

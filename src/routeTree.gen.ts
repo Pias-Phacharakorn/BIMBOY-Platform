@@ -15,6 +15,7 @@ import { Route as HubSettingsRouteImport } from './routes/hub-settings'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
+import { Route as ArProjectIdRouteImport } from './routes/ar.$projectId'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects/$projectId/index'
 import { Route as ProjectsProjectIdStandardRouteImport } from './routes/projects/$projectId/standard'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects/$projectId/settings'
@@ -53,6 +54,11 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   id: '/$projectId',
   path: '/$projectId',
   getParentRoute: () => ProjectsRoute,
+} as any)
+const ArProjectIdRoute = ArProjectIdRouteImport.update({
+  id: '/ar/$projectId',
+  path: '/ar/$projectId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsProjectIdIndexRoute = ProjectsProjectIdIndexRouteImport.update({
   id: '/',
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/hub-settings': typeof HubSettingsRoute
   '/login': typeof LoginRoute
   '/projects': typeof ProjectsRouteWithChildren
+  '/ar/$projectId': typeof ArProjectIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/': typeof ProjectsIndexRoute
   '/projects/$projectId/clashes': typeof ProjectsProjectIdClashesRoute
@@ -121,6 +128,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/hub-settings': typeof HubSettingsRoute
   '/login': typeof LoginRoute
+  '/ar/$projectId': typeof ArProjectIdRoute
   '/projects': typeof ProjectsIndexRoute
   '/projects/$projectId/clashes': typeof ProjectsProjectIdClashesRoute
   '/projects/$projectId/documents': typeof ProjectsProjectIdDocumentsRoute
@@ -137,6 +145,7 @@ export interface FileRoutesById {
   '/hub-settings': typeof HubSettingsRoute
   '/login': typeof LoginRoute
   '/projects': typeof ProjectsRouteWithChildren
+  '/ar/$projectId': typeof ArProjectIdRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/': typeof ProjectsIndexRoute
   '/projects/$projectId/clashes': typeof ProjectsProjectIdClashesRoute
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
     | '/hub-settings'
     | '/login'
     | '/projects'
+    | '/ar/$projectId'
     | '/projects/$projectId'
     | '/projects/'
     | '/projects/$projectId/clashes'
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
     | '/'
     | '/hub-settings'
     | '/login'
+    | '/ar/$projectId'
     | '/projects'
     | '/projects/$projectId/clashes'
     | '/projects/$projectId/documents'
@@ -185,6 +196,7 @@ export interface FileRouteTypes {
     | '/hub-settings'
     | '/login'
     | '/projects'
+    | '/ar/$projectId'
     | '/projects/$projectId'
     | '/projects/'
     | '/projects/$projectId/clashes'
@@ -202,6 +214,7 @@ export interface RootRouteChildren {
   HubSettingsRoute: typeof HubSettingsRoute
   LoginRoute: typeof LoginRoute
   ProjectsRoute: typeof ProjectsRouteWithChildren
+  ArProjectIdRoute: typeof ArProjectIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -247,6 +260,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/projects/$projectId'
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
       parentRoute: typeof ProjectsRoute
+    }
+    '/ar/$projectId': {
+      id: '/ar/$projectId'
+      path: '/ar/$projectId'
+      fullPath: '/ar/$projectId'
+      preLoaderRoute: typeof ArProjectIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/projects/$projectId/': {
       id: '/projects/$projectId/'
@@ -351,6 +371,7 @@ const rootRouteChildren: RootRouteChildren = {
   HubSettingsRoute: HubSettingsRoute,
   LoginRoute: LoginRoute,
   ProjectsRoute: ProjectsRouteWithChildren,
+  ArProjectIdRoute: ArProjectIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
