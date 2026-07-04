@@ -225,6 +225,10 @@ import { cn } from "../../../lib/utils"
 - Ask one concrete question with a recommended option
 - Never assume state placement, data shape, or layer assignment
 
+**5. After implementation**
+- Do not prompt, ask, or offer to run `git add` / `git commit` / merge
+- Present the diff/result and stop — the developer reviews and commits personally
+
 ## 🤝 Multi-Agent Workflow: Gemini + Claude Code CLI
 
 **Roles:**
@@ -242,7 +246,7 @@ import { cn } from "../../../lib/utils"
    ```
 3. **Review** — Gemini runs `git diff` and checks the result against: spec compliance, bugs/logic errors, this document's conventions, security (injection, unsafe input), and performance.
 4. **Fix or re-loop** — Significant issues → re-invoke Claude Code CLI with corrections. Minor issues → Gemini patches directly and explains why.
-5. **Report & wait** — Gemini presents the diff, a summary of what Claude wrote vs. what Gemini reviewed/fixed, and any risks. **No commit or merge without your explicit approval.**
+5. **Report & wait** — Gemini presents the diff, a summary of what Claude wrote vs. what Gemini reviewed/fixed, and any risks. **No commit or merge without your explicit approval — and no AI in this loop asks/offers to `git add` or commit; the developer does that personally.**
 
 **Hard rules:**
 - All real feature code is written by Claude Code CLI — not by Gemini — except small inline fixes per step 4.
@@ -265,4 +269,5 @@ import { cn } from "../../../lib/utils"
 | No Supabase in `views/` or `components/` | Data access is `features/` responsibility |
 | No `features/index.ts` barrel | Circular deps + HMR slowdown |
 | No subdirs under `views/` | Views must be flat at root |
+| No AI prompts/offers to `git add`/commit/merge | Developer reviews diff and commits personally |
 
