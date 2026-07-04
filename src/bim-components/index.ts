@@ -7,3 +7,4 @@ export * from "./MiniMap";
 export * from "./SmartViews";
 export * from "./CursorSurface";
 export * from "./SpotCoordinate";
+export * from "./ArSession";

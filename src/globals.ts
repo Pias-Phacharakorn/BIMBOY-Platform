@@ -32,6 +32,7 @@ export const appIcons = {
   SOURCE: "mdi:file-document-outline",
   SMARTVIEW: "mdi:teamviewer",
   EARTH: "mdi:earth",
+  AR: "material-symbols:view-in-ar-rounded",
   CLOUD: "mdi:cloud-download",
   CLASH: "mdi:close-circle-outline",
   STARTDATE: "mdi:calendar-blank",

@@ -7,11 +7,12 @@ import { GisPanel } from "@/react-components/features/gis";
 import { PropertyPanel } from "@/react-components/features/property-panel";
 import { PropertyTable } from "@/react-components/features/property-table/PropertyTable";
 import { ClashList, ClashPreview } from "@/react-components/features/clash-dashboard";
+import { ArViewerPanel } from "@/react-components/features/ar-viewer";
 import { useProject, useIsProjectAdmin } from "@/react-components/features/projects/useProjects";
 import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useAutoLoadCloudModels } from "@/react-components/features/cloud-models/useAutoLoadCloudModels";
 
-const workspaceTabs = ["Models", "Queries", "Viewer", "Smart Views", "GIS", "Viewpoint"];
+const workspaceTabs = ["Models", "Queries", "Viewer", "Smart Views", "GIS", "Viewpoint", "AR"];
 
 export function ModelsView() {
   const { projectId } = useParams({ strict: false });
@@ -25,7 +26,8 @@ export function ModelsView() {
   const isQueriesTab = activeTab === "Queries";
   const isGisTab = activeTab === "GIS";
   const isViewpointTab = activeTab === "Viewpoint";
-  const isFlexLayout = activeTab === "Models" || isGisTab || isViewpointTab;
+  const isArTab = activeTab === "AR";
+  const isFlexLayout = activeTab === "Models" || isGisTab || isViewpointTab || isArTab;
 
   if (isLoading) {
     return (
@@ -108,6 +110,7 @@ export function ModelsView() {
           <ViewportRightToolbar />
           <ViewportToolbar />
           <CloudModelLoadingModal />
+          {isArTab && <ArViewerPanel />}
         </section>
 
         <RightPanel
