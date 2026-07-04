@@ -1,6 +1,6 @@
 import { useState, useMemo, type MouseEvent as ReactMouseEvent } from "react";
-import type { ClashItem } from "@/types";
-import { useDeleteClashViewpoints } from "../clash-dashboard/useClashViewpoints";
+import type { ClashItem, ClashStatus, ClashType } from "@/types";
+import { useDeleteClashViewpoints, useBulkUpdateClashViewpoints } from "../clash-dashboard/useClashViewpoints";
 
 export function useClashTable(projectId: string, clashItems: ClashItem[]) {
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
@@ -24,6 +24,8 @@ export function useClashTable(projectId: string, clashItems: ClashItem[]) {
   });
 
   const deleteMutation = useDeleteClashViewpoints();
+  const bulkUpdateMutation = useBulkUpdateClashViewpoints();
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // Assign sequential stable IDs to items based on their position in the fetched array (newest to oldest)
   const itemsWithSeqId = useMemo(() => {
@@ -124,6 +126,27 @@ export function useClashTable(projectId: string, clashItems: ClashItem[]) {
     }
   };
 
+  const openEditModal = () => {
+    if (selectedRowIds.size === 0) return;
+    setIsEditModalOpen(true);
+  };
+
+  const closeEditModal = () => {
+    setIsEditModalOpen(false);
+  };
+
+  const handleBulkEditApply = async (updates: { status?: ClashStatus; type?: ClashType }) => {
+    const ids = Array.from(selectedRowIds);
+    if (ids.length === 0 || (updates.status === undefined && updates.type === undefined)) return;
+    try {
+      await bulkUpdateMutation.mutateAsync({ ids, updates });
+      setSelectedRowIds(new Set());
+      setIsEditModalOpen(false);
+    } catch (err) {
+      console.error("Bulk edit failed", err);
+    }
+  };
+
   const handleExportCSV = () => {
     const targets = selectedRowIds.size > 0 ? searchedClashes.filter(c => selectedRowIds.has(c.id)) : searchedClashes;
     if (targets.length === 0) return;
@@ -169,6 +192,11 @@ export function useClashTable(projectId: string, clashItems: ClashItem[]) {
     toggleSelectAll,
     handleBulkDelete,
     handleExportCSV,
+    isEditModalOpen,
+    openEditModal,
+    closeEditModal,
+    handleBulkEditApply,
+    isBulkEditSubmitting: bulkUpdateMutation.isPending,
     paginatedClashes,
     totalPages,
     totalCount: searchedClashes.length,

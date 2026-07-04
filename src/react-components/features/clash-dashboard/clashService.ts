@@ -90,6 +90,25 @@ export const clashService = {
     return data;
   },
 
+  /**
+   * Bulk-updates Status and/or Type across multiple clash viewpoints in one request.
+   */
+  async bulkUpdateClashViewpoints(
+    ids: string[],
+    updates: Partial<Pick<ClashViewpointRow, "status" | "type">>
+  ): Promise<void> {
+    if (!ids || ids.length === 0) return;
+    const { error } = await supabase
+      .from("clash_viewpoints")
+      .update(updates)
+      .in("id", ids);
+
+    if (error) {
+      console.error(`Error bulk-updating clash viewpoints:`, error);
+      throw error;
+    }
+  },
+
   async deleteClashViewpoints(ids: string[]): Promise<void> {
     if (!ids || ids.length === 0) return;
     const { error } = await supabase

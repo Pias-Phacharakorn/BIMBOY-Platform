@@ -4,6 +4,7 @@ import { useClashStore } from "@/react-components/store/clashStore";
 import { useClashViewpoints } from "@/react-components/features/clash-dashboard/useClashViewpoints";
 import { Icon } from "@/react-components/components/ui/Icon";
 import { useClashTable } from "./useClashTable";
+import { BulkEditClashModal } from "./BulkEditClashModal";
 import type { ClashItem } from "@/types";
 
 interface ClashTableProps {
@@ -87,6 +88,11 @@ export function ClashTable({ projectId }: ClashTableProps) {
     toggleSelectAll,
     handleBulkDelete,
     handleExportCSV,
+    isEditModalOpen,
+    openEditModal,
+    closeEditModal,
+    handleBulkEditApply,
+    isBulkEditSubmitting,
     paginatedClashes,
     totalPages,
     totalCount,
@@ -177,7 +183,7 @@ export function ClashTable({ projectId }: ClashTableProps) {
                 ? "text-muted pointer-events-none opacity-40"
                 : "text-fg hover:bg-[oklch(18%_0.02_255)]"
             }`}
-            onClick={() => window.alert(`Edit ${selectionCount} clash(es)`)}
+            onClick={openEditModal}
           >
             <Icon name="EDIT" size={16} />
             Edit ({selectionCount})
@@ -394,6 +400,14 @@ export function ClashTable({ projectId }: ClashTableProps) {
           </button>
         </div>
       </div>
+
+      <BulkEditClashModal
+        isOpen={isEditModalOpen}
+        onClose={closeEditModal}
+        selectionCount={selectionCount}
+        isSubmitting={isBulkEditSubmitting}
+        onApply={handleBulkEditApply}
+      />
     </div>
   );
 }

@@ -107,6 +107,25 @@ export function useUpdateClashViewpoint() {
   });
 }
 
+/**
+ * Hook to bulk-update Status and/or Type across multiple selected clash viewpoints.
+ */
+export function useBulkUpdateClashViewpoints() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      ids,
+      updates,
+    }: {
+      ids: string[];
+      updates: Partial<Pick<ClashViewpointRow, "status" | "type">>;
+    }) => clashService.bulkUpdateClashViewpoints(ids, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: clashKeys.all });
+    },
+  });
+}
+
 export function useDeleteClashViewpoints() {
   const queryClient = useQueryClient();
   return useMutation({
