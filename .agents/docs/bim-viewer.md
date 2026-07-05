@@ -37,4 +37,5 @@ The 3D world is a singleton bootstrapped once in `bim-components/setup/` — nev
 ## Gotchas / watch-outs
 
 - **Version lock**: ThatOpen pinned v3.4.x — verify peer deps (Three.js ^0.182, web-ifc) before any bump.
+- **Teardown / dispose ordering**: `ViewportWrapper` calls `activeComponents.dispose()` on unmount (leaving the model view). `Components.dispose()` disposes the camera/world **before** custom components that reference them, and `world.camera` is a **getter that THROWS** `"No camera initialized!"` once the camera is gone — so `if (world.camera && …)` does *not* guard it. In any custom component's `dispose()`/`_deactivate()`, wrap camera/world/renderer access in `try/catch` (pattern: `SpotCoordinate._deactivate`). `ViewportWrapper` also wraps `dispose()` in `try/catch` as a last-resort safety net so a teardown throw can't trip React's error boundary and tear down the whole app. Regression test: `e2e/model-teardown.spec.ts`.
 - _(fill as encountered)_

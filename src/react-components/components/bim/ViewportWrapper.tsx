@@ -265,7 +265,16 @@ export function ViewportWrapper({
         } catch (e) {
           // Ignore error if highlighter is disposed
         }
-        activeComponents.dispose();
+        try {
+          activeComponents.dispose();
+        } catch (e) {
+          // Disposing the OBC engine on unmount can throw if a component touches
+          // already-torn-down world state (e.g. the `world.camera` getter throws
+          // once the camera is gone). Swallow it so React's error boundary doesn't
+          // tear down the whole app — the viewport is being removed anyway.
+          // Root-cause guards belong in each component's dispose()/_deactivate().
+          console.warn("BIM engine dispose error on unmount (non-fatal):", e);
+        }
       }
 
       if (viewportElement) {

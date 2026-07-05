@@ -197,15 +197,26 @@ export class SpotCoordinate extends OBC.Component implements OBC.Disposable {
       }
     }
     if (this._spotCameraListener) {
-      if (this._world.camera && this._world.camera.controls) {
-        this._world.camera.controls.removeEventListener("update", this._spotCameraListener);
+      try {
+        // `world.camera` is a GETTER that THROWS ("No camera initialized!") once
+        // the camera has been torn down — which happens during Components.dispose().
+        // So `this._world.camera && ...` can't guard it; wrap in try/catch instead.
+        if (this._world.camera && this._world.camera.controls) {
+          this._world.camera.controls.removeEventListener("update", this._spotCameraListener);
+        }
+      } catch {
+        // Camera already disposed during teardown — nothing to detach.
       }
       if (this._world.onCameraChanged) {
         this._world.onCameraChanged.remove(this._spotCameraListener);
       }
       this._spotCameraListener = null;
     }
-    this.components.get(CursorSurface).hide();
+    try {
+      this.components.get(CursorSurface).hide();
+    } catch {
+      // CursorSurface may already be disposed during teardown.
+    }
 
     this._currentStrokeColor = "rgba(80, 160, 255, 0.95)";
     this._currentFillColor = "rgba(80, 160, 255, 0.12)";
