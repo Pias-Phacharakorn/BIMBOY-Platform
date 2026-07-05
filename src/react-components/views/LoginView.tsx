@@ -1,13 +1,9 @@
 import { useState } from "react";
 import { useAuth } from "@/react-components/features/auth/useAuth";
 import { Icon } from "@/react-components/components/ui";
-import { useNavigate, useSearch } from "@tanstack/react-router";
 
 export function LoginView() {
   const { loginWithEmail, signUpWithEmail, loginWithOAuth } = useAuth();
-  const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as any;
-  const redirectTarget = search.redirect || "/projects";
 
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
@@ -27,8 +23,10 @@ export function LoginView() {
         // If sign up doesn't auto-login (depends on email confirmation settings), show message
         setError("Account created! Please check your email for confirmation or sign in.");
       } else {
+        // On success, auth state changes and login.tsx's beforeLoad guard
+        // redirects to the ?redirect= target (or /projects). No navigate here —
+        // an imperative navigate races the guard and caused a redirect loop.
         await loginWithEmail(email, password);
-        navigate({ to: redirectTarget });
       }
     } catch (err: any) {
       setError(err.message || "An authentication error occurred.");

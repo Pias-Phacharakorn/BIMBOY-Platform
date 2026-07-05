@@ -1,7 +1,7 @@
 # Backend — Supabase (auth, DB, storage)
 
 > Status: seed — expand as you work this area.
-> This project's Supabase wiring only. Generic Supabase docs live upstream; schema/RLS/edge-function work should go through the `Superbase_BimWeb` agent.
+> This project's Supabase wiring only. Generic Supabase docs live upstream; schema/RLS/edge-function work should go through the `Agent_Supabase` agent.
 
 ## Overview
 
@@ -24,10 +24,13 @@ Supabase is the sole backend: auth, Postgres, storage. The client is created onc
 
 - **Data access is `features/` responsibility** — service file (`*Service.ts`) does the Supabase call, a `use*.ts` hook wraps it in TanStack Query. Views/components consume the hook.
 - **Auth in `AuthContext` only** — no auth state in Zustand.
+- **Auth redirects use ONE mechanism: route `beforeLoad` guards.** Protected routes (`routes/projects.tsx`, `routes/hub-settings.tsx`) throw `redirect()` in `beforeLoad`; `routes/login.tsx` redirects already-authenticated users away, honoring the `?redirect=` param via `redirect({ href })` (internal paths only). `main.tsx` calls `router.invalidate()` when `auth.isAuthenticated`/`auth.profile` change so guards re-run against fresh context. Do **not** add `useEffect`/`window.location` redirects in `main.tsx` or `__root.tsx` — competing mechanisms caused a post-login `/login`↔`/projects` redirect loop (~3,390 bounces).
+- **`AuthContext` must not flip `isLoading` back to `true` on `onAuthStateChange`.** `isLoading` gates the initial session-recovery spinner in `main.tsx`, which unmounts the whole router. Toggling it after login unmounts the router mid-navigation (the other half of the loop). The post-login profile fetch therefore runs in the background.
 - Typed helpers + generated `types.ts` keep queries type-safe; regenerate types after schema changes.
-- For schema/RLS/migration/edge-function work, delegate to the `Superbase_BimWeb` agent (Supabase MCP).
+- For schema/RLS/migration/edge-function work, delegate to the `Agent_Supabase` agent (Supabase MCP).
 
 ## Gotchas / watch-outs
 
 - Don't call Supabase from `views/` or `components/` — always through a feature service.
+- Profile is fetched in the background after login; guards that read `context.auth.profile` (e.g. `hub-settings`' `hub_role`) depend on `main.tsx`'s `router.invalidate()` being keyed on `auth.profile` so they re-run once the profile resolves — otherwise a valid admin can be wrongly denied right after login.
 - _(fill as encountered)_

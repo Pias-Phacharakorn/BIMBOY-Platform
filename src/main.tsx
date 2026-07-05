@@ -9,11 +9,17 @@ import './style.css'
 function App() {
   const auth = useAuth()
 
+  // Re-run route guards (beforeLoad) whenever auth changes so protected routes
+  // redirect after login/logout. This is the SINGLE auth-redirect mechanism —
+  // the actual redirect rules live in each route's beforeLoad (login.tsx,
+  // projects.tsx, hub-settings.tsx). Do not add competing useEffect/location
+  // redirects here; that caused the post-login redirect loop.
+  // Depend on profile too: profile is fetched in the background after login, and
+  // some guards gate on it (e.g. hub-settings' hub_role). Re-invalidating when it
+  // arrives lets those guards re-run instead of leaving the user wrongly denied.
   useEffect(() => {
-    if (!auth.isLoading && !auth.isAuthenticated && window.location.pathname !== '/login') {
-      window.location.href = '/login'
-    }
-  }, [auth.isLoading, auth.isAuthenticated])
+    router.invalidate()
+  }, [auth.isAuthenticated, auth.profile])
 
   if (auth.isLoading) {
     return (

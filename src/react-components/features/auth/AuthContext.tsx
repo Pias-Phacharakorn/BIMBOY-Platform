@@ -97,15 +97,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // 2. Subscribe to auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+    } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
       if (newSession?.user) {
         isWaitingForOAuth = false;
-        setIsLoading(true);
-        await fetchProfile(newSession.user.id);
-        if (timeoutId) clearTimeout(timeoutId);
-        setIsLoading(false);
+        // Fetch the profile in the background. We intentionally do NOT flip
+        // isLoading back to true here: doing so unmounts the router mid-login
+        // (see main.tsx) and caused a /login <-> /projects redirect loop.
+        fetchProfile(newSession.user.id).finally(() => {
+          if (timeoutId) clearTimeout(timeoutId);
+          setIsLoading(false);
+        });
       } else {
         setProfile(null);
         // Only set isLoading to false if we are not currently waiting for an OAuth callback exchange

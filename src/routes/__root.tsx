@@ -1,5 +1,4 @@
-import { useEffect } from 'react'
-import { createRootRouteWithContext, Outlet, useNavigate, useLocation } from '@tanstack/react-router'
+import { createRootRouteWithContext, Outlet } from '@tanstack/react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from '@/lib/queryClient'
 import type { AuthContextType } from '@/react-components/features/auth/AuthContext'
@@ -17,22 +16,10 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 })
 
 // ─── Root Layout ───────────────────────────────────────────────────────────────
+// Auth redirects are handled entirely by each route's `beforeLoad` guard
+// (re-run via router.invalidate() in main.tsx on auth change). No redirect
+// logic lives here — keeping it out avoids competing navigations / loops.
 function RootLayout() {
-  const { auth } = Route.useRouteContext()
-  const navigate = useNavigate()
-  const location = useLocation()
-
-  useEffect(() => {
-    if (!auth.isAuthenticated && location.pathname !== '/login') {
-      navigate({
-        to: '/login',
-        search: {
-          redirect: location.href,
-        },
-      })
-    }
-  }, [auth.isAuthenticated, location.pathname, location.href, navigate])
-
   return (
     <QueryClientProvider client={queryClient}>
       {/* All page routes render here */}
@@ -40,4 +27,3 @@ function RootLayout() {
     </QueryClientProvider>
   )
 }
-
