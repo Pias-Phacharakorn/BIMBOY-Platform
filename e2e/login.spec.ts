@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { loginAsTestUser } from './helpers'
 
 // ─── Test 1: the login page loads ─────────────────────────────────────────────
 // No credentials needed. Visiting the app root redirects an unauthenticated
@@ -18,23 +19,9 @@ test('login page loads', async ({ page }) => {
 })
 
 // ─── Test 2: a user can log in ────────────────────────────────────────────────
-// Uses the dev/test account credentials from .env.local. Fills the form, submits,
-// and expects a successful redirect to /projects.
+// Uses the dev/test account credentials from .env.local. loginAsTestUser fills
+// the form, submits, and waits for the redirect to /projects.
 test('user can log in', async ({ page }) => {
-  const email = process.env.VITE_DEV_AUTO_LOGIN_EMAIL
-  const password = process.env.VITE_DEV_AUTO_LOGIN_PASSWORD
-
-  test.skip(
-    !email || !password,
-    'Set VITE_DEV_AUTO_LOGIN_EMAIL / VITE_DEV_AUTO_LOGIN_PASSWORD in .env.local to run this test.',
-  )
-
-  await page.goto('/login')
-
-  await page.getByLabel('Email Address').fill(email!)
-  await page.getByLabel('Password').fill(password!)
-  await page.getByRole('button', { name: 'Sign In' }).click()
-
-  // On success the app navigates to the projects list.
-  await expect(page).toHaveURL(/\/projects/, { timeout: 15_000 })
+  await loginAsTestUser(page)
+  await expect(page).toHaveURL(/\/projects/)
 })

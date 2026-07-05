@@ -1,27 +1,14 @@
 import { defineConfig, devices } from '@playwright/test'
-import { readFileSync } from 'node:fs'
+import { loadEnv } from 'vite'
 import { fileURLToPath } from 'node:url'
-import { dirname, resolve } from 'node:path'
+import { dirname } from 'node:path'
 
-// ─── Load .env.local ──────────────────────────────────────────────────────────
+// ─── Load .env / .env.local ───────────────────────────────────────────────────
 // The project keeps secrets (Supabase keys, test-account credentials) in
-// .env.local. We read it manually here so tests can use those values without
-// adding a `dotenv` dependency. Existing process.env values always win.
+// .env* files. Reuse Vite's loader (Vite is already a dependency) — the ''
+// prefix loads all keys, not just VITE_*. Existing process.env values win.
 const rootDir = dirname(fileURLToPath(import.meta.url))
-try {
-  const envFile = readFileSync(resolve(rootDir, '.env.local'), 'utf-8')
-  for (const line of envFile.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-    const eq = trimmed.indexOf('=')
-    if (eq === -1) continue
-    const key = trimmed.slice(0, eq).trim()
-    const value = trimmed.slice(eq + 1).trim()
-    if (!(key in process.env)) process.env[key] = value
-  }
-} catch {
-  // .env.local is optional — the credential-free smoke test still runs without it.
-}
+process.env = { ...loadEnv('development', rootDir, ''), ...process.env }
 
 const PORT = 5173
 const baseURL = `http://localhost:${PORT}`
