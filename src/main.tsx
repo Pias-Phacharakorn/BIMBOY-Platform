@@ -14,12 +14,13 @@ function App() {
   // the actual redirect rules live in each route's beforeLoad (login.tsx,
   // projects.tsx, hub-settings.tsx). Do not add competing useEffect/location
   // redirects here; that caused the post-login redirect loop.
-  // Depend on profile too: profile is fetched in the background after login, and
-  // some guards gate on it (e.g. hub-settings' hub_role). Re-invalidating when it
-  // arrives lets those guards re-run instead of leaving the user wrongly denied.
+  // Key on whether the profile is loaded (not the object) so guards that gate on
+  // it (e.g. hub-settings' hub_role) re-run once it arrives — WITHOUT re-firing
+  // on every profile object churn (e.g. hourly TOKEN_REFRESHED refetches).
+  const hasProfile = !!auth.profile
   useEffect(() => {
     router.invalidate()
-  }, [auth.isAuthenticated, auth.profile])
+  }, [auth.isAuthenticated, hasProfile])
 
   if (auth.isLoading) {
     return (
