@@ -6,4 +6,6 @@
 
 **Execution model:** Gemini acts as orchestrator + spec writer, not the direct code author. Gemini defines the task and writes the spec, then invokes **Claude Code CLI** (`claude -p "<spec>" --permission-mode bypassPermissions`) to think about the code and write/edit files. The developer approves the final diff before merge. Full loop is defined in AGENTS.md → **🤝 Multi-Agent Workflow**.
 
-**Applies to every AI working in this repo, regardless of which agent:** grill requirements (`grill-with-docs`) → visualize the plan (`plan-visualizer`) → wait for explicit developer approval → implement. After implementation, never prompt or offer to `git add`/commit/merge — present the result and stop; the developer commits personally.
+**Applies to every AI working in this repo, regardless of which agent:** grill requirements (`grill-with-docs`) → visualize the plan (`plan-visualizer`) → wait for explicit developer approval → implement → for non-trivial changes, review (`code-review`, independent sub-agent) → simplify (`simplify`). After implementation, never prompt or offer to `git add`/commit/merge — present the result and stop; the developer commits personally.
+
+**Keep the Domain Guides in sync:** when a change alters something critical or important in an area covered by `AGENTS.md` → **📚 Domain Guides**, update the matching guide in **both** `.agents/docs/` and `.claude/docs/` as part of the same change. The two copies must never drift.

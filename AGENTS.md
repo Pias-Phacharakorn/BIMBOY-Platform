@@ -25,6 +25,24 @@
 
 ---
 
+## 📚 Domain Guides
+
+This file is the **map**; these guides are the **territory** — deep, project-specific detail loaded on demand. When a task goes deep into an area below, read its guide (path is canonical; a mirror also exists under `.claude/docs/`). Guides document *how this project wires things* — they never re-document a framework (that's the skills + `.agents/ThatOpen_docs/`).
+
+| Working on … | Load guide |
+|--------------|-----------|
+| React, routing, Zustand stores, views/features/components, Tailwind | `.agents/docs/frontend.md` |
+| ThatOpen/OBC viewer wiring, world setup, IFC/FRAG loading, BUI containment | `.agents/docs/bim-viewer.md` |
+| Supabase auth, DB, storage, feature services, `AuthContext` | `.agents/docs/backend.md` |
+| Clash import (BCF), clash register/table/filters, clash dashboard | `.agents/docs/clash-detection.md` |
+| Drawing Directory, shop-drawing register, PDF revisions | `.agents/docs/drawing.md` |
+| GIS layers, Cesium 3D Tiles, coordinates/CRS | `.agents/docs/gis-cesium.md` |
+| AR / WebXR viewing, `/ar/$projectId`, ModelsView AR tab | `.agents/docs/ar-webxr.md` |
+
+**Keep guides current:** when a change alters something critical or important in one of these areas, update the matching guide in **both** `.agents/docs/` and `.claude/docs/` as part of the same change — the two copies must never drift.
+
+---
+
 ## 🏗️ Project Identity
 
 **BIMBOY:** Digital BIM Management Platform on [ThatOpen](https://docs.thatopen.com) ecosystem. Centralizes models, documents, coordination, and GIS data.
@@ -111,34 +129,11 @@ New file?
 
 ### Routes Pattern
 
-```tsx
-// ✅ Correct — routes are composition only
-export const Route = createFileRoute('/projects/$projectId/clashes')({
-  component: () => <ClashView />,
-})
-
-// ❌ Never — routes cannot fetch or manage state
-export const Route = createFileRoute('/projects/$projectId/clashes')({
-  component: () => {
-    const [data, setData] = useState([])
-    useEffect(() => { fetch(...) }, [])
-    return <ClashView data={data} />
-  },
-})
-```
+Routes are composition only — no logic, state, or fetching. → ✅/❌ example in `.agents/docs/frontend.md`.
 
 ### Views Pattern
 
-```tsx
-const LAYOUTS = {
-  Dashboard: { areas: `"dashboard filter" "table filter"`, cols: "1fr 20rem", rows: "auto 1fr" },
-  ClashModel: { areas: `"viewport viewport" "table filter"`, cols: "1fr 20rem", rows: "1fr 1fr" },
-} as const;
-
-// ✅ Layout state always from store
-const { clashLayout, setClashLayout } = useUIStore();
-// ❌ Never: const [layout, setLayout] = useState(...)
-```
+Layout state always from the store (never `useState`); views compose via a `LAYOUTS` grid const. → example in `.agents/docs/frontend.md`.
 
 ### Naming
 
@@ -181,29 +176,13 @@ const { clashLayout, setClashLayout } = useUIStore();
 1. Read ThatOpen docs — use `thatopen-docs-navigator` skill
 2. Check v3.4.x API (breaking changes from v2)
 
-**New OBC component:**
-1. Use `_thatopen-bim-component` skill
-2. Place in `bim-components/`
-3. Extend `OBC.Component`, implement `OBC.Disposable`
-4. Use `OBC.Disposer` for all Three.js meshes
-5. Unbind DOM events in `dispose()`
-6. Register in `bim-components/setup/` (singleton)
+**New OBC component:** follow the `_thatopen-bim-component` skill. → project wiring + step checklist in `.agents/docs/bim-viewer.md`.
 
 **Version constraint:** All ThatOpen libs pinned to **v3.4.x** — never mix versions or bootstrap OBC inside React
 
 ## 📦 Imports
 
-Always use `@/*` alias. Never relative `../../../` paths.
-
-```ts
-// ✅
-import { cn } from "@/lib/utils"
-import { useUIStore } from "@/react-components/store/uiStore"
-import { supabase } from "@/integrations/supabase/client"
-
-// ❌
-import { cn } from "../../../lib/utils"
-```
+Always use `@/*` alias. Never relative `../../../` paths. → example in `.agents/docs/frontend.md`.
 
 ## 📋 Workflow
 
@@ -214,6 +193,7 @@ import { cn } from "../../../lib/utils"
 
 **2. Plan before code**
 - Use `grill-with-docs` skill for requirements + layer placement
+- New architecture, cross-cutting refactor, tricky bug, or multiple viable approaches? → suggest the developer run `/fable-advisor` (developer-triggered only, never auto-invoked) to get a second opinion from Fable before finalizing the plan
 - Use `plan-visualizer` skill for: current flow (ASCII) + proposed flow (mark `[NEW]`/`[MOD]`/`[DEL]`) + pros/cons + files
 - **Get explicit approval before coding**
 
@@ -221,13 +201,23 @@ import { cn } from "../../../lib/utils"
 - See **🤝 Multi-Agent Workflow** below. Gemini does not write feature code directly — it specs the task, delegates to Claude Code CLI, then reviews the diff.
 - Exception: small inline fixes to Claude's diff (typo, missing import, minor logic slip) may be patched directly by Gemini.
 
-**4. Uncertain?**
+**4. Refine — review & simplify** _(automatic, non-trivial changes only)_
+- Skip both passes for genuinely trivial edits (typo, rename, import fix, single-line tweak, config bump) — and say so in one line so it's visible.
+- Otherwise, before presenting:
+  1. **Code-review** via a **fresh sub-agent** (`code-review` skill) — independent eyes that did not write the code
+  2. **Apply confirmed findings**; report any deliberately not acted on + why
+  3. **Simplify** inline (`simplify` skill) on the now-correct code
+  4. **Light behavior-preservation check** after simplify — verify nothing changed semantically (not a full second review)
+- No extra approval gate — this feeds straight into the segmented present in step 6.
+
+**5. Uncertain?**
 - Ask one concrete question with a recommended option
 - Never assume state placement, data shape, or layer assignment
 
-**5. After implementation**
+**6. After implementation**
 - Do not prompt, ask, or offer to run `git add` / `git commit` / merge
 - Present the diff/result and stop — the developer reviews and commits personally
+- Segment the final diff so it's clear what came from where: **implemented** / **changed by review** / **changed by simplify**
 
 ## 🤝 Multi-Agent Workflow: Gemini + Claude Code CLI
 
