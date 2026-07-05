@@ -59,7 +59,7 @@ export function BulkEditClashModal({
             <option value="new">New</option>
             <option value="unresolved">Unresolved</option>
             <option value="resolved">Resolved</option>
-            <option value="approved_as_note">Approved as Note</option>
+            <option value="approved_as_note">Approved</option>
           </select>
         </div>
 

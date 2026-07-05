@@ -15,7 +15,14 @@ const statusLabelMap: Record<ClashItem["status"], string> = {
   new: "NEW",
   unresolved: "UNRESOLVED",
   resolved: "RESOLVED",
-  approved_as_note: "APPROVED AS NOTE",
+  approved_as_note: "APPROVED",
+};
+
+const statusToneClassMap: Record<ClashItem["status"], string> = {
+  new: "border-[oklch(63%_0.18_28_/_42%)] bg-[oklch(63%_0.18_28_/_13%)] text-status-danger",
+  unresolved: "border-[oklch(70%_0.17_55_/_42%)] bg-[oklch(70%_0.17_55_/_13%)] text-[oklch(70%_0.17_55)]",
+  resolved: "border-[oklch(77%_0.14_76_/_42%)] bg-[oklch(77%_0.14_76_/_13%)] text-status-warn",
+  approved_as_note: "border-[oklch(70%_0.14_150_/_42%)] bg-[oklch(70%_0.14_150_/_13%)] text-status-ok",
 };
 
 const typeLabelMap: Record<ClashItem["type"], string> = {
@@ -114,12 +121,7 @@ export function ClashTable({ projectId }: ClashTableProps) {
         );
       case "status": {
         const statusLabel = statusLabelMap[item.status] || item.status;
-        const statusToneClasses =
-          item.status === "new"
-            ? "border-[oklch(63%_0.18_28_/_42%)] bg-[oklch(63%_0.18_28_/_13%)] text-status-danger"
-            : item.status === "unresolved"
-              ? "border-[oklch(77%_0.14_76_/_42%)] bg-[oklch(77%_0.14_76_/_13%)] text-status-warn"
-              : "border-[oklch(70%_0.14_150_/_42%)] bg-[oklch(70%_0.14_150_/_13%)] text-status-ok";
+        const statusToneClasses = statusToneClassMap[item.status] || statusToneClassMap.new;
         return (
           <span
             className={`inline-flex items-center min-h-5 px-2.5 py-0.5 border rounded-full text-[10px] font-bold tracking-wider uppercase ${statusToneClasses}`}

@@ -13,7 +13,7 @@ const rows: { key: StatusType; label: string }[] = [
   { key: "new", label: "New" },
   { key: "unresolved", label: "Unresolved" },
   { key: "resolved", label: "Resolved" },
-  { key: "approved_as_note", label: "Approved as Note" },
+  { key: "approved_as_note", label: "Approved" },
 ];
 
 const cols: { key: SeverityType; label: string; textClass: string }[] = [

@@ -13,7 +13,7 @@ export function useClashTable(projectId: string, clashItems: ClashItem[]) {
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
     id: 70,
     title: 240,
-    status: 130,
+    status: 100,
     type: 130,
     assignedTo: 120,
     dueDate: 120,

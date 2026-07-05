@@ -236,7 +236,7 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
             <option value="new">New</option>
             <option value="unresolved">Unresolved</option>
             <option value="resolved">Resolved</option>
-            <option value="approved_as_note">Approved as Note</option>
+            <option value="approved_as_note">Approved</option>
           </select>
         </div>
 
@@ -442,7 +442,7 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
                       : "border-[oklch(77%_0.14_76_/_42%)] bg-[oklch(77%_0.14_76_/_13%)] text-status-warn"
                   }`}
                 >
-                  {item.status.replace(/_/g, " ")}
+                  {item.status === "approved_as_note" ? "approved" : item.status.replace(/_/g, " ")}
                 </span>
               </div>
 
