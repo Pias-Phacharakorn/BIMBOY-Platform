@@ -102,6 +102,12 @@ export interface ProjectDisplay {
 
 export interface AppProject extends ClassProject {
   display: ProjectDisplay;
+  location: {
+    latitude: number;
+    longitude: number;
+    rotation: number;
+    elevation: number;
+  };
 }
 
 export interface StatItem {

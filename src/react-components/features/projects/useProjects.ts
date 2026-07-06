@@ -101,7 +101,7 @@ export function useProjects() {
         projInstance.cost = p.cost;
         projInstance.progress = p.progress;
 
-        const appProj = Object.assign(projInstance, { display: p.display }) as AppProject;
+        const appProj = Object.assign(projInstance, { display: p.display, location: p.location }) as AppProject;
         projectsManager.list.push(appProj);
       }
 

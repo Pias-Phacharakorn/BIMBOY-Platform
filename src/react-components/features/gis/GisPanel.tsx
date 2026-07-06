@@ -3,7 +3,7 @@ import * as OBC from "@thatopen/components";
 import * as BUI from "@thatopen/ui";
 import { RotateCcw, Save } from "lucide-react";
 import { GisLayers } from "@/bim-components";
-import { useUpdateProject } from "@/react-components/features/projects/useProjects";
+import { useProject, useUpdateProject } from "@/react-components/features/projects/useProjects";
 import { useProjectStore } from "@/react-components/store/projectStore";
 import { Icon } from "@/react-components/components/ui";
 import { useBimStore } from "@/react-components/store/bimStore";
@@ -40,8 +40,10 @@ export function GisPanel() {
   const { components } = useBimStore();
   const { activeProjectId } = useProjectStore();
   const updateProjectMutation = useUpdateProject();
+  const { data: activeProject } = useProject(activeProjectId);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const appliedLocationRef = useRef<{ id: string; gisLayers: GisLayers } | null>(null);
 
   const mapHostRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<GisState>(initialState);
@@ -126,6 +128,30 @@ export function GisPanel() {
       }
     };
   }, [components, gisLayers]);
+
+  // Apply the freshly-fetched project location once per project, overriding whatever
+  // GisLayer3d picked up at construction time (which can race the projects list load
+  // and end up stale — see GISParser.getActiveProjectLocation).
+  useEffect(() => {
+    if (!gisLayers || !activeProject) return;
+    const applied = appliedLocationRef.current;
+    if (applied && applied.id === activeProject.id && applied.gisLayers === gisLayers) return;
+    appliedLocationRef.current = { id: activeProject.id, gisLayers };
+
+    const { longitude, latitude, rotation, elevation } = activeProject.location;
+    gisLayers.layer3d.longitude = longitude;
+    gisLayers.layer3d.latitude = latitude;
+    gisLayers.layer3d.rotation = rotation;
+    gisLayers.layer3d.height = elevation;
+    gisLayers.layer3d.updateMapPosition();
+    try {
+      gisLayers.layer2d.setMarkerPosition(longitude, latitude);
+    } catch (e) {
+      console.warn("Unable to update GIS map marker", e);
+    }
+
+    setState((current) => ({ ...current, longitude, latitude, rotation, elevation }));
+  }, [gisLayers, activeProject]);
 
   // Synchronize events from BUI elements back to state
   useEffect(() => {

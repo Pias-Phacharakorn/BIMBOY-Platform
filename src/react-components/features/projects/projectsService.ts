@@ -96,6 +96,11 @@ export const projectsService = {
 
     if (error) {
       console.error(`Error updating project ${id} in Supabase:`, error);
+      if (error.code === "PGRST116") {
+        throw new Error(
+          "This project could not be updated. It may have been deleted, or you may not have permission (contact a project admin or hub admin)."
+        );
+      }
       throw error;
     }
 
