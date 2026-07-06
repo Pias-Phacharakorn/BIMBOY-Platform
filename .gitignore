@@ -45,7 +45,7 @@ lerna-debug.log*
 *.sw?
 .DS_Store
 Thumbs.db
-.vercel
+.wrangler
 
 # Local scratch / unrelated project, not part of this repo
 ___QR Prompt Check/
