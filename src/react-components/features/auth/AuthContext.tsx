@@ -91,8 +91,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setIsLoading(false);
         });
       } else if (!hasOAuthParams) {
-        const devEmail = import.meta.env.DEV ? (import.meta.env as any).VITE_DEV_AUTO_LOGIN_EMAIL : undefined;
-        const devPassword = import.meta.env.DEV ? (import.meta.env as any).VITE_DEV_AUTO_LOGIN_PASSWORD : undefined;
+        const devEnv = import.meta.env as unknown as {
+          VITE_DEV_AUTO_LOGIN_EMAIL?: string;
+          VITE_DEV_AUTO_LOGIN_PASSWORD?: string;
+        };
+        const devEmail = import.meta.env.DEV ? devEnv.VITE_DEV_AUTO_LOGIN_EMAIL : undefined;
+        const devPassword = import.meta.env.DEV ? devEnv.VITE_DEV_AUTO_LOGIN_PASSWORD : undefined;
 
         if (devEmail && devPassword && !devAutoLoginAttempted.current) {
           devAutoLoginAttempted.current = true;
