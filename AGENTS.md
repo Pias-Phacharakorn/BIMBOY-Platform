@@ -63,7 +63,7 @@ This file is the **map**; these guides are the **territory** — deep, project-s
 **BIM:** @thatopen/components + @thatopen/ui **v3.4.x** · Three.js ^0.182  
 **Backend:** Supabase (auth, DB, storage)  
 **Build:** Vite 7 + router plugin + tsconfig paths  
-**Deploy:** Cloudflare Pages (git-connected, auto-deploys `main`) · SPA routing via `public/_redirects`  
+**Deploy:** Cloudflare Workers static assets (git-connected, auto-deploys `main`) · SPA routing via `wrangler.jsonc` (`assets.not_found_handling`)  
 **Utilities:** lucide-react · date-fns · TypeScript ^5.2  
 
 **⚠️ Critical constraint:** ThatOpen pinned to **v3.4.x** — check peer deps (Three.js, web-ifc) before upgrading.
