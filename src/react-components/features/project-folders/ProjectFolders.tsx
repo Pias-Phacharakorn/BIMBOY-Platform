@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { AppProject } from "@/types";
 import { cn } from "@/lib/utils";
@@ -19,14 +19,14 @@ import {
   GitCompareArrows,
 } from "lucide-react";
 import { shopDrawingsService, type ShopDrawingRow } from "@/react-components/features/shop-drawings/shopDrawingsService";
-import { useCreateShopDrawing, useAddShopDrawingRevision } from "@/react-components/features/shop-drawings/useShopDrawings";
 import { mapShopDrawingRow } from "@/react-components/features/shop-drawings/shopDrawingTypes";
-import { DISCIPLINES, type DisciplineCode } from "@/react-components/features/shop-drawings/disciplines";
-import { AddDrawingDialog, type NewDrawingInput } from "@/react-components/components/shop-drawings/AddDrawingDialog";
+import { useGroupedShopDrawings, sheetKey, type SheetBucket } from "@/react-components/features/shop-drawings/useGroupedShopDrawings";
+import { useShopDrawingActions } from "@/react-components/features/shop-drawings/useShopDrawingActions";
+import { type DisciplineCode } from "@/react-components/features/shop-drawings/disciplines";
+import { AddDrawingDialog } from "@/react-components/components/shop-drawings/AddDrawingDialog";
 import { UploadPdfDialog, type UploadRevisionInput } from "@/react-components/components/shop-drawings/UploadPdfDialog";
 import { PdfViewerModal } from "@/react-components/components/shop-drawings/PdfViewerModal";
 import { CompareDrawingsModal } from "@/react-components/components/shop-drawings/CompareDrawingsModal";
-import { useAuth } from "@/react-components/features/auth/useAuth";
 
 interface ProjectFoldersProps {
   project: AppProject;
@@ -48,18 +48,6 @@ interface StorageFile {
 
 const DRAWING_FOLDER = "04_Drawing";
 
-// Sheets are keyed by discipline+sheetNo since the same sheet_no could in
-// principle recur under a different discipline.
-function sheetKey(discipline: string, sheetNo: string): string {
-  return `${discipline}::${sheetNo}`;
-}
-
-interface SheetBucket {
-  sheetNo: string;
-  sheetName: string;
-  versions: ShopDrawingRow[];
-}
-
 export function ProjectFolders({ project, focusFolder, isAdmin = false, large = false }: ProjectFoldersProps) {
   const projectPath = `${project.projectnumber}_${project.projectName}`;
   const subFolders = ["01_ifc", "02_frag", "03_ClashImport", DRAWING_FOLDER];
@@ -78,57 +66,21 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false, large = 
   // (sheet -> revisions) instead of a flat Storage list — see plan.md.
   // Add/Upload here call the same service+mutations Register uses; delete
   // still lives only in Register.
-  const { user } = useAuth();
-  const createShopDrawing = useCreateShopDrawing();
-  const addRevision = useAddShopDrawingRevision();
-  const [shopDrawings, setShopDrawings] = useState<ShopDrawingRow[]>([]);
-  const [shopDrawingsLoading, setShopDrawingsLoading] = useState(false);
-  const [shopDrawingsError, setShopDrawingsError] = useState<string | null>(null);
+  const {
+    groupedByDiscipline,
+    totalSheetCount,
+    loading: shopDrawingsLoading,
+    error: shopDrawingsError,
+    refetch: fetchShopDrawings,
+  } = useGroupedShopDrawings(project.id);
+  const { handleAddDrawing, handleUploadRevision, handleDownload: handleDownloadShopDrawing, authorEmail } =
+    useShopDrawingActions(project);
   const [expandedDisciplines, setExpandedDisciplines] = useState<Record<string, boolean>>({});
   const [expandedSheets, setExpandedSheets] = useState<Record<string, boolean>>({});
   const [addDrawingDiscipline, setAddDrawingDiscipline] = useState<DisciplineCode | null>(null);
   const [uploadTarget, setUploadTarget] = useState<ShopDrawingRow | null>(null);
   const [viewerTarget, setViewerTarget] = useState<ShopDrawingRow | null>(null);
-  const [compareSheet, setCompareSheet] = useState<{ sheetNo: string; versions: ShopDrawingRow[] } | null>(null);
-
-  const groupedByDiscipline = useMemo(() => {
-    const sheetsByDiscipline = new Map<string, Map<string, ShopDrawingRow[]>>();
-    shopDrawings.forEach((row) => {
-      const sheetsForDiscipline = sheetsByDiscipline.get(row.discipline) ?? new Map<string, ShopDrawingRow[]>();
-      const versions = sheetsForDiscipline.get(row.sheet_no) ?? [];
-      versions.push(row);
-      sheetsForDiscipline.set(row.sheet_no, versions);
-      sheetsByDiscipline.set(row.discipline, sheetsForDiscipline);
-    });
-
-    return DISCIPLINES.map((discipline) => {
-      const sheetsForDiscipline = sheetsByDiscipline.get(discipline.value);
-      const sheets: SheetBucket[] = [];
-      sheetsForDiscipline?.forEach((versions, sheetNo) => {
-        versions.sort((a, b) => a.revision - b.revision);
-        sheets.push({ sheetNo, sheetName: versions[versions.length - 1].sheet_name, versions });
-      });
-      sheets.sort((a, b) => a.sheetNo.localeCompare(b.sheetNo));
-      return { code: discipline.value, label: discipline.label, sheets };
-    });
-  }, [shopDrawings]);
-
-  // Cheap fixed-size (8 disciplines) reduce — not worth its own memo.
-  const totalSheetCount = groupedByDiscipline.reduce((sum, d) => sum + d.sheets.length, 0);
-
-  const fetchShopDrawings = async () => {
-    setShopDrawingsLoading(true);
-    setShopDrawingsError(null);
-    try {
-      const rows = await shopDrawingsService.listShopDrawings(project.id);
-      setShopDrawings(rows);
-    } catch (err: any) {
-      console.error("Error loading shop drawings:", err);
-      setShopDrawingsError(err.message || "Failed to load shop drawings");
-    } finally {
-      setShopDrawingsLoading(false);
-    }
-  };
+  const [compareSheet, setCompareSheet] = useState<SheetBucket | null>(null);
 
   const toggleSheet = (key: string) => {
     setExpandedSheets((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -138,59 +90,9 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false, large = 
     setExpandedDisciplines((prev) => ({ ...prev, [discipline]: !prev[discipline] }));
   };
 
-  const handleDownloadShopDrawing = (row: ShopDrawingRow) => {
-    const url = shopDrawingsService.getPdfPublicUrl(row.pdf_path);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${row.sheet_no}-${row.sheet_name}-Rev${row.revision}.pdf`;
-    a.target = "_blank";
-    a.click();
-  };
-
-  const describeShopDrawingError = (error: unknown, fallback: string) => {
-    const code = (error as { code?: string })?.code;
-    if (code === "23505") {
-      return "Someone just uploaded a newer revision — refresh and try again.";
-    }
-    return error instanceof Error ? error.message : fallback;
-  };
-
-  const handleAddDrawing = (input: NewDrawingInput) => {
-    createShopDrawing.mutate(
-      {
-        project,
-        discipline: input.discipline,
-        sheetNo: input.no,
-        sheetName: input.name,
-        author: input.author || null,
-        pdfFile: input.pdfFile,
-        createdBy: user?.id ?? null,
-      },
-      {
-        onSuccess: () => fetchShopDrawings(),
-        onError: (error) => alert(describeShopDrawingError(error, "Failed to add drawing.")),
-      }
-    );
-  };
-
-  const handleUploadRevision = (input: UploadRevisionInput) => {
-    if (!uploadTarget || !input.pdfFile) return;
-    addRevision.mutate(
-      {
-        project,
-        discipline: uploadTarget.discipline,
-        sheetNo: uploadTarget.sheet_no,
-        sheetName: uploadTarget.sheet_name,
-        author: uploadTarget.author,
-        revision: input.revision,
-        pdfFile: input.pdfFile,
-        createdBy: user?.id ?? null,
-      },
-      {
-        onSuccess: () => fetchShopDrawings(),
-        onError: (error) => alert(describeShopDrawingError(error, "Failed to upload revision.")),
-      }
-    );
+  const handleUploadRevisionSubmit = (input: UploadRevisionInput) => {
+    if (!uploadTarget) return;
+    handleUploadRevision(uploadTarget, input);
   };
 
   // Format bytes to readable size
@@ -279,10 +181,9 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false, large = 
   const toggleFolder = (folderName: string) => {
     setExpandedFolders((prev) => {
       const nextState = !prev[folderName];
-      // Fetch if expanding and not loaded yet
-      if (nextState && folderName === DRAWING_FOLDER && shopDrawings.length === 0) {
-        fetchShopDrawings();
-      } else if (nextState && subFolders.includes(folderName) && !files[folderName]) {
+      // shop_drawings (04_Drawing) is fetched by useGroupedShopDrawings on
+      // mount already — only the raw Storage folders need fetch-on-expand.
+      if (nextState && folderName !== DRAWING_FOLDER && subFolders.includes(folderName) && !files[folderName]) {
         fetchFolderFiles(folderName);
       }
       return { ...prev, [folderName]: nextState };
@@ -294,9 +195,7 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false, large = 
     if (project.id) {
       const foldersToLoad = focusFolder ? [focusFolder] : subFolders;
       foldersToLoad.forEach((folder) => {
-        if (folder === DRAWING_FOLDER) {
-          fetchShopDrawings();
-        } else {
+        if (folder !== DRAWING_FOLDER) {
           fetchFolderFiles(folder);
         }
       });
@@ -770,13 +669,14 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false, large = 
         onClose={() => setAddDrawingDiscipline(null)}
         onAdd={handleAddDrawing}
         lockedDiscipline={addDrawingDiscipline ?? undefined}
+        authorEmail={authorEmail}
       />
 
       <UploadPdfDialog
         isOpen={!!uploadTarget}
         onClose={() => setUploadTarget(null)}
         drawing={uploadTarget ? mapShopDrawingRow(uploadTarget) : null}
-        onUpload={handleUploadRevision}
+        onUpload={handleUploadRevisionSubmit}
       />
 
       <PdfViewerModal

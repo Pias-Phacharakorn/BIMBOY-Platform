@@ -96,6 +96,7 @@ export const shopDrawingsService = {
     sheetName: string;
     author: string | null;
     revision: number;
+    reason: string;
     pdfFile: File;
     createdBy: string | null;
   }): Promise<ShopDrawingRow> {
@@ -107,6 +108,7 @@ export const shopDrawingsService = {
       sheet_name: args.sheetName,
       author: args.author,
       revision: args.revision,
+      reason: args.reason,
       pdf_path: pdfPath,
       created_by: args.createdBy,
     });

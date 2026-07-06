@@ -6,32 +6,46 @@
 ## Overview
 
 The Drawing Directory (`DrawingView`) has two tabs:
-- **Folder** — a file browser (`ProjectFolders`) focused on the project's `04_Drawing` folder.
+- **Folder** — `DrawingFolderExplorer`, an ACC/BIM 360-style browser: a 3-level
+  tree (discipline → sheet → revision) on the left, a table on the right that
+  mirrors whatever's selected in the tree.
 - **Register** — a revision-tracked shop-drawing table (`ShopDrawingTable`). Each sheet (`sheet_no`) has one row per revision; PDFs live in Supabase storage.
 
-Drawings are stored as `shop_drawings` rows + PDF objects in the `project-files` bucket. A sheet accumulates revisions (rev 0 = first upload, then `addRevision`); the highest revision is treated as the latest. Every sheet also has a fixed **discipline** (`01_AR`…`08_SN`), set once at creation and inherited by all its revisions — see Disciplines below.
+Drawings are stored as `shop_drawings` rows + PDF objects in the `project-files` bucket. A sheet accumulates revisions (rev 0 = first upload, then `addRevision`); the highest revision is treated as the latest. Every sheet also has a fixed **discipline** (`01_AR`…`08_SN`), set once at creation and inherited by all its revisions — see Disciplines below. Every revision past rev 0 also requires a **reason** — see Reason below.
+
+Note: the general Project Files Directory on the Settings page (unfocused `ProjectFolders`, showing `01_ifc`/`02_frag`/`03_ClashImport`/`04_Drawing` as flat Storage listings) keeps its own simpler inline-tree rendering of `04_Drawing` — it is a different component from `DrawingFolderExplorer` and was deliberately left alone since it has no document-management metadata to show in a table.
 
 ## Key files
 
-- `src/react-components/views/DrawingView.tsx` — page: `WorkspaceHeader` tabs (Folder/Register), composition only
+- `src/react-components/views/DrawingView.tsx` — page: `WorkspaceHeader` tabs (Folder/Register), composition only.
 - `src/routes/projects/$projectId/drawing.tsx` — route → `DrawingView` (composition only)
-- `src/react-components/features/shop-drawings/ShopDrawingTable.tsx` — the Register table UI, plus a Discipline column and filter dropdown
+- `src/react-components/features/shop-drawings/DrawingFolderExplorer.tsx` — the Folder tab: a 3-level tree (discipline → sheet folder → revision file) on the left, a table that mirrors the tree's current selection depth on the right. Owns `expandedDisciplines`/`expandedSheets` (independent of selection) plus a `selection: { level: "discipline" | "sheet"; ... } | null` state, search query, and CSV export.
+- `src/react-components/features/shop-drawings/useGroupedShopDrawings.ts` — shared hook (groups `useShopDrawings`' cached rows by discipline → sheet). Consumed by both `DrawingFolderExplorer.tsx` and `ProjectFolders.tsx`; shares the same React Query cache as `ShopDrawingTable.tsx` rather than fetching independently.
+- `src/react-components/features/shop-drawings/useShopDrawingActions.ts` — shared hook for create-sheet/add-revision/download, used by `ProjectFolders.tsx` and `DrawingFolderExplorer.tsx` (not `ShopDrawingTable.tsx`, which has its own inline-note error UX instead of `alert()`). Centralizes the author-is-uploader-email logic in one place instead of three.
+- `src/react-components/components/shop-drawings/RowActionsMenu.tsx` — generic kebab (⋮) dropdown menu, pure UI, used for each row's actions.
+- `src/react-components/features/shop-drawings/ShopDrawingTable.tsx` — the Register table UI, plus a Discipline column and filter dropdown.
 - `src/react-components/features/shop-drawings/useShopDrawings.ts` — TanStack Query hooks (list/create/addRevision/delete)
 - `src/react-components/features/shop-drawings/shopDrawingsService.ts` — Supabase data + storage access
 - `src/react-components/features/shop-drawings/shopDrawingTypes.ts` — `ShopDrawing`, `GroupedDrawing`, `mapShopDrawingRow`
 - `src/react-components/features/shop-drawings/disciplines.ts` — `DISCIPLINES` list (single source of truth for the 8 discipline codes/labels), `DisciplineCode` type
 - `src/react-components/features/shop-drawings/index.ts` — feature entry
-- `src/react-components/features/project-folders/ProjectFolders.tsx` — the Folder tab browser (reused with `focusFolder="04_Drawing"`); groups drawings by discipline, then by sheet
-- `src/react-components/components/shop-drawings/AddDrawingDialog.tsx` — create-sheet form; discipline select, lockable via `lockedDiscipline` prop
-- Supabase: `shop_drawings` table (incl. `discipline` enum column) + `project-files` storage bucket
+- `src/react-components/features/project-folders/ProjectFolders.tsx` — the Settings-page general file browser (all 4 subfolders, unfocused); its `04_Drawing` branch now also consumes `useGroupedShopDrawings` but keeps its original inline nested-tree UI unchanged
+- `src/react-components/components/shop-drawings/AddDrawingDialog.tsx` — create-sheet form; discipline select, lockable via `lockedDiscipline` prop. Author is **not** a form field — see Author below.
+- `src/react-components/components/shop-drawings/UploadPdfDialog.tsx` — add-revision form; requires a **Reason** in addition to the PDF file — see Reason below.
+- Supabase: `shop_drawings` table (incl. `discipline` enum column, `reason` text column) + `project-files` storage bucket
 
 ## Patterns & conventions
 
 - **Storage layout**: `{projectnumber}_{projectName}/04_Drawing/{discipline}/{sheetNo}/Rev{revision}_{timestamp}.pdf` (see `buildPdfPath`). PDF public URL via `getPdfPublicUrl`. `pdf_path` is stored per-row, not recomputed from convention at read time — so rows created before the discipline segment was added keep working at their original path.
 - **Upload-then-insert**: `uploadThenInsert` uploads the PDF first, then inserts the row; if the insert fails it does a best-effort storage cleanup so a retry won't leave an orphaned object at that exact path.
-- **Revisions**: multiple `shop_drawings` rows share a `sheet_no`, ordered `sheet_no` asc then `revision` desc; grouped into `GroupedDrawing` where `versions[0]` (max revision) is the latest. `isLatest` on a row is cosmetic — grouping decides latest, not the flag.
-- **Disciplines**: fixed global Postgres enum `drawing_discipline` (`01_AR`, `02_ST`, `03_LA`, `04_CV`, `05_AC`, `06_EE`, `07_FP`, `08_SN` — same list for every project, not project-configurable). Set once via `AddDrawingDialog` when a sheet is first created; `addRevision` always inherits the sheet's existing discipline and cannot change it. `disciplines.ts` is the single source of truth for the ordered list + labels — both the Folder tree and the Register filter/column read from it.
-- **Folder tab tree**: renders all 8 discipline folders always (even with zero drawings), collapsed by default. Each discipline row has its own "+" that opens `AddDrawingDialog` with `lockedDiscipline` set, so the dropdown is pre-filled and disabled. In the Register tab, the same dialog is opened without `lockedDiscipline` — the user picks manually.
+- **Revisions**: multiple `shop_drawings` rows share a `sheet_no`, ordered `sheet_no` asc then `revision` desc; grouped into `GroupedDrawing`/`SheetBucket` where the max-revision entry is the latest. `isLatest` on a row is cosmetic — grouping decides latest, not the flag.
+- **Disciplines**: fixed global Postgres enum `drawing_discipline` (`01_AR`, `02_ST`, `03_LA`, `04_CV`, `05_AC`, `06_EE`, `07_FP`, `08_SN` — same list for every project, not project-configurable). Set once via `AddDrawingDialog` when a sheet is first created; `addRevision` always inherits the sheet's existing discipline and cannot change it. `disciplines.ts` is the single source of truth for the ordered list + labels — the Folder tree, `AddDrawingDialog`, and the Register filter/column all read from it.
+- **Author**: automatically the uploader's email (`useAuth()`'s `user.email`), not user-editable. `profiles` has no display-name column (only `uid`/`email`/`hub_role`/`is_active`), so email is the only identity string guaranteed to exist regardless of login method. `AddDrawingDialog` shows it read-only via an `authorEmail` prop for transparency; the actual DB value is set by the caller at submit time, not handled by the dialog itself. `ProjectFolders` and `DrawingFolderExplorer` get both `authorEmail` and the mutation handlers from `useShopDrawingActions`; `ShopDrawingTable` sets `author: user?.email ?? null` inline since it has its own error-handling UX (inline note vs `alert()`) and wasn't folded into the shared hook. `addRevision` always inherits `author` from the sheet's existing value, so this only affects sheet creation.
+- **Reason**: required whenever uploading a revision (`UploadPdfDialog`, revision 1+), **not** required or shown when creating a sheet (`AddDrawingDialog`, revision 0). Validated client-side (non-empty after trim) and backed by a DB check constraint (`shop_drawings_reason_required_check`: `revision = 0 or reason is not null`) as defense in depth. `UploadRevisionInput` carries `reason: string`; both `useShopDrawingActions.handleUploadRevision` and `ShopDrawingTable`'s own separate `handleUpload` pass it straight through to `addRevision`.
+- **Folder tab (`DrawingFolderExplorer`) — 3-level tree**: `04_Drawing` → 8 discipline folders (always shown, even empty) → sheet folders (`{sheetNo}_{sheetName}`) → revision file leaves (`Rev0`, `Rev1`, ...). Expand state (`expandedDisciplines`/`expandedSheets`) is tracked independently per node and is **not** collapsed by selecting elsewhere — only the clicked node's own expansion toggles. Clicking a discipline or sheet row both toggles its expansion and sets it as the table's selection in one action; clicking a revision leaf opens the PDF viewer directly (it's a leaf, nothing to select into).
+  - **Table mirrors selection depth**: discipline selected → one row per **sheet** (latest revision), columns Name/Author/`Version` (`Rev N`)/Last updated, kebab View/Download/Compare Revisions (disabled <2 revisions)/Upload New Revision (admin-only). Sheet selected → one row per **revision**, columns Revision/Author/Reason/Last updated, kebab View/Download only (a single past revision has no compare/upload action of its own).
+  - **Toolbar**: a search box (filters the currently visible table's rows by name/author/reason — scoped to whatever's selected, not a global cross-discipline search) and an Export button (CSV of the currently visible rows only — sheets or revisions, whichever level is showing). The primary action button changes with selection level: "+ Add Drawing" (discipline selected, via `AddDrawingDialog` with `lockedDiscipline`) vs. "+ Upload New Revision" (sheet selected, via `UploadPdfDialog` seeded from that sheet's latest revision).
+  - There is no "Revision History" action anymore — browsing a sheet's full revision history is just clicking its folder in the tree (or selecting it), no tab switch needed. (An earlier version of this feature had a kebab item that deep-linked to the Register tab; removed as redundant once revisions became browsable in-place, along with `DrawingView`'s `pendingRegisterFilter` plumbing that supported it.)
 - **Admin gate**: create/revise/delete gated by `useIsProjectAdmin` (project admin or `hub_admin`).
 - Data access stays in `shopDrawingsService.ts` wrapped by `useShopDrawings.ts` — see `backend.md`.
 
@@ -41,5 +55,9 @@ Drawings are stored as `shop_drawings` rows + PDF objects in the `project-files`
 - `isLatest` is not a source of truth — never branch on it for correctness; rely on the grouped max-revision.
 - The Folder tab depends on the `04_Drawing` folder convention; changing project folder names breaks the focused browse.
 - Discipline is immutable after sheet creation by design — there's no UI to move a sheet to a different discipline once created. A mis-assigned sheet currently has no fix path short of a manual DB update.
-- Sheet expand/compare/upload state in `ProjectFolders.tsx` is keyed by `discipline::sheetNo` (not just `sheetNo`), since the same sheet number could in principle recur under a different discipline.
+- Sheet keys (`sheetKey` in `useGroupedShopDrawings.ts`) are `discipline::sheetNo` (not just `sheetNo`), since the same sheet number could in principle recur under a different discipline.
+- `RowActionsMenu` renders its dropdown into a `createPortal(..., document.body)` positioned via the trigger button's `getBoundingClientRect()`, not as a normal `absolute` child — the sheet/revision table is inside an `overflow-auto` container, which would otherwise clip the menu for rows near the bottom. It closes on any scroll (capture-phase listener) rather than tracking position, since the table it lives in doesn't need the menu to survive a scroll.
+- `AddDrawingDialog`'s `authorEmail` prop is display-only — changing it does not change what gets saved; each caller must independently pass the matching `author: user?.email ?? null` into its own mutation call.
+- Historical revisions uploaded before the Reason requirement was added were backfilled with the placeholder `'Not recorded (added retroactively)'` (see the migration) rather than left null, since the DB check constraint requires `reason is not null` for every `revision > 0` row, existing or new.
+- The Folder tab's CSV export only covers whatever table is currently visible (one discipline's sheets, or one sheet's revisions) — there's no "export everything" option.
 - _(fill as encountered)_

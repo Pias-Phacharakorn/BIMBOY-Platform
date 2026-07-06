@@ -90,7 +90,7 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
         discipline: input.discipline,
         sheetNo: input.no,
         sheetName: input.name,
-        author: input.author || null,
+        author: user?.email ?? null,
         pdfFile: input.pdfFile,
         createdBy: user?.id ?? null,
       },
@@ -111,6 +111,7 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
         sheetName: uploadTarget.name,
         author: uploadTarget.author,
         revision: input.revision,
+        reason: input.reason,
         pdfFile: input.pdfFile,
         createdBy: user?.id ?? null,
       },
@@ -374,7 +375,7 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
         </div>
       </div>
 
-      <AddDrawingDialog isOpen={addOpen} onClose={() => setAddOpen(false)} onAdd={handleAdd} />
+      <AddDrawingDialog isOpen={addOpen} onClose={() => setAddOpen(false)} onAdd={handleAdd} authorEmail={user?.email ?? ""} />
 
       <UploadPdfDialog
         isOpen={!!uploadTarget}

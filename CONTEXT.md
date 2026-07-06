@@ -107,3 +107,148 @@ ratio rather than the fixed container `height`).
 
 See `.agents/docs/drawing.md` for the Drawing feature guide this component
 supports.
+
+## Drawing Directory Folder tab — tree + table layout
+
+Replacing the current single-pane nested/inline-expand tree (in
+`ProjectFolders.tsx`, used focused on `04_Drawing` by `DrawingView.tsx`) with
+a two-pane master-detail layout: a left folder tree + a right data table,
+matching an Autodesk ACC/BIM 360 Docs-style browser (reference screenshot
+provided by the user). Note: in the reference itself, most of its columns
+(Description, Version, Indicators, Markups, Issues, Size) show `--` for
+every row — i.e. even Autodesk's own product leaves most of that metadata
+empty; only Name and Last updated carry real data in the example.
+
+### Decisions
+
+- **Scope**: only the Drawing Directory's Folder tab (`DrawingView.tsx`'s
+  focused `04_Drawing` case) gets this redesign. The general Project Files
+  Directory (Settings page, unfocused `ProjectFolders`, showing
+  `01_ifc`/`02_frag`/`03_ClashImport`/`04_Drawing` as flat Storage listings)
+  keeps its current inline-tree UI unchanged — those are raw file listings
+  with no document-management metadata to show in a table. Implementation
+  note: this likely means a new dedicated component (not a mode-flag inside
+  `ProjectFolders.tsx`) consuming a shared data hook, so the two presentations
+  don't duplicate the shop-drawings fetch/group logic.
+- **Tree depth**: the left tree stops at discipline folders
+  (`04_Drawing` → `01_AR`...`08_SN`). Individual sheets never appear in the
+  tree — only in the right-hand table once a discipline is selected. Matches
+  the reference exactly (its tree stops at folder level; documents only
+  appear in the table).
+- **Row granularity**: one row per **sheet**, not per revision. The row
+  shows the sheet's latest revision (Name, Author, Last updated); a
+  `Version` column shows `Rev {latestRevision}`. This is a UX change from
+  today's inline per-revision sub-rows.
+- **Row actions**: a single kebab (⋮) menu per row — View, Download,
+  Compare revisions (disabled if <2 revisions, same as today), Upload New
+  Revision (admin-only, same as today), and Revision History. Replaces
+  today's always-visible inline icon buttons, which don't scale to 5 actions.
+- **Revision History action**: switches `DrawingView`'s active tab to
+  **Register** and pre-fills its sheet-number filter to that sheet, reusing
+  the existing Register table instead of building a second revision-history
+  UI. Requires lifting Register's sheet-number filter state (or an
+  equivalent initial-filter prop) up so `DrawingView` can drive it.
+- **Columns**: `Name`, `Author`, `Version` (`Rev N`), `Last updated`, plus
+  the ⋮ actions column. Dropped `Description`/`Indicators`/`Markups`/`Issues`
+  (no underlying data or feature — these are ACC-specific integrations we
+  don't have) and `Size` (would require an extra Storage metadata lookup per
+  sheet with no clear payoff for PDFs).
+- **No bulk select**: no row checkboxes / bulk actions — not requested, and
+  every existing action is already scoped to a single sheet.
+- **Add Drawing entry point**: moves from a per-discipline "+" icon on the
+  tree row to a "+ Add Drawing" button above the table, scoped to whichever
+  discipline is currently selected — matches the Register tab's existing
+  button pattern.
+- **Initial state**: nothing selected on first load — the right pane shows
+  an empty "select a discipline folder" prompt rather than auto-selecting
+  `01_AR`.
+- **Row click**: clicking a sheet row opens the PDF viewer directly (same
+  as today's click-to-view on the file name), in addition to View being
+  offered in the kebab menu for discoverability.
+
+- **Author auto-set to uploader, not editable**: `AddDrawingDialog`'s free-text
+  Author field is replaced by the current logged-in user, set automatically
+  and not user-editable. The `profiles` table has no display-name column
+  (only `uid`, `email`, `hub_role`, `is_active`), so the stored value is the
+  uploader's **email** (`user.email` from `useAuth()`) — the only identity
+  string guaranteed to exist regardless of login method (email/password or
+  OAuth). `addRevision` already inherits `author` from the sheet's existing
+  value rather than re-prompting, so no change needed there — this only
+  affects the create-new-sheet form.
+
+See `.agents/docs/drawing.md` for the Drawing feature guide this affects.
+
+## Drawing Folder Explorer — deeper tree, search/export, required revision reason
+
+Three follow-up changes to `DrawingFolderExplorer.tsx`, revising some of the
+decisions in the section above.
+
+### 1. Tree now goes discipline → sheet → revision (reverses "tree stops at discipline")
+
+The earlier decision that "the left tree stops at discipline folders" is
+**reversed**. Re-examining the original ACC reference screenshot: its tree is
+a real nested file tree, and the table always mirrors whatever's currently
+selected in the tree — that's the actual pattern being asked for, generalized
+one level deeper each time.
+
+- **Tree levels**: `04_Drawing` → 8 discipline folders → sheet folders
+  (`{sheetNo}_{sheetName}`) → revision files (`Rev0`, `Rev1`, `Rev2`...).
+  Disciplines and sheets are expand/collapse folder nodes; revisions are leaf
+  files.
+- **Table mirrors tree selection depth**: selecting a discipline shows its
+  sheets as rows (unchanged from before). Selecting a sheet folder shows its
+  individual **revisions** as rows instead — each with its own Author/Last
+  updated (and now Reason, see below).
+- **Expand vs. select are independent**, like a normal file explorer: clicking
+  a discipline/sheet row both toggles its tree expansion and sets it as the
+  table's selection; expanding a node doesn't require it to be selected, and
+  selecting elsewhere doesn't collapse previously-expanded nodes.
+- **Revision leaf click**: clicking a revision file in the tree opens the PDF
+  viewer directly (same "click to view" convention as everywhere else in this
+  feature), since it's a leaf with nothing further to select into.
+- **"Revision History" kebab action removed**: redundant now that clicking a
+  sheet folder shows all its revisions without leaving the Folder tab. This
+  also removes `DrawingView`'s `pendingRegisterFilter` deep-link plumbing and
+  `DrawingFolderExplorer`'s `onViewRevisionHistory` prop entirely — the
+  Register tab remains reachable by switching tabs normally, just without the
+  auto-filter shortcut.
+- **Sheet-level top button**: when a sheet is selected, the button above the
+  table changes from "+ Add Drawing" to "+ Upload New Revision", scoped to
+  that sheet — parallel to how "+ Add Drawing" is scoped to the selected
+  discipline. Also still reachable via the discipline-level sheet row's kebab
+  menu.
+- **Revision row kebab menu**: View + Download only. Compare Revisions and
+  Upload New Revision stay at the sheet level (top button / discipline-level
+  row) — a single past revision doesn't have its own "compare" or "upload"
+  action.
+
+### 2. Search bar + Export
+
+- **Search**: scoped to whatever's currently selected (discipline or sheet)
+  — filters the visible table's rows by name/number, not a global
+  cross-discipline search. Simpler and consistent with how the table already
+  works; requires the right discipline/sheet already selected.
+- **Export**: a button that exports the **currently visible table** (sheet
+  list or revision list, whichever is showing) as a CSV — a document-register
+  export, not a bundle of the actual PDF files. Columns match whatever's
+  displayed at that level.
+
+### 3. Required Reason on new revisions
+
+- **Scope**: applies only to `UploadPdfDialog` (adding revision 1+ to an
+  existing sheet), **not** `AddDrawingDialog` (creating a sheet's revision 0)
+  — matches the user's own framing ("when add new Revision").
+- **Validation**: a required text box; submitting with it empty (after trim)
+  blocks the upload, same validation style as the existing Sheet
+  Number/Sheet Name checks in `AddDrawingDialog`.
+- **Storage**: new nullable `reason` column on `shop_drawings` (nullable
+  because existing rows and all revision-0 rows have none), with a DB-level
+  check constraint (`revision = 0 or reason is not null`) as defense in
+  depth — matches this codebase's existing pattern of enforcing invariants at
+  the DB layer (e.g. the `discipline` NOT NULL migration), not just in the
+  form.
+- **Display**: shown as a new **Reason** column in the revision-level table
+  (from decision 1 above) — Rev0 shows "Initial upload" or "—" since the
+  requirement doesn't apply to it.
+
+See `.agents/docs/drawing.md` for the Drawing feature guide this affects.

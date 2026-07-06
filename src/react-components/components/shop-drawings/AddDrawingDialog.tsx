@@ -6,7 +6,6 @@ import { DISCIPLINES, type DisciplineCode } from "@/react-components/features/sh
 export interface NewDrawingInput {
   no: string;
   name: string;
-  author: string;
   discipline: DisciplineCode;
   pdfFile: File;
 }
@@ -17,12 +16,13 @@ interface AddDrawingDialogProps {
   onAdd: (drawing: NewDrawingInput) => void;
   /** When set, the discipline is pre-filled and locked (opened from a discipline folder row). */
   lockedDiscipline?: DisciplineCode;
+  /** Current user's email — shown read-only as the Author that will be recorded. */
+  authorEmail: string;
 }
 
-export function AddDrawingDialog({ isOpen, onClose, onAdd, lockedDiscipline }: AddDrawingDialogProps) {
+export function AddDrawingDialog({ isOpen, onClose, onAdd, lockedDiscipline, authorEmail }: AddDrawingDialogProps) {
   const [no, setNo] = useState("");
   const [name, setName] = useState("");
-  const [author, setAuthor] = useState("");
   const [discipline, setDiscipline] = useState<DisciplineCode | "">(lockedDiscipline ?? "");
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -33,7 +33,6 @@ export function AddDrawingDialog({ isOpen, onClose, onAdd, lockedDiscipline }: A
   const resetAndClose = () => {
     setNo("");
     setName("");
-    setAuthor("");
     setDiscipline(lockedDiscipline ?? "");
     setPdfFile(null);
     setFormError(null);
@@ -77,7 +76,6 @@ export function AddDrawingDialog({ isOpen, onClose, onAdd, lockedDiscipline }: A
     onAdd({
       no: trimmedNo,
       name: trimmedName,
-      author: author.trim(),
       discipline,
       pdfFile,
     });
@@ -149,16 +147,12 @@ export function AddDrawingDialog({ isOpen, onClose, onAdd, lockedDiscipline }: A
             />
           </label>
 
-          <label className="flex flex-col gap-1 text-xs text-muted">
+          <div className="flex flex-col gap-1 text-xs text-muted">
             Author
-            <input
-              type="text"
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              className="h-9 px-3 text-xs bg-surface-alt border border-border rounded-radius text-fg placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
-              placeholder="e.g., John Doe"
-            />
-          </label>
+            <div className="h-9 px-3 flex items-center text-xs bg-surface-alt/60 border border-border rounded-radius text-fg/80">
+              {authorEmail}
+            </div>
+          </div>
 
           <label className="flex flex-col gap-1 text-xs text-muted">
             PDF File *

@@ -5,6 +5,7 @@ import type { ShopDrawing } from "@/react-components/features/shop-drawings/shop
 
 export interface UploadRevisionInput {
   revision: number;
+  reason: string;
   pdfFile: File | null;
 }
 
@@ -17,6 +18,7 @@ interface UploadPdfDialogProps {
 
 export function UploadPdfDialog({ isOpen, onClose, drawing, onUpload }: UploadPdfDialogProps) {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [reason, setReason] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -26,6 +28,7 @@ export function UploadPdfDialog({ isOpen, onClose, drawing, onUpload }: UploadPd
 
   const resetAndClose = () => {
     setPdfFile(null);
+    setReason("");
     setFormError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     onClose();
@@ -44,11 +47,16 @@ export function UploadPdfDialog({ isOpen, onClose, drawing, onUpload }: UploadPd
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+      setFormError("A reason is required to upload a new revision.");
+      return;
+    }
     if (!pdfFile) {
       setFormError("Select a PDF to upload as the new revision.");
       return;
     }
-    onUpload({ revision: nextRevision, pdfFile });
+    onUpload({ revision: nextRevision, reason: trimmedReason, pdfFile });
     resetAndClose();
   };
 
@@ -83,6 +91,18 @@ export function UploadPdfDialog({ isOpen, onClose, drawing, onUpload }: UploadPd
             Current revision <span className="font-semibold text-fg">Rev {drawing.currentRevision}</span> → new
             revision <span className="font-semibold text-fg">Rev {nextRevision}</span>
           </p>
+
+          <label className="flex flex-col gap-1 text-xs text-muted">
+            Reason *
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+              className="px-3 py-2 text-xs bg-surface-alt border border-border rounded-radius text-fg placeholder:text-muted focus:outline-none focus:border-accent transition-colors resize-none"
+              placeholder="e.g., Updated grid line per structural comment"
+              autoFocus
+            />
+          </label>
 
           <label className="flex flex-col gap-1 text-xs text-muted">
             PDF File *

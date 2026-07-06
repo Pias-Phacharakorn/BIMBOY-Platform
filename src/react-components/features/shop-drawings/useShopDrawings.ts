@@ -45,6 +45,7 @@ export function useAddShopDrawingRevision() {
       sheetName: string;
       author: string | null;
       revision: number;
+      reason: string;
       pdfFile: File;
       createdBy: string | null;
     }) => shopDrawingsService.addRevision(args),
