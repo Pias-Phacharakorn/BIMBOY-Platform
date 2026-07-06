@@ -28,7 +28,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const devAutoLoginAttempted = useRef(false);
+  const devAutoLoginState = useRef<"idle" | "attempting" | "settled">("idle");
 
   const fetchProfile = async (uid: string, retries = 3): Promise<void> => {
     for (let i = 0; i < retries; i++) {
@@ -98,16 +98,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const devEmail = import.meta.env.DEV ? devEnv.VITE_DEV_AUTO_LOGIN_EMAIL : undefined;
         const devPassword = import.meta.env.DEV ? devEnv.VITE_DEV_AUTO_LOGIN_PASSWORD : undefined;
 
-        if (devEmail && devPassword && !devAutoLoginAttempted.current) {
-          devAutoLoginAttempted.current = true;
+        if (devEmail && devPassword && devAutoLoginState.current === "idle") {
+          devAutoLoginState.current = "attempting";
+          const devLoginTimeoutId = setTimeout(() => {
+            console.warn("Dev auto-login timed out.");
+            devAutoLoginState.current = "settled";
+            setIsLoading(false);
+          }, 8000); // Safety timeout, mirrors the OAuth exchange timeout above.
+
           loginWithEmail(devEmail, devPassword)
             .catch((err) => {
               console.warn("Dev auto-login failed:", err);
+            })
+            .finally(() => {
+              clearTimeout(devLoginTimeoutId);
+              devAutoLoginState.current = "settled";
               setIsLoading(false);
             });
-        } else {
+        } else if (!devEmail || !devPassword) {
           setIsLoading(false);
         }
+        // else: a dev auto-login attempt is already in flight (or has settled) from a
+        // prior invocation of this effect (e.g. React StrictMode's double-invoke in dev)
+        // — let that attempt's own timeout/catch/finally resolve isLoading instead of
+        // flipping it here, which would race ahead of the still-pending login.
       }
     });
 
