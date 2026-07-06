@@ -9,6 +9,7 @@ import { PdfViewerModal } from "@/react-components/components/shop-drawings/PdfV
 import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useShopDrawings, useCreateShopDrawing, useAddShopDrawingRevision, useDeleteShopDrawing } from "./useShopDrawings";
 import { mapShopDrawingRow, type GroupedDrawing, type ShopDrawing } from "./shopDrawingTypes";
+import { DISCIPLINES, type DisciplineCode } from "./disciplines";
 import type { AppProject } from "@/types";
 
 interface ShopDrawingTableProps {
@@ -28,6 +29,7 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
   const [sheetNumberFilter, setSheetNumberFilter] = useState("");
   const [sheetNameFilter, setSheetNameFilter] = useState("");
   const [authorFilter, setAuthorFilter] = useState("");
+  const [disciplineFilter, setDisciplineFilter] = useState<DisciplineCode | "">("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [note, setNote] = useState<string | null>(null);
 
@@ -38,17 +40,13 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
   const [viewerTarget, setViewerTarget] = useState<ShopDrawing | null>(null);
 
   const groupedDrawings = useMemo<GroupedDrawing[]>(() => {
-    let filtered = drawings;
-
-    if (sheetNumberFilter) {
-      filtered = filtered.filter((d) => d.no.toLowerCase().includes(sheetNumberFilter.toLowerCase()));
-    }
-    if (sheetNameFilter) {
-      filtered = filtered.filter((d) => d.name.toLowerCase().includes(sheetNameFilter.toLowerCase()));
-    }
-    if (authorFilter) {
-      filtered = filtered.filter((d) => (d.author ?? "").toLowerCase().includes(authorFilter.toLowerCase()));
-    }
+    const filtered = drawings.filter((d) => {
+      if (sheetNumberFilter && !d.no.toLowerCase().includes(sheetNumberFilter.toLowerCase())) return false;
+      if (sheetNameFilter && !d.name.toLowerCase().includes(sheetNameFilter.toLowerCase())) return false;
+      if (authorFilter && !(d.author ?? "").toLowerCase().includes(authorFilter.toLowerCase())) return false;
+      if (disciplineFilter && d.discipline !== disciplineFilter) return false;
+      return true;
+    });
 
     const groups = new Map<string, ShopDrawing[]>();
     filtered.forEach((drawing) => {
@@ -66,7 +64,7 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
     result.sort((a, b) => a.versions[0].no.localeCompare(b.versions[0].no));
 
     return result;
-  }, [drawings, sheetNumberFilter, sheetNameFilter, authorFilter]);
+  }, [drawings, sheetNumberFilter, sheetNameFilter, authorFilter, disciplineFilter]);
 
   const toggleGroup = (sheetId: string) => {
     setExpandedGroups((prev) => {
@@ -89,6 +87,7 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
     createShopDrawing.mutate(
       {
         project,
+        discipline: input.discipline,
         sheetNo: input.no,
         sheetName: input.name,
         author: input.author || null,
@@ -107,6 +106,7 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
     addRevision.mutate(
       {
         project,
+        discipline: uploadTarget.discipline,
         sheetNo: uploadTarget.sheetId,
         sheetName: uploadTarget.name,
         author: uploadTarget.author,
@@ -192,6 +192,7 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
                 <th className="sticky top-0 z-1 w-8 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong" />
                 <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">No.</th>
                 <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Name</th>
+                <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Discipline</th>
                 <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Date/Time</th>
                 <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Author</th>
                 <th className="sticky top-0 z-1 px-4 py-3 bg-[oklch(12.5%_0.016_255)] border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Revision</th>
@@ -201,7 +202,7 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td className="px-4 py-8 text-muted text-sm text-center" colSpan={7}>
+                  <td className="px-4 py-8 text-muted text-sm text-center" colSpan={8}>
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-4 h-4 border-2 border-border border-t-accent rounded-full animate-spin" />
                       <span>Loading shop drawings...</span>
@@ -211,7 +212,7 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
               )}
               {!isLoading && groupedDrawings.length === 0 && (
                 <tr>
-                  <td className="px-4 py-8 text-muted text-sm text-center" colSpan={7}>
+                  <td className="px-4 py-8 text-muted text-sm text-center" colSpan={8}>
                     No shop drawings match the current filters.
                   </td>
                 </tr>
@@ -245,6 +246,7 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
                         </td>
                         <td className="px-4 py-3 font-semibold">{latest.no}</td>
                         <td className="px-4 py-3 text-accent">{latest.name}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-muted">{latest.discipline}</td>
                         <td className="px-4 py-3 font-mono text-sm">{format(new Date(latest.lastUpdated), "yyyy-MM-dd HH:mm")}</td>
                         <td className="px-4 py-3">{latest.author || "-"}</td>
                         <td className="px-4 py-3 font-mono font-semibold text-accent">{latest.currentRevision}</td>
@@ -291,6 +293,7 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
                             <td className="px-4 py-2" />
                             <td className="px-4 py-2 pl-8 text-muted">{version.no}</td>
                             <td className="px-4 py-2 text-muted">{version.name}</td>
+                            <td className="px-4 py-2 font-mono text-xs text-muted">{version.discipline}</td>
                             <td className="px-4 py-2 font-mono text-xs text-muted">
                               {format(new Date(version.lastUpdated), "yyyy-MM-dd HH:mm")}
                             </td>
@@ -352,6 +355,21 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
               placeholder="Filter by author..."
               className="h-9 px-3 text-xs bg-surface-alt border border-border rounded-radius text-fg placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
             />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-muted">
+            Discipline
+            <select
+              value={disciplineFilter}
+              onChange={(e) => setDisciplineFilter(e.target.value as DisciplineCode | "")}
+              className="h-9 px-3 text-xs bg-surface-alt border border-border rounded-radius text-fg focus:outline-none focus:border-accent transition-colors"
+            >
+              <option value="">All</option>
+              {DISCIPLINES.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {d.value} — {d.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
       </div>

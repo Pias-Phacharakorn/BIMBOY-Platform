@@ -21,6 +21,7 @@ import {
 import { shopDrawingsService, type ShopDrawingRow } from "@/react-components/features/shop-drawings/shopDrawingsService";
 import { useCreateShopDrawing, useAddShopDrawingRevision } from "@/react-components/features/shop-drawings/useShopDrawings";
 import { mapShopDrawingRow } from "@/react-components/features/shop-drawings/shopDrawingTypes";
+import { DISCIPLINES, type DisciplineCode } from "@/react-components/features/shop-drawings/disciplines";
 import { AddDrawingDialog, type NewDrawingInput } from "@/react-components/components/shop-drawings/AddDrawingDialog";
 import { UploadPdfDialog, type UploadRevisionInput } from "@/react-components/components/shop-drawings/UploadPdfDialog";
 import { PdfViewerModal } from "@/react-components/components/shop-drawings/PdfViewerModal";
@@ -47,6 +48,18 @@ interface StorageFile {
 
 const DRAWING_FOLDER = "04_Drawing";
 
+// Sheets are keyed by discipline+sheetNo since the same sheet_no could in
+// principle recur under a different discipline.
+function sheetKey(discipline: string, sheetNo: string): string {
+  return `${discipline}::${sheetNo}`;
+}
+
+interface SheetBucket {
+  sheetNo: string;
+  sheetName: string;
+  versions: ShopDrawingRow[];
+}
+
 export function ProjectFolders({ project, focusFolder, isAdmin = false, large = false }: ProjectFoldersProps) {
   const projectPath = `${project.projectnumber}_${project.projectName}`;
   const subFolders = ["01_ifc", "02_frag", "03_ClashImport", DRAWING_FOLDER];
@@ -71,27 +84,37 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false, large = 
   const [shopDrawings, setShopDrawings] = useState<ShopDrawingRow[]>([]);
   const [shopDrawingsLoading, setShopDrawingsLoading] = useState(false);
   const [shopDrawingsError, setShopDrawingsError] = useState<string | null>(null);
+  const [expandedDisciplines, setExpandedDisciplines] = useState<Record<string, boolean>>({});
   const [expandedSheets, setExpandedSheets] = useState<Record<string, boolean>>({});
-  const [addDrawingOpen, setAddDrawingOpen] = useState(false);
+  const [addDrawingDiscipline, setAddDrawingDiscipline] = useState<DisciplineCode | null>(null);
   const [uploadTarget, setUploadTarget] = useState<ShopDrawingRow | null>(null);
   const [viewerTarget, setViewerTarget] = useState<ShopDrawingRow | null>(null);
   const [compareSheet, setCompareSheet] = useState<{ sheetNo: string; versions: ShopDrawingRow[] } | null>(null);
 
-  const groupedShopDrawings = useMemo(() => {
-    const groups = new Map<string, ShopDrawingRow[]>();
+  const groupedByDiscipline = useMemo(() => {
+    const sheetsByDiscipline = new Map<string, Map<string, ShopDrawingRow[]>>();
     shopDrawings.forEach((row) => {
-      const existing = groups.get(row.sheet_no) ?? [];
-      existing.push(row);
-      groups.set(row.sheet_no, existing);
+      const sheetsForDiscipline = sheetsByDiscipline.get(row.discipline) ?? new Map<string, ShopDrawingRow[]>();
+      const versions = sheetsForDiscipline.get(row.sheet_no) ?? [];
+      versions.push(row);
+      sheetsForDiscipline.set(row.sheet_no, versions);
+      sheetsByDiscipline.set(row.discipline, sheetsForDiscipline);
     });
-    const result: { sheetNo: string; sheetName: string; versions: ShopDrawingRow[] }[] = [];
-    groups.forEach((versions, sheetNo) => {
-      versions.sort((a, b) => a.revision - b.revision);
-      result.push({ sheetNo, sheetName: versions[versions.length - 1].sheet_name, versions });
+
+    return DISCIPLINES.map((discipline) => {
+      const sheetsForDiscipline = sheetsByDiscipline.get(discipline.value);
+      const sheets: SheetBucket[] = [];
+      sheetsForDiscipline?.forEach((versions, sheetNo) => {
+        versions.sort((a, b) => a.revision - b.revision);
+        sheets.push({ sheetNo, sheetName: versions[versions.length - 1].sheet_name, versions });
+      });
+      sheets.sort((a, b) => a.sheetNo.localeCompare(b.sheetNo));
+      return { code: discipline.value, label: discipline.label, sheets };
     });
-    result.sort((a, b) => a.sheetNo.localeCompare(b.sheetNo));
-    return result;
   }, [shopDrawings]);
+
+  // Cheap fixed-size (8 disciplines) reduce — not worth its own memo.
+  const totalSheetCount = groupedByDiscipline.reduce((sum, d) => sum + d.sheets.length, 0);
 
   const fetchShopDrawings = async () => {
     setShopDrawingsLoading(true);
@@ -107,8 +130,12 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false, large = 
     }
   };
 
-  const toggleSheet = (sheetNo: string) => {
-    setExpandedSheets((prev) => ({ ...prev, [sheetNo]: !prev[sheetNo] }));
+  const toggleSheet = (key: string) => {
+    setExpandedSheets((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleDiscipline = (discipline: DisciplineCode) => {
+    setExpandedDisciplines((prev) => ({ ...prev, [discipline]: !prev[discipline] }));
   };
 
   const handleDownloadShopDrawing = (row: ShopDrawingRow) => {
@@ -132,6 +159,7 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false, large = 
     createShopDrawing.mutate(
       {
         project,
+        discipline: input.discipline,
         sheetNo: input.no,
         sheetName: input.name,
         author: input.author || null,
@@ -150,6 +178,7 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false, large = 
     addRevision.mutate(
       {
         project,
+        discipline: uploadTarget.discipline,
         sheetNo: uploadTarget.sheet_no,
         sheetName: uploadTarget.sheet_name,
         author: uploadTarget.author,
@@ -419,7 +448,7 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false, large = 
               const isLoading = isDrawingFolder ? shopDrawingsLoading : loading[subFolder];
               const isUploading = uploading[subFolder];
               const error = isDrawingFolder ? shopDrawingsError : errors[subFolder];
-              const itemCount = isDrawingFolder ? groupedShopDrawings.length : folderFiles.length;
+              const itemCount = isDrawingFolder ? totalSheetCount : folderFiles.length;
 
               return (
                 <div key={subFolder} className="flex flex-col gap-1">
@@ -457,20 +486,6 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false, large = 
                         <RefreshCw className={cn(sz.icon3, isLoading ? "animate-spin text-accent" : "")} />
                       </button>
 
-                      {isDrawingFolder && isAdmin && (
-                        <button
-                          className={cn("rounded-radius hover:bg-surface-raised text-muted hover:text-accent transition-colors duration-120 shrink-0", sz.btnPad)}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAddDrawingOpen(true);
-                          }}
-                          title="Add new drawing"
-                          type="button"
-                        >
-                          <Plus className={sz.icon3} />
-                        </button>
-                      )}
-
                       {!isDrawingFolder && (
                         <label className={cn("rounded-radius hover:bg-surface-raised text-muted hover:text-fg transition-colors duration-120 shrink-0 cursor-pointer", sz.btnPad)}>
                           {isUploading ? (
@@ -499,7 +514,7 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false, large = 
                   {/* Files List in Subfolder */}
                   {isExpanded && isDrawingFolder && (
                     <div className={cn("border-l border-border/40 flex flex-col mt-1", sz.indent, sz.gap1_5)}>
-                      {isLoading && groupedShopDrawings.length === 0 && (
+                      {isLoading && totalSheetCount === 0 && (
                         <div className={cn("flex items-center py-2 text-muted", sz.gap2, sz.textXs)}>
                           <Loader2 className={cn(sz.icon3, "animate-spin text-accent")} />
                           <span>Loading shop drawings...</span>
@@ -512,110 +527,160 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false, large = 
                         </div>
                       )}
 
-                      {!isLoading && !error && groupedShopDrawings.length === 0 && (
-                        <div className={cn("text-muted-2 py-2 px-3 italic", sz.textXs)}>
-                          No shop drawings yet — add one from the Register tab.
-                        </div>
-                      )}
-
-                      {groupedShopDrawings.map((sheet) => {
-                        const sheetLabel = `${sheet.sheetNo}_${sheet.sheetName}`;
-                        const isSheetExpanded = expandedSheets[sheet.sheetNo];
-
-                        const latestInSheet = sheet.versions[sheet.versions.length - 1];
+                      {groupedByDiscipline.map((discipline) => {
+                        const isDisciplineExpanded = !!expandedDisciplines[discipline.code];
 
                         return (
-                          <div key={sheet.sheetNo} className="flex flex-col gap-1">
+                          <div key={discipline.code} className="flex flex-col gap-1">
                             <div className={cn("flex items-center justify-between rounded-radius hover:bg-surface-alt/70 transition-colors duration-120 group", sz.rowPad)}>
                               <div
                                 className={cn("flex items-center cursor-pointer select-none font-medium flex-1 min-w-0", sz.gap2, sz.text13)}
-                                onClick={() => toggleSheet(sheet.sheetNo)}
+                                onClick={() => toggleDiscipline(discipline.code)}
+                                title={discipline.label}
                               >
-                                {isSheetExpanded ? (
+                                {isDisciplineExpanded ? (
                                   <ChevronDown className={cn(sz.icon3, "text-muted shrink-0")} />
                                 ) : (
                                   <ChevronRight className={cn(sz.icon3, "text-muted shrink-0")} />
                                 )}
-                                {isSheetExpanded ? (
+                                {isDisciplineExpanded ? (
                                   <FolderOpen className={cn(sz.icon4, "text-accent-2 shrink-0")} />
                                 ) : (
                                   <Folder className={cn(sz.icon4, "text-accent-2 shrink-0")} />
                                 )}
-                                <span className="font-mono truncate">{sheetLabel}</span>
+                                <span className="font-mono truncate">{discipline.code}</span>
                                 <span className={cn("bg-surface-raised rounded-full text-muted border border-border shrink-0", sz.text10, sz.badgePad)}>
-                                  {sheet.versions.length}
+                                  {discipline.sheets.length}
                                 </span>
                               </div>
-
-                              <button
-                                className={cn(
-                                  "rounded-radius transition-colors duration-120 shrink-0",
-                                  sz.btnPad,
-                                  sheet.versions.length >= 2
-                                    ? "hover:bg-surface-raised text-muted hover:text-accent cursor-pointer"
-                                    : "text-muted/40 cursor-not-allowed"
-                                )}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (sheet.versions.length >= 2) setCompareSheet(sheet);
-                                }}
-                                disabled={sheet.versions.length < 2}
-                                title={sheet.versions.length >= 2 ? "Compare revisions" : "Need at least 2 revisions to compare"}
-                                type="button"
-                              >
-                                <GitCompareArrows className={sz.icon3} />
-                              </button>
 
                               {isAdmin && (
                                 <button
                                   className={cn("rounded-radius hover:bg-surface-raised text-muted hover:text-accent transition-colors duration-120 shrink-0", sz.btnPad)}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setUploadTarget(latestInSheet);
+                                    setAddDrawingDiscipline(discipline.code);
                                   }}
-                                  title="Upload PDF / Add Revision"
+                                  title={`Add new drawing in ${discipline.code}`}
                                   type="button"
                                 >
-                                  <Upload className={sz.icon3} />
+                                  <Plus className={sz.icon3} />
                                 </button>
                               )}
                             </div>
 
-                            {isSheetExpanded && (
+                            {isDisciplineExpanded && (
                               <div className={cn("border-l border-border/40 flex flex-col mt-1", sz.indent, sz.gap1_5)}>
-                                {sheet.versions.map((row) => {
-                                  const fileLabel = `${row.sheet_no}-${row.sheet_name}-Rev${row.revision}`;
-                                  return (
-                                    <div
-                                      key={row.id}
-                                      className={cn("flex items-center justify-between rounded-radius hover:bg-surface-raised/40 transition-colors duration-120 group/file border border-transparent hover:border-border/30", sz.rowPad)}
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={() => setViewerTarget(row)}
-                                        className={cn("flex items-center min-w-0 flex-1 text-left cursor-pointer hover:text-accent transition-colors duration-120", sz.gap2)}
-                                        title={`View ${fileLabel}`}
-                                      >
-                                        <FileText className={cn(sz.icon4, "text-muted shrink-0")} />
-                                        <span className={cn("font-medium truncate font-mono", sz.text12_5)}>
-                                          {fileLabel}
-                                        </span>
-                                      </button>
+                                {discipline.sheets.length === 0 && (
+                                  <div className={cn("text-muted-2 py-2 px-3 italic", sz.textXs)}>
+                                    No shop drawings yet in {discipline.code} — add one above or from the Register tab.
+                                  </div>
+                                )}
 
-                                      <div className={cn("flex items-center shrink-0", sz.gap4)}>
-                                        <span className={cn("text-muted-2 font-mono hidden lg:inline", sz.text10)}>
-                                          {formatDate(row.uploaded_at)}
-                                        </span>
+                                {discipline.sheets.map((sheet) => {
+                                  const sheetLabel = `${sheet.sheetNo}_${sheet.sheetName}`;
+                                  const key = sheetKey(discipline.code, sheet.sheetNo);
+                                  const isSheetExpanded = expandedSheets[key];
+
+                                  const latestInSheet = sheet.versions[sheet.versions.length - 1];
+
+                                  return (
+                                    <div key={key} className="flex flex-col gap-1">
+                                      <div className={cn("flex items-center justify-between rounded-radius hover:bg-surface-alt/70 transition-colors duration-120 group", sz.rowPad)}>
+                                        <div
+                                          className={cn("flex items-center cursor-pointer select-none font-medium flex-1 min-w-0", sz.gap2, sz.text13)}
+                                          onClick={() => toggleSheet(key)}
+                                        >
+                                          {isSheetExpanded ? (
+                                            <ChevronDown className={cn(sz.icon3, "text-muted shrink-0")} />
+                                          ) : (
+                                            <ChevronRight className={cn(sz.icon3, "text-muted shrink-0")} />
+                                          )}
+                                          {isSheetExpanded ? (
+                                            <FolderOpen className={cn(sz.icon4, "text-accent-2 shrink-0")} />
+                                          ) : (
+                                            <Folder className={cn(sz.icon4, "text-accent-2 shrink-0")} />
+                                          )}
+                                          <span className="font-mono truncate">{sheetLabel}</span>
+                                          <span className={cn("bg-surface-raised rounded-full text-muted border border-border shrink-0", sz.text10, sz.badgePad)}>
+                                            {sheet.versions.length}
+                                          </span>
+                                        </div>
 
                                         <button
-                                          className={cn("rounded-radius hover:bg-surface-raised text-muted hover:text-accent transition-colors duration-120", sz.btnPad)}
-                                          onClick={() => handleDownloadShopDrawing(row)}
-                                          title="Download file"
+                                          className={cn(
+                                            "rounded-radius transition-colors duration-120 shrink-0",
+                                            sz.btnPad,
+                                            sheet.versions.length >= 2
+                                              ? "hover:bg-surface-raised text-muted hover:text-accent cursor-pointer"
+                                              : "text-muted/40 cursor-not-allowed"
+                                          )}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (sheet.versions.length >= 2) setCompareSheet(sheet);
+                                          }}
+                                          disabled={sheet.versions.length < 2}
+                                          title={sheet.versions.length >= 2 ? "Compare revisions" : "Need at least 2 revisions to compare"}
                                           type="button"
                                         >
-                                          <Download className={sz.icon3} />
+                                          <GitCompareArrows className={sz.icon3} />
                                         </button>
+
+                                        {isAdmin && (
+                                          <button
+                                            className={cn("rounded-radius hover:bg-surface-raised text-muted hover:text-accent transition-colors duration-120 shrink-0", sz.btnPad)}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setUploadTarget(latestInSheet);
+                                            }}
+                                            title="Upload PDF / Add Revision"
+                                            type="button"
+                                          >
+                                            <Upload className={sz.icon3} />
+                                          </button>
+                                        )}
                                       </div>
+
+                                      {isSheetExpanded && (
+                                        <div className={cn("border-l border-border/40 flex flex-col mt-1", sz.indent, sz.gap1_5)}>
+                                          {sheet.versions.map((row) => {
+                                            const fileLabel = `${row.sheet_no}-${row.sheet_name}-Rev${row.revision}`;
+                                            return (
+                                              <div
+                                                key={row.id}
+                                                className={cn("flex items-center justify-between rounded-radius hover:bg-surface-raised/40 transition-colors duration-120 group/file border border-transparent hover:border-border/30", sz.rowPad)}
+                                              >
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setViewerTarget(row)}
+                                                  className={cn("flex items-center min-w-0 flex-1 text-left cursor-pointer hover:text-accent transition-colors duration-120", sz.gap2)}
+                                                  title={`View ${fileLabel}`}
+                                                >
+                                                  <FileText className={cn(sz.icon4, "text-muted shrink-0")} />
+                                                  <span className={cn("font-medium truncate font-mono", sz.text12_5)}>
+                                                    {fileLabel}
+                                                  </span>
+                                                </button>
+
+                                                <div className={cn("flex items-center shrink-0", sz.gap4)}>
+                                                  <span className={cn("text-muted-2 font-mono hidden lg:inline", sz.text10)}>
+                                                    {formatDate(row.uploaded_at)}
+                                                  </span>
+
+                                                  <button
+                                                    className={cn("rounded-radius hover:bg-surface-raised text-muted hover:text-accent transition-colors duration-120", sz.btnPad)}
+                                                    onClick={() => handleDownloadShopDrawing(row)}
+                                                    title="Download file"
+                                                    type="button"
+                                                  >
+                                                    <Download className={sz.icon3} />
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
                                     </div>
                                   );
                                 })}
@@ -699,7 +764,13 @@ export function ProjectFolders({ project, focusFolder, isAdmin = false, large = 
         )}
       </div>
 
-      <AddDrawingDialog isOpen={addDrawingOpen} onClose={() => setAddDrawingOpen(false)} onAdd={handleAddDrawing} />
+      <AddDrawingDialog
+        key={addDrawingDiscipline ?? "closed"}
+        isOpen={!!addDrawingDiscipline}
+        onClose={() => setAddDrawingDiscipline(null)}
+        onAdd={handleAddDrawing}
+        lockedDiscipline={addDrawingDiscipline ?? undefined}
+      />
 
       <UploadPdfDialog
         isOpen={!!uploadTarget}

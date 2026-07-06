@@ -1,11 +1,13 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Plus, FileUp } from "lucide-react";
+import { DISCIPLINES, type DisciplineCode } from "@/react-components/features/shop-drawings/disciplines";
 
 export interface NewDrawingInput {
   no: string;
   name: string;
   author: string;
+  discipline: DisciplineCode;
   pdfFile: File;
 }
 
@@ -13,12 +15,15 @@ interface AddDrawingDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (drawing: NewDrawingInput) => void;
+  /** When set, the discipline is pre-filled and locked (opened from a discipline folder row). */
+  lockedDiscipline?: DisciplineCode;
 }
 
-export function AddDrawingDialog({ isOpen, onClose, onAdd }: AddDrawingDialogProps) {
+export function AddDrawingDialog({ isOpen, onClose, onAdd, lockedDiscipline }: AddDrawingDialogProps) {
   const [no, setNo] = useState("");
   const [name, setName] = useState("");
   const [author, setAuthor] = useState("");
+  const [discipline, setDiscipline] = useState<DisciplineCode | "">(lockedDiscipline ?? "");
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -29,6 +34,7 @@ export function AddDrawingDialog({ isOpen, onClose, onAdd }: AddDrawingDialogPro
     setNo("");
     setName("");
     setAuthor("");
+    setDiscipline(lockedDiscipline ?? "");
     setPdfFile(null);
     setFormError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -51,6 +57,10 @@ export function AddDrawingDialog({ isOpen, onClose, onAdd }: AddDrawingDialogPro
 
     const trimmedNo = no.trim();
     const trimmedName = name.trim();
+    if (!discipline) {
+      setFormError("Discipline is required.");
+      return;
+    }
     if (!trimmedNo || !trimmedName) {
       setFormError("Sheet number and name are required.");
       return;
@@ -68,6 +78,7 @@ export function AddDrawingDialog({ isOpen, onClose, onAdd }: AddDrawingDialogPro
       no: trimmedNo,
       name: trimmedName,
       author: author.trim(),
+      discipline,
       pdfFile,
     });
     resetAndClose();
@@ -98,6 +109,23 @@ export function AddDrawingDialog({ isOpen, onClose, onAdd }: AddDrawingDialogPro
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3 p-4 overflow-y-auto">
+          <label className="flex flex-col gap-1 text-xs text-muted">
+            Discipline *
+            <select
+              value={discipline}
+              onChange={(e) => setDiscipline(e.target.value as DisciplineCode)}
+              disabled={!!lockedDiscipline}
+              className="h-9 px-3 text-xs bg-surface-alt border border-border rounded-radius text-fg focus:outline-none focus:border-accent transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {!lockedDiscipline && <option value="" disabled>Select discipline...</option>}
+              {DISCIPLINES.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {d.value} — {d.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <label className="flex flex-col gap-1 text-xs text-muted">
             Sheet Number *
             <input

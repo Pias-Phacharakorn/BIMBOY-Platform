@@ -1,17 +1,23 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import type { AppProject } from "@/types";
+import type { DisciplineCode } from "./disciplines";
 
 export type ShopDrawingRow = Database["public"]["Tables"]["shop_drawings"]["Row"];
 
 const BUCKET = "project-files";
 
-function sheetFolderPath(project: AppProject, sheetNo: string): string {
-  return `${project.projectnumber}_${project.projectName}/04_Drawing/${sheetNo}`;
+function sheetFolderPath(project: AppProject, discipline: DisciplineCode, sheetNo: string): string {
+  return `${project.projectnumber}_${project.projectName}/04_Drawing/${discipline}/${sheetNo}`;
 }
 
-function buildPdfPath(project: AppProject, sheetNo: string, revision: number): string {
-  return `${sheetFolderPath(project, sheetNo)}/Rev${revision}_${Date.now()}.pdf`;
+function buildPdfPath(
+  project: AppProject,
+  discipline: DisciplineCode,
+  sheetNo: string,
+  revision: number
+): string {
+  return `${sheetFolderPath(project, discipline, sheetNo)}/Rev${revision}_${Date.now()}.pdf`;
 }
 
 async function uploadThenInsert(
@@ -62,6 +68,7 @@ export const shopDrawingsService = {
 
   async createShopDrawing(args: {
     project: AppProject;
+    discipline: DisciplineCode;
     sheetNo: string;
     sheetName: string;
     author: string | null;
@@ -69,9 +76,10 @@ export const shopDrawingsService = {
     createdBy: string | null;
   }): Promise<ShopDrawingRow> {
     const revision = 0;
-    const pdfPath = buildPdfPath(args.project, args.sheetNo, revision);
+    const pdfPath = buildPdfPath(args.project, args.discipline, args.sheetNo, revision);
     return uploadThenInsert(pdfPath, args.pdfFile, {
       project_id: args.project.id,
+      discipline: args.discipline,
       sheet_no: args.sheetNo,
       sheet_name: args.sheetName,
       author: args.author,
@@ -83,6 +91,7 @@ export const shopDrawingsService = {
 
   async addRevision(args: {
     project: AppProject;
+    discipline: DisciplineCode;
     sheetNo: string;
     sheetName: string;
     author: string | null;
@@ -90,9 +99,10 @@ export const shopDrawingsService = {
     pdfFile: File;
     createdBy: string | null;
   }): Promise<ShopDrawingRow> {
-    const pdfPath = buildPdfPath(args.project, args.sheetNo, args.revision);
+    const pdfPath = buildPdfPath(args.project, args.discipline, args.sheetNo, args.revision);
     return uploadThenInsert(pdfPath, args.pdfFile, {
       project_id: args.project.id,
+      discipline: args.discipline,
       sheet_no: args.sheetNo,
       sheet_name: args.sheetName,
       author: args.author,

@@ -401,6 +401,7 @@ export type Database = {
         Row: {
           author: string | null
           created_by: string | null
+          discipline: Database["public"]["Enums"]["drawing_discipline"]
           id: string
           pdf_path: string
           project_id: string
@@ -412,6 +413,7 @@ export type Database = {
         Insert: {
           author?: string | null
           created_by?: string | null
+          discipline: Database["public"]["Enums"]["drawing_discipline"]
           id?: string
           pdf_path: string
           project_id: string
@@ -423,6 +425,7 @@ export type Database = {
         Update: {
           author?: string | null
           created_by?: string | null
+          discipline?: Database["public"]["Enums"]["drawing_discipline"]
           id?: string
           pdf_path?: string
           project_id?: string
@@ -548,6 +551,15 @@ export type Database = {
       clash_source_format: "navisworks" | "bcf" | "manual"
       clash_status: "new" | "unresolved" | "resolved" | "approved_as_note"
       clash_type: "major" | "minor" | "regulation"
+      drawing_discipline:
+        | "01_AR"
+        | "02_ST"
+        | "03_LA"
+        | "04_CV"
+        | "05_AC"
+        | "06_EE"
+        | "07_FP"
+        | "08_SN"
       hub_role: "hub_admin" | "hub_member"
       project_role: "project_admin" | "project_member"
       project_status: "bidding" | "active" | "finished"
@@ -681,6 +693,16 @@ export const Constants = {
       clash_source_format: ["navisworks", "bcf", "manual"],
       clash_status: ["new", "unresolved", "resolved", "approved_as_note"],
       clash_type: ["major", "minor", "regulation"],
+      drawing_discipline: [
+        "01_AR",
+        "02_ST",
+        "03_LA",
+        "04_CV",
+        "05_AC",
+        "06_EE",
+        "07_FP",
+        "08_SN",
+      ],
       hub_role: ["hub_admin", "hub_member"],
       project_role: ["project_admin", "project_member"],
       project_status: ["bidding", "active", "finished"],

@@ -1,10 +1,12 @@
 import { shopDrawingsService, type ShopDrawingRow } from "./shopDrawingsService";
+import type { DisciplineCode } from "./disciplines";
 
 export interface ShopDrawing {
   id: string;
   no: string;
   name: string;
   sheetId: string;
+  discipline: DisciplineCode;
   currentRevision: number;
   isLatest: boolean;
   author: string | null;
@@ -27,6 +29,7 @@ export function mapShopDrawingRow(row: ShopDrawingRow): ShopDrawing {
     no: row.sheet_no,
     name: row.sheet_name,
     sheetId: row.sheet_no,
+    discipline: row.discipline,
     currentRevision: row.revision,
     isLatest: false,
     author: row.author,

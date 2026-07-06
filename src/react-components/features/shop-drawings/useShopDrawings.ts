@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { shopDrawingsService } from "./shopDrawingsService";
 import type { AppProject } from "@/types";
+import type { DisciplineCode } from "./disciplines";
 
 export const shopDrawingsKeys = {
   all: ["shop_drawings"] as const,
@@ -21,6 +22,7 @@ export function useCreateShopDrawing() {
   return useMutation({
     mutationFn: (args: {
       project: AppProject;
+      discipline: DisciplineCode;
       sheetNo: string;
       sheetName: string;
       author: string | null;
@@ -38,6 +40,7 @@ export function useAddShopDrawingRevision() {
   return useMutation({
     mutationFn: (args: {
       project: AppProject;
+      discipline: DisciplineCode;
       sheetNo: string;
       sheetName: string;
       author: string | null;
