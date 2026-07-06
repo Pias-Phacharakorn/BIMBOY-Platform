@@ -16,12 +16,13 @@ export function PdfSliderCompare({ imageA, imageB, zoomLevel, height }: PdfSlide
   const panStart = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
 
   const updateSlider = useCallback((clientX: number) => {
-    const container = containerRef.current;
     const inner = innerRef.current;
-    if (!container || !inner) return;
-    const rect = container.getBoundingClientRect();
-    const xInContent = clientX - rect.left + container.scrollLeft;
-    const pct = Math.max(0, Math.min(100, (xInContent / inner.offsetWidth) * 100));
+    if (!inner) return;
+    // Measure from the inner content's own edge rather than the container's —
+    // once the content is centered (zoomed out), its left edge no longer
+    // lines up with the container's scrollable-area origin.
+    const rect = inner.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
     setSliderPos(pct);
   }, []);
 
@@ -80,7 +81,7 @@ export function PdfSliderCompare({ imageA, imageB, zoomLevel, height }: PdfSlide
   return (
     <div
       ref={containerRef}
-      className="relative overflow-auto border border-border rounded-radius bg-surface-alt select-none cursor-grab active:cursor-grabbing"
+      className="relative overflow-auto flex flex-col border border-border rounded-radius bg-surface-alt select-none cursor-grab active:cursor-grabbing"
       style={{ height: height || "60vh" }}
       onPointerDown={handlePanPointerDown}
       onPointerMove={handlePanPointerMove}
@@ -92,7 +93,7 @@ export function PdfSliderCompare({ imageA, imageB, zoomLevel, height }: PdfSlide
         <span className="bg-surface/80 backdrop-blur-sm text-[10px] px-2 py-1 rounded-radius font-semibold text-fg">Older</span>
       </div>
 
-      <div ref={innerRef} className="relative" style={{ width: `${zoomLevel * 100}%` }}>
+      <div ref={innerRef} className="relative shrink-0 m-auto" style={{ width: `${zoomLevel * 100}%` }}>
         <img src={imageB} alt="Older revision" className="w-full block" draggable={false} />
 
         <div className="absolute inset-0 overflow-hidden" style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}>
