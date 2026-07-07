@@ -202,14 +202,15 @@ Always use `@/*` alias. Never relative `../../../` paths. → example in `.agent
 - See **🤝 Multi-Agent Workflow** below. Gemini does not write feature code directly — it specs the task, delegates to Claude Code CLI, then reviews the diff.
 - Exception: small inline fixes to Claude's diff (typo, missing import, minor logic slip) may be patched directly by Gemini.
 
-**4. Refine — review & simplify** _(automatic, non-trivial changes only)_
-- Skip both passes for genuinely trivial edits (typo, rename, import fix, single-line tweak, config bump) — and say so in one line so it's visible.
-- Otherwise, before presenting:
+**4. Refine — review & simplify** _(ask after implementation, non-trivial changes only)_
+- Skip both passes for genuinely trivial edits (typo, rename, import fix, single-line tweak, config bump) — no need to ask, just say so in one line so it's visible.
+- Otherwise, after implementation, **ask the developer** whether to run review + simplify before presenting the result.
+- If yes:
   1. **Code-review** via a **fresh sub-agent** (`code-review` skill) — independent eyes that did not write the code
   2. **Apply confirmed findings**; report any deliberately not acted on + why
   3. **Simplify** inline (`simplify` skill) on the now-correct code
   4. **Light behavior-preservation check** after simplify — verify nothing changed semantically (not a full second review)
-- No extra approval gate — this feeds straight into the segmented present in step 6.
+- If no: present the implementation as-is per step 6.
 
 **5. Uncertain?**
 - Ask one concrete question with a recommended option
