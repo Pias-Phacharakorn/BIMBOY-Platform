@@ -15,9 +15,10 @@ import type { AppProject } from "@/types";
 interface ShopDrawingTableProps {
   project: AppProject;
   isAdmin: boolean;
+  initialDisciplineFilter?: DisciplineCode;
 }
 
-export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
+export function ShopDrawingTable({ project, isAdmin, initialDisciplineFilter }: ShopDrawingTableProps) {
   const { user } = useAuth();
   const { data: rows, isLoading } = useShopDrawings(project.id);
   const createShopDrawing = useCreateShopDrawing();
@@ -29,7 +30,7 @@ export function ShopDrawingTable({ project, isAdmin }: ShopDrawingTableProps) {
   const [sheetNumberFilter, setSheetNumberFilter] = useState("");
   const [sheetNameFilter, setSheetNameFilter] = useState("");
   const [authorFilter, setAuthorFilter] = useState("");
-  const [disciplineFilter, setDisciplineFilter] = useState<DisciplineCode | "">("");
+  const [disciplineFilter, setDisciplineFilter] = useState<DisciplineCode | "">(initialDisciplineFilter ?? "");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [note, setNote] = useState<string | null>(null);
 

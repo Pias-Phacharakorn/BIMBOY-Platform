@@ -252,3 +252,100 @@ one level deeper each time.
   requirement doesn't apply to it.
 
 See `.agents/docs/drawing.md` for the Drawing feature guide this affects.
+
+## Folder tab restyle to match "Document Register" mockup
+
+A Claude-artifact HTML/CSS/JS mockup (a static prototype with fabricated data,
+no backend) was given as the visual target for `DrawingFolderExplorer.tsx`.
+Grilled against the current domain model to separate "restyle" from
+"behavior change," since the mockup disagrees with the real app in a few
+places.
+
+### Decisions
+
+- **Scope is visual/interaction-placement only, not behavior.** Where the
+  mockup's flow conflicts with an already-shipped, deliberately-designed real
+  feature, the real behavior wins:
+  - Compare Revisions stays the existing PDF slider/reveal visual diff
+    (`CompareDrawingsModal.tsx` + `PdfSliderCompare.tsx`) — **not** replaced
+    by the mockup's plain Author/Reason/Last-updated metadata diff table.
+  - Upload New Revision keeps auto-computed revision numbers and
+    sheet-inherited author (DB-enforced via the `(project_id, sheet_no,
+    revision)` unique constraint) — **no** manual "Revision Code" text field
+    or "Author Email" field is added, despite the mockup showing both.
+  - The revision-level kebab menu stays **View + Download only** — the
+    mockup's "Edit Metadata" and "Delete Revision" items are not added; no
+    edit-metadata concept exists anywhere in this feature, and delete stays
+    exclusive to the Register tab as already decided.
+- **"+ Add Drawing" is kept, not dropped**, even though the mockup's
+  discipline-selected toolbar only shows Export + Drawing Register. It's the
+  only entry point for creating a new sheet; removing it would be a
+  regression, not a restyle. Toolbar becomes `Export | Drawing Register | +
+  Add Drawing` when a discipline is selected.
+- **"Drawing Register" button reuses the existing Register tab** (switches
+  `DrawingView`'s active tab, optionally scoped/filtered to the selected
+  discipline) instead of building a new standalone summary modal — the
+  mockup's modal would functionally duplicate `ShopDrawingTable.tsx`.
+- **Tree collapses to 2 levels** (Discipline → Drawing), reversing the
+  "discipline → sheet → revision" 3-level tree from the section above.
+  Revision leaves are dropped from the sidebar; revisions remain fully
+  reachable via the right-pane table's rows and kebab (View/Download). This
+  intentionally re-reverses a decision that was itself a reversal — matching
+  the mockup's shallower tree was judged worth it since nothing becomes
+  unreachable, only relocated.
+- **Discipline-level table drops the Author column** (ambiguous when a row
+  aggregates multiple revisions with potentially different authors) but
+  **keeps the latest-revision label** (`Version` = "Rev N") rather than
+  switching to the mockup's bare revision **count** — strictly more
+  informative for the same rendering cost. Columns: `Name | Version (Rev N) |
+  Last updated` + kebab.
+- **UI copy says "Drawing," not "Sheet."** The mockup's user-facing term for
+  the folder-level entity ("Drawing," e.g. sidebar rows, empty states,
+  "Drawing Register") is adopted in all UI text. Internal code naming
+  (`Sheet*`, `sheetNo`, `SheetBucket`) is **not** renamed — copy-only change,
+  no refactor.
+- **New header-level "Compare Revision" button** when a drawing is selected
+  (disabled if <2 revisions, same rule as today), opening the existing
+  `CompareDrawingsModal` scoped to that drawing. The existing kebab "Compare
+  Revisions" action on discipline-view sheet rows is **kept alongside it**,
+  not replaced — an additional entry point, not a relocation.
+- **Discipline list uses the real 8 codes** (`01_AR`...`08_SN`), not the
+  mockup's incomplete sample of 7 (missing `08_SN`) — the omission was
+  presumably just illustrative mock data, not intentional.
+
+See `.agents/docs/drawing.md` (mirrored `.claude/docs/drawing.md`) for the
+Drawing feature guide — update both once this is implemented, per
+`CLAUDE.md`'s "Keep the Domain Guides in sync" rule.
+
+## Folder tab — discipline-view row click drills in instead of opening the PDF
+
+The original "Row click: clicking a sheet row opens the PDF viewer directly"
+decision (see the tree + table layout section above) was made when the tree
+stopped at the discipline level and the table was the *only* way to reach a
+sheet — there was no drill-down to select into. Once sheet/drawing selection
+was later added to both the tree and the table, this row-click behavior was
+never revisited, leaving a stale inconsistency: the sidebar's drawing row
+drills in on click, but the table's equivalent row for the same drawing
+opens a PDF instead.
+
+### Decisions
+
+- **Scope**: only the **discipline-selected table**'s row click changes
+  (rows = drawings/sub-folders). The **drawing-selected table**'s row click
+  (rows = individual revisions) is unchanged and keeps opening the PDF
+  viewer directly — a revision is a leaf, nothing to drill into.
+- **New behavior**: clicking a discipline-view row calls `selectSheet(discipline,
+  sheetNo)` (the same function the sidebar's drawing row already uses)
+  instead of `setViewerTarget(latest)`. This switches the table to that
+  drawing's revision list, mirroring the sidebar's own click behavior.
+- **"View" stays in the kebab, unchanged** — it becomes the primary
+  direct-to-PDF entry point from the discipline-selected table now that the
+  row itself no longer does that. Not redundant; it's the intended
+  discoverable affordance the original decision already called out.
+- **No visual affordance change**: the row keeps its existing
+  `cursor-pointer` + hover-highlight styling, matching the sidebar's drawing
+  rows (which also give no special "drill in" cue beyond hover). Keeps the
+  diff minimal.
+
+See `.agents/docs/drawing.md` (mirrored `.claude/docs/drawing.md`) for the
+Drawing feature guide — update both once this is implemented.

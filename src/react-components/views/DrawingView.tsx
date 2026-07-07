@@ -4,6 +4,7 @@ import { AppShell, WorkspaceHeader } from "@/react-components/components/layout"
 import { useProject, useIsProjectAdmin } from "@/react-components/features/projects/useProjects";
 import { useAuth } from "@/react-components/features/auth/useAuth";
 import { ShopDrawingTable, DrawingFolderExplorer } from "@/react-components/features/shop-drawings";
+import type { DisciplineCode } from "@/react-components/features/shop-drawings/disciplines";
 
 export function DrawingView() {
   const { projectId } = useParams({ strict: false });
@@ -11,6 +12,12 @@ export function DrawingView() {
   const { user, profile } = useAuth();
   const showSettings = useIsProjectAdmin(project?.id, user?.id, profile?.hub_role === "hub_admin");
   const [activeTab, setActiveTab] = useState("Folder");
+  const [registerDisciplineFilter, setRegisterDisciplineFilter] = useState<DisciplineCode | undefined>(undefined);
+
+  const handleOpenRegister = (discipline?: DisciplineCode) => {
+    setRegisterDisciplineFilter(discipline);
+    setActiveTab("Register");
+  };
 
   if (isLoading) {
     return (
@@ -44,10 +51,12 @@ export function DrawingView() {
       <div className="relative flex-1 min-w-0 overflow-auto bg-gradient-to-b from-[oklch(12%_0.014_255)] to-[oklch(9.8%_0.012_255)]">
         {activeTab === "Folder" && (
           <div className="flex flex-col gap-6 w-full p-6 md:p-8">
-            <DrawingFolderExplorer project={project} isAdmin={showSettings} />
+            <DrawingFolderExplorer project={project} isAdmin={showSettings} onOpenRegister={handleOpenRegister} />
           </div>
         )}
-        {activeTab === "Register" && <ShopDrawingTable project={project} isAdmin={showSettings} />}
+        {activeTab === "Register" && (
+          <ShopDrawingTable project={project} isAdmin={showSettings} initialDisciplineFilter={registerDisciplineFilter} />
+        )}
       </div>
     </AppShell>
   );

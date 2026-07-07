@@ -3,7 +3,6 @@ import { format } from "date-fns";
 import {
   Folder,
   FolderOpen,
-  FileText,
   Plus,
   Search,
   Download,
@@ -13,6 +12,7 @@ import {
   ChevronRight,
   ChevronDown,
   Loader2,
+  ListTree,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AppProject } from "@/types";
@@ -30,6 +30,7 @@ import type { DisciplineCode } from "./disciplines";
 interface DrawingFolderExplorerProps {
   project: AppProject;
   isAdmin: boolean;
+  onOpenRegister: (discipline?: DisciplineCode) => void;
 }
 
 type Selection =
@@ -51,12 +52,11 @@ function downloadCsv(filename: string, headers: string[], rows: (string | number
   URL.revokeObjectURL(url);
 }
 
-export function DrawingFolderExplorer({ project, isAdmin }: DrawingFolderExplorerProps) {
+export function DrawingFolderExplorer({ project, isAdmin, onOpenRegister }: DrawingFolderExplorerProps) {
   const { groupedByDiscipline, loading, error } = useGroupedShopDrawings(project.id);
   const { handleAddDrawing, handleUploadRevision, handleDownload, authorEmail } = useShopDrawingActions(project);
 
   const [expandedDisciplines, setExpandedDisciplines] = useState<Set<DisciplineCode>>(new Set());
-  const [expandedSheets, setExpandedSheets] = useState<Set<string>>(new Set());
   const [selection, setSelection] = useState<Selection | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [addDrawingOpen, setAddDrawingOpen] = useState(false);
@@ -76,13 +76,6 @@ export function DrawingFolderExplorer({ project, isAdmin }: DrawingFolderExplore
   };
 
   const selectSheet = (discipline: DisciplineCode, sheetNo: string) => {
-    const key = sheetKey(discipline, sheetNo);
-    setExpandedSheets((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
     setSelection({ level: "sheet", discipline, sheetNo });
     setSearchQuery("");
   };
@@ -122,7 +115,7 @@ export function DrawingFolderExplorer({ project, isAdmin }: DrawingFolderExplore
 
   return (
     <div className="flex gap-4 w-full h-[70vh] min-h-[420px] text-fg">
-      {/* Tree: discipline -> sheet -> revision */}
+      {/* Tree: discipline -> drawing (revisions surface in the table on the right) */}
       <div className="w-72 shrink-0 border border-border bg-surface/94 rounded-radius overflow-y-auto flex flex-col gap-0.5 p-2">
         <div className="px-2 py-1.5 text-[11px] font-bold tracking-wider uppercase text-muted">Disciplines</div>
         {groupedByDiscipline.map((discipline) => {
@@ -136,10 +129,11 @@ export function DrawingFolderExplorer({ project, isAdmin }: DrawingFolderExplore
                 onClick={() => selectDiscipline(discipline.code)}
                 title={discipline.label}
                 className={cn(
-                  "flex items-center gap-1.5 px-2 py-2 rounded-radius text-left text-[13px] font-mono transition-colors duration-120 cursor-pointer",
+                  "relative flex items-center gap-1.5 px-2 py-2 rounded-radius text-left text-[13px] font-mono transition-colors duration-120 cursor-pointer",
                   isDisciplineSelected ? "bg-accent/15 text-accent font-semibold" : "hover:bg-surface-alt text-fg"
                 )}
               >
+                {isDisciplineSelected && <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-accent rounded-full" />}
                 {isDisciplineExpanded ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
                 {isDisciplineExpanded ? <FolderOpen className="w-4 h-4 shrink-0" /> : <Folder className="w-4 h-4 shrink-0" />}
                 <span className="flex-1 truncate">{discipline.code}</span>
@@ -152,46 +146,27 @@ export function DrawingFolderExplorer({ project, isAdmin }: DrawingFolderExplore
                 <div className="ml-3 pl-2 border-l border-border/40 flex flex-col gap-0.5 mt-0.5">
                   {discipline.sheets.map((sheet) => {
                     const key = sheetKey(discipline.code, sheet.sheetNo);
-                    const isSheetExpanded = expandedSheets.has(key);
                     const isSheetSelected =
                       selection?.level === "sheet" && selection.discipline === discipline.code && selection.sheetNo === sheet.sheetNo;
 
                     return (
-                      <div key={key} className="flex flex-col">
-                        <button
-                          type="button"
-                          onClick={() => selectSheet(discipline.code, sheet.sheetNo)}
-                          className={cn(
-                            "flex items-center gap-1.5 px-2 py-1.5 rounded-radius text-left text-[12px] font-mono transition-colors duration-120 cursor-pointer min-w-0",
-                            isSheetSelected ? "bg-accent/15 text-accent font-semibold" : "hover:bg-surface-alt text-fg"
-                          )}
-                        >
-                          {isSheetExpanded ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
-                          {isSheetExpanded ? <FolderOpen className="w-3.5 h-3.5 shrink-0" /> : <Folder className="w-3.5 h-3.5 shrink-0" />}
-                          <span className="flex-1 truncate">{sheet.sheetNo}_{sheet.sheetName}</span>
-                          <span className="text-[9px] px-1 py-0.5 rounded-full bg-surface-raised border border-border text-muted shrink-0">
-                            {sheet.versions.length}
-                          </span>
-                        </button>
-
-                        {isSheetExpanded && (
-                          <div className="ml-3 pl-2 border-l border-border/40 flex flex-col gap-0.5 mt-0.5">
-                            {[...sheet.versions]
-                              .sort((a, b) => b.revision - a.revision)
-                              .map((row) => (
-                                <button
-                                  key={row.id}
-                                  type="button"
-                                  onClick={() => setViewerTarget(row)}
-                                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-radius text-left text-[11.5px] font-mono text-muted hover:bg-surface-alt hover:text-fg transition-colors duration-120 cursor-pointer"
-                                >
-                                  <FileText className="w-3.5 h-3.5 shrink-0" />
-                                  <span className="truncate">Rev {row.revision}</span>
-                                </button>
-                              ))}
-                          </div>
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => selectSheet(discipline.code, sheet.sheetNo)}
+                        title={`${sheet.sheetNo}_${sheet.sheetName}`}
+                        className={cn(
+                          "relative flex items-center gap-1.5 px-2 py-1.5 rounded-radius text-left text-[12px] font-mono transition-colors duration-120 cursor-pointer min-w-0",
+                          isSheetSelected ? "bg-accent/15 text-accent font-semibold" : "hover:bg-surface-alt text-fg"
                         )}
-                      </div>
+                      >
+                        {isSheetSelected && <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-accent rounded-full" />}
+                        <Folder className="w-3.5 h-3.5 shrink-0" />
+                        <span className="flex-1 truncate">{sheet.sheetNo}_{sheet.sheetName}</span>
+                        <span className="text-[9px] px-1 py-0.5 rounded-full bg-surface-raised border border-border text-muted shrink-0">
+                          {sheet.versions.length}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>
@@ -222,7 +197,7 @@ export function DrawingFolderExplorer({ project, isAdmin }: DrawingFolderExplore
                   <input
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search sheets..."
+                    placeholder="Search drawings..."
                     className="w-full h-8 pl-8 pr-3 text-xs bg-surface-alt border border-border rounded-radius text-fg placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
                   />
                 </div>
@@ -234,6 +209,15 @@ export function DrawingFolderExplorer({ project, isAdmin }: DrawingFolderExplore
                 >
                   <FileDown className="w-3.5 h-3.5" />
                   Export
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenRegister(selectedDisciplineGroup.code)}
+                  title="Open the full revision Register, filtered to this discipline"
+                  className="inline-flex items-center gap-1.5 min-h-8 px-3 py-1.5 rounded-radius border border-border hover:bg-surface-alt text-fg text-xs font-semibold transition-all cursor-pointer"
+                >
+                  <ListTree className="w-3.5 h-3.5" />
+                  Drawing Register
                 </button>
                 {isAdmin && (
                   <button
@@ -253,7 +237,6 @@ export function DrawingFolderExplorer({ project, isAdmin }: DrawingFolderExplore
                 <thead>
                   <tr className="border-b border-border-strong">
                     <th className="sticky top-0 z-1 px-4 py-3 bg-bg border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Name</th>
-                    <th className="sticky top-0 z-1 px-4 py-3 bg-bg border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Author</th>
                     <th className="sticky top-0 z-1 px-4 py-3 bg-bg border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Version</th>
                     <th className="sticky top-0 z-1 px-4 py-3 bg-bg border-b border-border-strong text-muted text-[11px] font-bold tracking-wider text-left uppercase">Last updated</th>
                     <th className="sticky top-0 z-1 w-12 px-4 py-3 bg-bg border-b border-border-strong" />
@@ -262,7 +245,7 @@ export function DrawingFolderExplorer({ project, isAdmin }: DrawingFolderExplore
                 <tbody>
                   {loading && selectedDisciplineGroup.sheets.length === 0 && (
                     <tr>
-                      <td className="px-4 py-8 text-muted text-sm text-center" colSpan={5}>
+                      <td className="px-4 py-8 text-muted text-sm text-center" colSpan={4}>
                         <div className="flex items-center justify-center gap-2">
                           <Loader2 className="w-4 h-4 animate-spin text-accent" />
                           <span>Loading shop drawings...</span>
@@ -273,7 +256,7 @@ export function DrawingFolderExplorer({ project, isAdmin }: DrawingFolderExplore
 
                   {error && (
                     <tr>
-                      <td className="px-4 py-3" colSpan={5}>
+                      <td className="px-4 py-3" colSpan={4}>
                         <div className="text-status-danger py-1 px-2 border border-status-danger/20 bg-status-danger/10 rounded-radius text-xs">
                           {error}
                         </div>
@@ -283,10 +266,10 @@ export function DrawingFolderExplorer({ project, isAdmin }: DrawingFolderExplore
 
                   {!loading && !error && filteredSheets.length === 0 && (
                     <tr>
-                      <td className="px-4 py-8 text-muted text-sm text-center italic" colSpan={5}>
+                      <td className="px-4 py-8 text-muted text-sm text-center italic" colSpan={4}>
                         {selectedDisciplineGroup.sheets.length === 0
-                          ? `No shop drawings yet in ${selectedDisciplineGroup.code} — add one above.`
-                          : "No sheets match your search."}
+                          ? `No drawings yet in ${selectedDisciplineGroup.code} — add one above.`
+                          : "No drawings match your search."}
                       </td>
                     </tr>
                   )}
@@ -322,10 +305,9 @@ export function DrawingFolderExplorer({ project, isAdmin }: DrawingFolderExplore
                       <tr
                         key={key}
                         className="hover:bg-surface-alt transition-colors duration-120 border-b border-border/60 cursor-pointer"
-                        onClick={() => setViewerTarget(latest)}
+                        onClick={() => selectSheet(selectedDisciplineGroup.code, sheet.sheetNo)}
                       >
                         <td className="px-4 py-3 font-mono font-semibold truncate max-w-0">{`${sheet.sheetNo}_${sheet.sheetName}`}</td>
-                        <td className="px-4 py-3 text-muted">{latest.author || "-"}</td>
                         <td className="px-4 py-3 font-mono font-semibold text-accent">Rev {latest.revision}</td>
                         <td className="px-4 py-3 font-mono text-xs text-muted">
                           {format(new Date(latest.uploaded_at), "yyyy-MM-dd HH:mm")}
@@ -367,6 +349,16 @@ export function DrawingFolderExplorer({ project, isAdmin }: DrawingFolderExplore
                 >
                   <FileDown className="w-3.5 h-3.5" />
                   Export
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCompareSheet(selectedSheet)}
+                  disabled={selectedSheet.versions.length < 2}
+                  title={selectedSheet.versions.length < 2 ? "Need at least 2 revisions to compare" : "Compare two revisions"}
+                  className="inline-flex items-center gap-1.5 min-h-8 px-3 py-1.5 rounded-radius border border-border hover:bg-surface-alt text-fg text-xs font-semibold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                >
+                  <GitCompareArrows className="w-3.5 h-3.5" />
+                  Compare Revision
                 </button>
                 {isAdmin && (
                   <button
