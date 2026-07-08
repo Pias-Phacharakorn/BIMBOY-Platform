@@ -322,6 +322,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          auto_load_cloud_models: boolean
           clash_folder_path: string | null
           created_at: string
           created_by: string | null
@@ -344,6 +345,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_load_cloud_models?: boolean
           clash_folder_path?: string | null
           created_at?: string
           created_by?: string | null
@@ -366,6 +368,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_load_cloud_models?: boolean
           clash_folder_path?: string | null
           created_at?: string
           created_by?: string | null
@@ -465,6 +468,7 @@ export type Database = {
     Views: {
       active_projects: {
         Row: {
+          auto_load_cloud_models: boolean | null
           clash_folder_path: string | null
           created_at: string | null
           created_by: string | null
@@ -486,6 +490,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          auto_load_cloud_models?: boolean | null
           clash_folder_path?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -507,6 +512,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          auto_load_cloud_models?: boolean | null
           clash_folder_path?: string | null
           created_at?: string | null
           created_by?: string | null

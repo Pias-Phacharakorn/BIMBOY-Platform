@@ -349,3 +349,51 @@ opens a PDF instead.
 
 See `.agents/docs/drawing.md` (mirrored `.claude/docs/drawing.md`) for the
 Drawing feature guide — update both once this is implemented.
+
+## Cloud Models — per-project auto-load toggle
+
+Adding an on/off switch for `useAutoLoadCloudModels`
+(`src/react-components/features/cloud-models/useAutoLoadCloudModels.ts`),
+which today runs unconditionally in `ModelsView.tsx` and auto-loads every
+`.frag` file under a project's `02_frag` storage folder as soon as the
+project opens. No existing setting controls this — it's currently always on
+for every project.
+
+### Decisions
+
+- **Toggle location**: right side of the `CloudModelModal.tsx` header (the
+  "Cloud Models" dialog opened from `ToolbarLoadModel.tsx`'s dropdown), next
+  to the existing close button — the only dedicated cloud-models UI surface
+  today.
+- **Scope: per-project, not per-user.** Auto-load affects the shared viewer
+  experience for everyone opening that project, so it's a project-level
+  setting, not a personal preference — stored on the project row, not on
+  `profiles` or client-local state.
+- **Permission**: gated by the existing `useIsProjectAdmin` check
+  (`useProjects.ts`) — same gate already used for the Settings panel. Only a
+  project admin or hub admin can flip it.
+- **Non-admins**: see the toggle rendered but **disabled** (read-only) — they
+  can see the current state without changing it, not hidden entirely.
+- **Storage**: new column `auto_load_cloud_models boolean NOT NULL DEFAULT
+  true` on the `projects` table. Default `true` makes this purely additive —
+  no existing project's behavior changes until an admin explicitly opts out.
+  Note: `projects` is read through the `active_projects` **view**
+  (`useProject`/`useProjects` → `projectsService.getProjects`/`getProjectById`),
+  and the view's source isn't tracked in `supabase/migrations/` (predates the
+  tracked migration history) — the view definition must be inspected live
+  (via `Agent_Supabase` / `list_tables`) and updated to expose the new column
+  in the same migration, or reads will silently miss it.
+- **Effect when disabled**: only suppresses the *next* automatic load (on
+  project open or project switch inside `useAutoLoadCloudModels`'s effect).
+  It does **not** unload models already sitting in the current viewer
+  session, and does **not** disable manual loading — the Cloud Models
+  dialog's checkbox/"Load Models" flow and the Load IFC/FRAG local-file paths
+  in `ToolbarLoadModel.tsx` keep working regardless of this setting.
+- **Read/write path**: reuse the existing `useProject`/`useUpdateProject`
+  hooks (`useProjects.ts`) rather than adding a parallel query — the toggle
+  mutates the same `projects` row already being fetched for the modal's
+  `project.projectnumber`/`project.projectName` prefix.
+
+See `.agents/docs/bim-viewer.md` (mirrored `.claude/docs/bim-viewer.md`) for
+the BIM Viewer guide's Cloud Models section — update both once this is
+implemented, per `CLAUDE.md`'s "Keep the Domain Guides in sync" rule.

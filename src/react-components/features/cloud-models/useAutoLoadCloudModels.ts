@@ -43,6 +43,11 @@ export function useAutoLoadCloudModels(projectId: string | null | undefined) {
         resetLoadedModels();
       }
 
+      // Per-project opt-out: bail AFTER the switch-dispose above (so leaving a
+      // project still cleans up its models) but BEFORE listing/loading, so the
+      // new project's auto-load is suppressed when the toggle is off.
+      if (!project.autoLoadCloudModels) return;
+
       let files;
       try {
         files = await cloudModelsService.listFragFiles(prefix);

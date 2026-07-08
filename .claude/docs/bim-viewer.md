@@ -22,6 +22,7 @@ The 3D world is a singleton bootstrapped once in `bim-components/setup/` — nev
 
 ## Patterns & conventions
 
+- **Cloud auto-load is per-project & opt-out.** `useAutoLoadCloudModels` loads every `.frag` under a project's `02_frag` folder on open, gated by the `auto_load_cloud_models` boolean column on `projects` (`DEFAULT true`). The toggle lives in `CloudModelModal.tsx`'s header, is admin-only (`useIsProjectAdmin`; non-admins see it read-only), and is read/written through the `projects` **table** (`useProject`/`useUpdateProject`) — not the `active_projects` view. Disabling only suppresses the *next* auto-load; it never unloads models already in the viewer, and manual load (Cloud Models picker, Load IFC/FRAG) is unaffected. The bail in `useAutoLoadCloudModels` sits **after** the project-switch dispose block so switching into a disabled project still cleans up the previous project's models.
 - OBC bootstrap is a **singleton** in `setup/` — React never constructs the world.
 - **New OBC component — step checklist** (moved from AGENTS.md; follow the `_thatopen-bim-component` skill for the full workflow):
   1. Use `_thatopen-bim-component` skill

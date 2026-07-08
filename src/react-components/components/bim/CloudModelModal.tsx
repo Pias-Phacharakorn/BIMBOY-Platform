@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { useProjectStore } from "@/react-components/store/projectStore";
-import { useProject } from "@/react-components/features/projects/useProjects";
+import { useProject, useUpdateProject, useIsProjectAdmin } from "@/react-components/features/projects/useProjects";
+import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useCloudModelFiles, useLoadCloudModelBatch } from "@/react-components/features/cloud-models/useCloudModels";
 import type { CloudFragFile } from "@/react-components/features/cloud-models/cloudModelsService";
 import {
@@ -31,6 +32,25 @@ export function CloudModelModal({ onClose }: CloudModelModalProps) {
   const { data: project, isLoading: isProjectLoading } = useProject(activeProjectId);
   const loadedModelIds = useBimStore((s) => s.loadedModelIds);
   const loadFiles = useLoadCloudModelBatch();
+
+  // Per-project auto-load toggle (admin-only; non-admins see it read-only).
+  const { user, profile } = useAuth();
+  const isProjectAdmin = useIsProjectAdmin(
+    project?.id,
+    user?.id,
+    profile?.hub_role === "hub_admin"
+  );
+  const updateProject = useUpdateProject();
+  const autoLoadEnabled = project?.autoLoadCloudModels ?? true;
+  const canToggleAutoLoad = !!project && isProjectAdmin && !updateProject.isPending;
+
+  const handleToggleAutoLoad = () => {
+    if (!project || !canToggleAutoLoad) return;
+    updateProject.mutate({
+      id: project.id,
+      project: { auto_load_cloud_models: !autoLoadEnabled },
+    });
+  };
 
   const projectPath = project ? `${project.projectnumber}_${project.projectName}` : "";
   const prefix = project ? `${projectPath}/02_frag` : "";
@@ -155,14 +175,49 @@ export function CloudModelModal({ onClose }: CloudModelModalProps) {
               Cloud Models
             </span>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-radius hover:bg-surface-alt text-muted hover:text-fg transition-all cursor-pointer"
-            type="button"
-            aria-label="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Per-project auto-load toggle — admins can flip it, non-admins see it read-only */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-medium text-muted select-none">
+                Auto-load
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={autoLoadEnabled}
+                aria-label="Auto-load cloud models on project open"
+                title={
+                  isProjectAdmin
+                    ? "Automatically load cloud models when this project opens"
+                    : "Only a project admin can change auto-load"
+                }
+                disabled={!canToggleAutoLoad}
+                onClick={handleToggleAutoLoad}
+                className={cn(
+                  "relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors",
+                  autoLoadEnabled ? "bg-accent" : "bg-surface-alt border border-border",
+                  canToggleAutoLoad
+                    ? "cursor-pointer"
+                    : "cursor-not-allowed opacity-60"
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform",
+                    autoLoadEnabled ? "translate-x-3.5" : "translate-x-0.5"
+                  )}
+                />
+              </button>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1 rounded-radius hover:bg-surface-alt text-muted hover:text-fg transition-all cursor-pointer"
+              type="button"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
             {/* Filter Bar */}

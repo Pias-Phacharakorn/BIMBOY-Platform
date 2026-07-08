@@ -108,6 +108,8 @@ export interface AppProject extends ClassProject {
     rotation: number;
     elevation: number;
   };
+  /** Per-project switch for auto-loading cloud .frag models on open (default true). */
+  autoLoadCloudModels: boolean;
 }
 
 export interface StatItem {

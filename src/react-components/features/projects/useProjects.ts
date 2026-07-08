@@ -52,6 +52,7 @@ export function mapProjectRowToAppProject(row: ProjectRow): AppProject {
     },
     cost: 0,
     progress: 0,
+    autoLoadCloudModels: row.auto_load_cloud_models ?? true,
     clashFolderPath: row.clash_folder_path || "",
     location: {
       latitude: row.latitude || 0,
