@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Plan: Real per-storey Levels</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 1200px; margin: 2rem auto; padding: 0 1rem;
+         background: #fff; color: #111; }
+  @media (prefers-color-scheme: dark) { body { background: #1e1e1e; color: #eee; } }
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; border-bottom: 1px solid #8884; padding-bottom: .3rem; }
+  .diagrams { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.5rem 0; }
+  @media (max-width: 800px) { .diagrams { grid-template-columns: 1fr; } }
+  .diagram-col { border: 1px solid #8884; border-radius: 8px; padding: 1rem; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { border: 1px solid #8884; padding: .5rem .75rem; text-align: left; vertical-align: top; }
+  code, pre { background: #8882; border-radius: 4px; }
+  pre { padding: .75rem; overflow-x: auto; }
+  .removed { color: #999; text-decoration: line-through; }
+</style>
+</head>
+<body>
+
+<h1>📌 Goal</h1>
+<p>Replace the Drawing Editor's single hardcoded "Floor Plan" placeholder row with real building-storey levels read from the loaded model(s) via <code>OBC.Views.createFromIfcStoreys()</code>, so clicking a level (e.g. "Level 2", "Roof") lazily projects and shows that storey's 2D drawing in the Sheet View — matching <code>CONTEXT.md</code>'s "Drawing Editor — real per-building-storey Levels (follow-up)" decisions.</p>
+
+<div class="diagrams">
+  <div class="diagram-col">
+    <h2>🔄 Current Flow</h2>
+    <pre class="mermaid">
+flowchart TD
+  Panel["DrawingEditorPanel.tsx<br/>mount → activate(world)"] --> DES["DrawingEditorSetup<br/>this.drawing (single)<br/>this.viewportId (single)"]
+  DES -->|"hardcoded position.set(0,1.2,0), far=4"| Drawing["one OBC.TechnicalDrawing"]
+  Row["'Floor Plan' row<br/>(always disabled=false once des.drawing exists)"] -->|"click → projectFromModel()"| DES
+  DES -->|"des.isProjected flag"| Row
+  Board["DrawingEditorBoard.tsx<br/>one-time effect on des.drawing.uuid"] -->|"board.addViewport() ONCE"| SheetBoard["bim-sheet-board / bim-paper-space"]
+    </pre>
+  </div>
+  <div class="diagram-col">
+    <h2>✅ Proposed Flow</h2>
+    <pre class="mermaid">
+flowchart TD
+  Panel["DrawingEditorPanel.tsx<br/>[MOD] mount → activate()"] --> DES["DrawingEditorSetup<br/>[MOD] levels[], levelCache Map,<br/>activeLevelId"]
+  DES -->|"OBC.Views.createFromIfcStoreys()"| Views["OBC.Views<br/>View[] per (model,storey)"]
+  Views -->|"★ merge by plane.constant, ±0.3m bucket"| DES
+  DES -->|"levels sorted desc"| List["Levels list<br/>[MOD] mapped rows, not 1 hardcoded row"]
+  List -->|"click → selectLevel(id)"| DES
+  DES -->|"first click: create+project+cache<br/>repeat click: switch cached drawing"| Cache["levelCache: id → {drawing, viewportId, projected}"]
+  DES -->|"onChanged (new activeLevelId)"| Board["DrawingEditorBoard.tsx<br/>[MOD] swap effect"]
+  Board -->|"removeViewport(old) + addViewport(new)"| SheetBoard["bim-sheet-board / bim-paper-space<br/>(still ONE sheet)"]
+    </pre>
+    <p class="removed">Removed: hand-rolled storey math — no <code>getItemsOfCategories</code>/<code>getItemsData</code> composition; no hardcoded <code>drawing.three.position.set(0,1.2,0)</code>/<code>drawing.far = 4</code> (now per-level, derived from each storey's <code>plane</code> and floor-to-floor spacing).</p>
+  </div>
+</div>
+
+<h2>⚖️ Pros &amp; Cons</h2>
+<table>
+  <tr><th>Pros</th><th>Cons</th></tr>
+  <tr>
+    <td>Uses ThatOpen's own <code>createFromIfcStoreys()</code> instead of hand-rolled category/attribute querying — gets the georeferencing height offset (<code>model.getCoordinates()</code>) correct for free, which a manual version would likely have missed.</td>
+    <td><code>createFromIfcStoreys()</code> assumes an IFC-derived model (per ThatOpen's own docs) — models converted from non-IFC schemas, or IFC files without properly authored <code>IFCBUILDINGSTOREY</code>/<code>Elevation</code> attributes, will return zero levels. No fallback UI state for "no storeys found" is in scope for this round (falls back to an empty list, not a crash) — worth flagging to users if it comes up.</td>
+  </tr>
+  <tr>
+    <td>Lazy per-level projection (cheap discovery eagerly, expensive projection only on first click, cached after) keeps tab-activation fast regardless of storey count, while still showing the full real level list immediately.</td>
+    <td>Per-level `TechnicalDrawing` + projected geometry stays cached in memory for the whole session once visited — on a model with many storeys and heavy geometry, clicking through most of them could accumulate meaningful memory before the tab deactivates and the whole cache is torn down.</td>
+  </tr>
+  <tr>
+    <td>±0.3m elevation-bucket merge means multi-discipline models (Architecture + Structure) collapse to one row per physical floor instead of a confusing duplicate-name list.</td>
+    <td>The 0.3m tolerance is a heuristic, not a real semantic match — a building with genuinely low floor-to-floor heights (e.g. a mezzanine 0.3m above a slab) could have two real levels incorrectly merged into one row. Not expected to bite in practice, but not provably safe for all buildings.</td>
+  </tr>
+  <tr>
+    <td>Single SheetBoard/viewport-swap keeps the Sheet View pane structurally simple — no new sheet-management UI needed.</td>
+    <td>Per-level "far" clipping distance (floor-to-floor gap to the next level up) means the topmost level ("Roof") has no next level to measure against — needs an explicit fallback default (matching today's hardcoded <code>far = 4</code>), which is itself still a heuristic guess for buildings with an unusually tall top floor.</td>
+  </tr>
+</table>
+
+<h2>📁 Files Changed</h2>
+<pre>[MOD] src/bim-components/DrawingEditorSetup/index.ts
+      — Replace single `drawing`/`viewportId` fields with a per-level model:
+          type Level = { id: string; name: string; elevationY: number };
+          type LevelEntry = { level: Level; drawing: OBC.TechnicalDrawing; viewportId: string; projected: boolean };
+          levels: Level[] = [];              // discovered, sorted desc by elevationY
+          activeLevelId: string | null = null;
+          private _levelCache = new Map&lt;string, LevelEntry&gt;();
+      — New method `discoverLevels(mainWorld)`:
+          - calls `components.get(OBC.Views).createFromIfcStoreys({ world: mainWorld })`
+            (no modelIds filter — matches existing "project from all loaded models" behavior)
+          - reads `{ id: view.id, elevationY: view.plane.constant }` from each returned View,
+            then immediately `view.dispose()` (we only needed the plane/id, not the View's
+            camera/open functionality — per CONTEXT.md decision)
+          - merges by elevationY into buckets within ±0.3m (first-seen name/id wins as the
+            bucket's Level), sorts descending by elevationY (Roof first, matches mockup)
+          - stores into `this.levels`, calls `this._notify()`
+      — New method `async selectLevel(levelId, fragments)`:
+          - if `levelId === this.activeLevelId`, no-op
+          - cancels in-progress placement + exits paper mode: reuses the same cancel logic
+            `deactivate()` already has for `editor.cancel()`/`activeTool = null` — exposed as
+            a small private `_cancelInProgress()` helper shared by both paths — but does
+            **not** call full `deactivate()` (that stays a whole-tab-exit operation)
+          - if `levelId` is in `_levelCache`: `editor.activeDrawing = cached.drawing`,
+            set `activeLevelId`, notify (board's viewport-swap effect picks this up)
+          - if not cached: create a new `OBC.TechnicalDrawing` via `techDrawings.create(mainWorld)`,
+            `drawing.orientTo(view's plane.normal)`, position via `elevationY` on the same axis
+            the tutorial uses (`drawing.three.position.set(0, elevationY, 0)`), `drawing.far` =
+            distance to the next level up (`nextLevel.elevationY - level.elevationY`), falling
+            back to `4` for the topmost level (no next level) — same 3 layers + 1 viewport setup
+            as today, then runs the existing `projectFromModel`-equivalent projection logic
+            (moved from the old `projectFromModel` into this per-level path), caches the
+            `LevelEntry`, sets `activeLevelId`, notifies
+      — `activate()` keeps creating the editor/tools/font-load exactly as today, but no longer
+        creates a `TechnicalDrawing` itself — it now also calls `discoverLevels(mainWorld)`
+        after editor/tools are ready
+      — `deactivate()` additionally disposes every cached `LevelEntry.drawing` (not just a
+        single `this.drawing`), clears `_levelCache`, `levels`, `activeLevelId`
+      — Remove `isProjected` getter (replaced by checking `_levelCache.has(activeLevelId)` /
+        `LevelEntry.projected` from the UI); remove the old single-drawing `projectFromModel`
+        public method (folded into `selectLevel`)
+      — Getter `activeLevel` / `activeEntry` convenience accessors for the board/panel to read
+        the current drawing + viewportId without reaching into the cache map directly
+
+[MOD] src/react-components/features/drawing-editor/DrawingEditorPanel.tsx
+      — Remove the single hardcoded "Floor Plan" button block
+      — Render `des.levels.map(level => ...)` as the list of rows (sorted desc, as stored),
+        each row: `onClick={() => des.selectLevel(level.id, fragments)}`, disabled while a
+        `isSelecting` local-state flag is true for *that* row (own loading text "Projecting…"),
+        active-row indicator (accent dot) when `level.id === des.activeLevelId`
+      — Empty state: if `des.levels.length === 0` after discovery settles, show a short message
+        ("No building storeys found in the loaded model(s)") instead of an empty list
+
+[MOD] src/react-components/features/drawing-editor/DrawingEditorBoard.tsx
+      — Replace the one-time "register viewport on first ready" effect with a swap effect keyed
+        on `des.activeLevelId`: tracks the previously-registered `{drawingId, viewportId}` in a
+        ref; when `activeLevelId` changes, calls `board.removeViewport(paper, prevDrawingId,
+        prevViewportId)` (skip if none yet) then `board.addViewport(paper, newDrawingId,
+        newViewportId, { x: 30, y: 20 })`, updates the ref, `board.requestRender()`
+      — All existing interaction wiring (paper-space edit mode, click-to-place, Escape/Delete,
+        DXF export, callout prompt) is unchanged — it already reads `des.editor`/`des.drawing`-
+        equivalent state generically, not the old single-drawing fields by name (only the
+        `des.drawing`/`des.viewportId` reads need renaming to `des.activeLevel`'s drawing/viewportId)
+</pre>
+
+<h2>❓ Open Questions</h2>
+<p>No open questions — all decisions (storey source, cross-model merge tolerance, eager-discovery/lazy-projection, mid-annotation level switching, single-sheet viewport swap, temporary View disposal) are recorded in <code>CONTEXT.md</code> under "Drawing Editor — real per-building-storey Levels (follow-up)". Ready to implement upon approval.</p>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  const theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default';
+  mermaid.initialize({ startOnLoad: true, theme });
+</script>
+
+</body>
+</html>

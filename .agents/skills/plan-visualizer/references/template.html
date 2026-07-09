@@ -1,0 +1,88 @@
+<!--
+  plan-visualizer reusable template
+  =================================
+  Copy this file to <project-root>/plan-visualizer.html and fill every {{PLACEHOLDER}}.
+  Do not change the <style>/<script> blocks or the grid structure — only fill placeholders
+  and, if a section has nothing to show (e.g. no removed items), remove that element.
+
+  Placeholders:
+    {{GOAL_SHORT}}            - 3-6 word title, used in <title>
+    {{GOAL_ONE_SENTENCE}}     - one sentence: what problem, for whom
+    {{CURRENT_FLOW_MERMAID}}  - Mermaid flowchart, current state
+    {{PROPOSED_FLOW_MERMAID}} - Mermaid flowchart, proposed state
+    {{REMOVED_ITEMS_LIST}}    - <p class="removed">Removed: File.tsx — reason</p> per item, or delete the block
+    {{PROS_CONS_ROWS}}        - one <tr><td>pro</td><td>con</td></tr> per row, 2-4 rows
+    {{FILES_CHANGED_LIST}}    - plain text, one file per line, tagged [NEW]/[MOD]/[DEL], deps first
+    {{OPEN_QUESTIONS_OR_NONE}} - blockers, or "No open questions — ready to implement upon approval."
+
+  Mermaid node conventions (flowchart TD, top-down, unless UI layout reads better as LR):
+    Node:   Id["ActualFile.tsx<br/>role annotation"]
+    Edge:   A --> B          A -->|label| B
+    Tags:   prefix label text with [NEW] or [MOD] inside the node string
+    Key change: put a ★ inside the single most important edge label
+    Max 15 nodes per diagram — group/simplify if larger
+    Removed items go in {{REMOVED_ITEMS_LIST}} below the diagram, never inside the Mermaid graph
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Plan: {{GOAL_SHORT}}</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 1200px; margin: 2rem auto; padding: 0 1rem;
+         background: #fff; color: #111; }
+  @media (prefers-color-scheme: dark) { body { background: #1e1e1e; color: #eee; } }
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; border-bottom: 1px solid #8884; padding-bottom: .3rem; }
+  .diagrams { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin: 1.5rem 0; }
+  @media (max-width: 800px) { .diagrams { grid-template-columns: 1fr; } }
+  .diagram-col { border: 1px solid #8884; border-radius: 8px; padding: 1rem; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { border: 1px solid #8884; padding: .5rem .75rem; text-align: left; vertical-align: top; }
+  code, pre { background: #8882; border-radius: 4px; }
+  pre { padding: .75rem; overflow-x: auto; }
+  .removed { color: #999; text-decoration: line-through; }
+</style>
+</head>
+<body>
+
+<h1>📌 Goal</h1>
+<p>{{GOAL_ONE_SENTENCE}}</p>
+
+<div class="diagrams">
+  <div class="diagram-col">
+    <h2>🔄 Current Flow</h2>
+    <pre class="mermaid">
+{{CURRENT_FLOW_MERMAID}}
+    </pre>
+  </div>
+  <div class="diagram-col">
+    <h2>✅ Proposed Flow</h2>
+    <pre class="mermaid">
+{{PROPOSED_FLOW_MERMAID}}
+    </pre>
+    {{REMOVED_ITEMS_LIST}}
+  </div>
+</div>
+
+<h2>⚖️ Pros &amp; Cons</h2>
+<table>
+  <tr><th>Pros</th><th>Cons</th></tr>
+  {{PROS_CONS_ROWS}}
+</table>
+
+<h2>📁 Files Changed</h2>
+<pre>{{FILES_CHANGED_LIST}}</pre>
+
+<h2>❓ Open Questions</h2>
+<p>{{OPEN_QUESTIONS_OR_NONE}}</p>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  const theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default';
+  mermaid.initialize({ startOnLoad: true, theme });
+</script>
+
+</body>
+</html>
