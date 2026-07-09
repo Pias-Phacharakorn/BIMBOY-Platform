@@ -35,6 +35,19 @@ declare global {
       'bim-grid': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>;
       'bim-viewport': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>;
       'bim-context-menu': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>;
+      'bim-dropdown': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+        label?: string;
+        required?: boolean | string;
+      };
+      'bim-option': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+        label?: string;
+        value?: string;
+        checked?: boolean | string;
+      };
+      'bim-sheet-board': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>;
+      'bim-paper-space': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+        label?: string;
+      };
     }
   }
 }

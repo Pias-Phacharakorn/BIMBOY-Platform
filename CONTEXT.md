@@ -1,5 +1,129 @@
 # CONTEXT
 
+## Drawing Editor tab (OBC TechnicalDrawings / annotations) — v1
+
+New "Drawing Editor" tab on `ModelsView.tsx`, ported from ThatOpen's
+`DrawingEditor` tutorial (`.agents/ThatOpen_docs/Tutorials/Components/Front/DrawingEditor.mdx`).
+Not to be confused with the unrelated existing "Drawing" feature
+(`shop-drawings`/document register, `.agents/docs/drawing.md`) — this is the
+ThatOpen `OBC.TechnicalDrawings` / `OBF.DrawingEditor` 2D annotation/DXF
+capability, brand new to this codebase.
+
+### Decisions
+
+- **Persistence**: session-only for v1, same as the tutorial. No Supabase
+  schema. Annotations/projections live only in memory; the only artifact
+  that survives is a DXF file if the user explicitly exports one.
+- **Lifecycle**: the Drawing Editor's engine (hidden world +
+  `TechnicalDrawings` + `DrawingEditor`) is created when the "Drawing
+  Editor" tab mounts and disposed when the user switches to any other tab —
+  same mount/unmount lifecycle as `ViewportWrapper`. Switching away and back
+  resets the drawing (no keep-alive-in-background).
+- **World architecture**: a second, hidden `OBC.World` is created dedicated
+  to the drawing/`SheetBoard` render target (own scene/camera/renderer,
+  never shown directly). The existing main `world` (from `useBimStore()`)
+  is only the *source* of geometry — projection reads from all currently
+  loaded models (`fragments.list`, unioned into one `OBC.ModelIdMap`), not
+  just the first/active model. Keeps the visible viewport's camera/controls
+  and `Clipper` state undisturbed.
+- **Component structure**: follows this repo's established convention
+  (`.agents/docs/bim-viewer.md`, `_thatopen-bim-component` skill) — a new
+  custom `OBC.Component` (living under `src/bim-components/`) owns the
+  hidden world, the `TechnicalDrawings` drawing, and the `DrawingEditor`
+  instance, exposing methods like `projectFromModel()`; a React feature
+  panel under `src/react-components/features/drawing-editor/` drives it via
+  `components.get(...)`, mirroring how `GisPanel` drives `GisLayers`.
+- **Layout**: reuses existing `LeftPanel`/`RightPanel`/`PanelSection` —
+  no new CSS grid template (unlike the Queries tab). `LeftPanel` holds the
+  tool selector (None/Linear/Angle/Callout), layer visibility checkboxes,
+  "Project from model" button, and model-visibility checkbox. The center
+  section splits into two flex panes side-by-side: the existing
+  `ViewportWrapper` (3D) and the new `SheetBoard`/paper view (2D) — both
+  visible at once, matching the tutorial's dual-pane demo rather than
+  replacing the 3D viewport.
+- **Feature scope (v1 "Core MVP")**: edge projection from model + visible/
+  hidden layer toggles + all 3 annotation tools (Linear, Angle, Callout)
+  with fixed/default styles only (no color/tick/font-size style-editor UI)
+  + paper-space `SheetBoard` editing (double-click viewport to annotate in
+  paper space) + DXF export (both per-viewport and full-sheet). Full
+  style-customization panels from the tutorial are deferred.
+- **Callout text input**: uses the tutorial's raw `prompt()` for entering/
+  editing callout text — no custom floating input built for v1.
+- **Font asset**: hotlinks ThatOpen's hosted `.ttf` font URL directly
+  (same as the tutorial), not self-hosted under `public/`.
+
+### Open follow-ups (not yet decided / out of scope for this round)
+
+- Persisting drawings/annotations per-project (would need a schema +
+  service layer, deferred per the "session-only" decision above).
+- Full style-editor UI (color, tick shapes, font size, enclosures) per
+  annotation tool.
+- Custom floating text input for callouts (replacing `prompt()`).
+- Keep-alive lifecycle across tab switches within one session.
+
+## Drawing Editor — real per-building-storey Levels (follow-up)
+
+Replaces the single hardcoded "Floor Plan" placeholder row (see previous
+section) with real levels read from the loaded model(s)' IFC building
+storeys, using `OBC.Views.createFromIfcStoreys()` — not a hand-rolled
+`getItemsOfCategories`/`getItemsData` composition.
+
+### Decisions
+
+- **Storey source**: use `components.get(OBC.Views).createFromIfcStoreys({ modelIds, offset, world })`.
+  Confirmed from the compiled source (`@thatopen/components` 3.4.2,
+  `dist/index.mjs`) that this already: iterates every loaded model (via
+  `OBC.FragmentsManager`), queries `getItemsOfCategories([/BUILDINGSTOREY/])`
+  + `getItemsData(...)`, and computes each storey's **world-space** height
+  as `storey.Elevation.value + model.getCoordinates()[1] + offset` (offset
+  defaults `0.25`) — correctly folding in the model's georeferencing height
+  offset, which a hand-rolled version would have silently gotten wrong. It
+  returns one `View` per `(model, storey)` pair with a public `plane:
+  THREE.Plane` (world-space normal + height) and `id` = the storey's IFC
+  `Name` — **no merging across models**.
+- **Cross-model merge**: since `createFromIfcStoreys` does not dedupe,
+  merge its returned `View[]` ourselves by **elevation, not name** — bucket
+  storeys whose `plane.constant` (world height) falls within **±0.3m** of
+  each other into one Levels-panel row (absorbs slab-top/bottom or
+  authoring differences between discipline models), using whichever
+  storey's name was seen first as the bucket's label. One row per physical
+  floor regardless of how many models describe it, consistent with the
+  existing "project from all loaded models" behavior.
+- **Eager discovery, lazy projection**: `createFromIfcStoreys()` (cheap
+  metadata query) runs once when the Drawing Editor tab activates, so the
+  full Levels list (real names, merged, sorted by elevation) appears
+  immediately. The expensive part — creating a `TechnicalDrawing` and
+  running `addProjectionFromItems` — only happens the **first time a level
+  row is clicked**. Once projected, that level's drawing is cached for the
+  rest of the session; clicking it again just switches back without
+  re-projecting.
+- **Switching levels mid-annotation**: auto-cancels any in-progress
+  placement and exits paper-space edit mode before switching (mirrors the
+  existing Escape-key behavior) — never blocks the switch. Already
+  *committed* annotations on the previous level are untouched (they live on
+  that level's own `TechnicalDrawing`); only an uncommitted in-progress
+  placement is discarded.
+- **One SheetBoard, viewport swap**: still exactly one `<bim-paper-space>`
+  sheet (matches the mockup). Switching levels removes the previously
+  registered viewport from the sheet and adds the newly-selected level's
+  viewport in its place — the Sheet View pane stays visually stable, DXF
+  export stays scoped to whatever's currently shown. Not one sheet per
+  level.
+- **Temporary `View` objects**: the `View` instances `createFromIfcStoreys`
+  returns are only used to read `plane`/`id` for our own Levels list and
+  per-level `TechnicalDrawing` creation — we don't use their camera/open
+  functionality. Dispose them right after extracting that data rather than
+  leaving them registered in `views.list`.
+
+### Open follow-ups (not yet decided / out of scope for this round)
+
+- Live-refreshing the Levels list if a new model finishes loading (e.g. via
+  cloud auto-load) *after* the Drawing Editor tab is already active —
+  discovery only runs once, on tab activation; switching tabs away and back
+  re-runs it.
+- Any UI to manually refresh/re-project an already-projected level if the
+  underlying model changes mid-session.
+
 ## Drawing discipline grouping (04_Drawing)
 
 Adding a discipline layer between the `04_Drawing` folder and the existing

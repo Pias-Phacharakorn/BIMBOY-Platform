@@ -21,6 +21,7 @@ import { PropertyTable } from "../PropertyTable";
 import { SpotCoordinate } from "../SpotCoordinate";
 import { CursorSurface } from "../CursorSurface";
 import { GisLayers } from "../GisLayers";
+import { DrawingEditorSetup } from "../DrawingEditorSetup";
 
 export const setupComponents = async () => {
   BUI.Manager.init();
@@ -49,6 +50,7 @@ export const setupComponents = async () => {
   const spotCoordinate = new SpotCoordinate(components);
   spotCoordinate.world = world;
   new GisLayers(components);
+  new DrawingEditorSetup(components);
 
 
   components.init()

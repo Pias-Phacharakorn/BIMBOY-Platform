@@ -7,6 +7,7 @@ import { GisPanel } from "@/react-components/features/gis";
 import { PropertyPanel } from "@/react-components/features/property-panel";
 import { PropertyTable } from "@/react-components/features/property-table/PropertyTable";
 import { ClashList, ClashPreview } from "@/react-components/features/clash-dashboard";
+import { DrawingEditorPanel, DrawingEditorBoard } from "@/react-components/features/drawing-editor";
 // AR runs on a standalone full-screen /ar page (single WebGL context, no OBC engine).
 // Clicking the "AR" tab navigates there — see onTabChange below.
 // The custom ArSession/ArViewerPanel/useArSession approach is kept in the repo but
@@ -15,7 +16,7 @@ import { useProject, useIsProjectAdmin } from "@/react-components/features/proje
 import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useAutoLoadCloudModels } from "@/react-components/features/cloud-models/useAutoLoadCloudModels";
 
-const workspaceTabs = ["Models", "Queries", "Viewer", "Smart Views", "GIS", "Viewpoint", "AR"];
+const workspaceTabs = ["Models", "Queries", "Viewer", "Smart Views", "GIS", "Viewpoint", "Drawing Editor", "AR"];
 
 export function ModelsView() {
   const { projectId } = useParams({ strict: false });
@@ -30,7 +31,8 @@ export function ModelsView() {
   const isQueriesTab = activeTab === "Queries";
   const isGisTab = activeTab === "GIS";
   const isViewpointTab = activeTab === "Viewpoint";
-  const isFlexLayout = activeTab === "Models" || isGisTab || isViewpointTab;
+  const isDrawingEditorTab = activeTab === "Drawing Editor";
+  const isFlexLayout = activeTab === "Models" || isGisTab || isViewpointTab || isDrawingEditorTab;
 
   // The "AR" tab escapes ModelsView entirely: it navigates to the standalone
   // full-screen /ar page instead of swapping panels here, so the WebXR session
@@ -87,7 +89,13 @@ export function ModelsView() {
         }
       />
       <div
-        className={isFlexLayout ? "flex flex-row flex-1 min-h-0 w-full" : "grid flex-1 min-h-0 w-full"}
+        className={
+          isDrawingEditorTab
+            ? "flex flex-col flex-1 min-h-0 w-full"
+            : isFlexLayout
+              ? "flex flex-row flex-1 min-h-0 w-full"
+              : "grid flex-1 min-h-0 w-full"
+        }
         style={
           isQueriesTab
             ? {
@@ -127,6 +135,18 @@ export function ModelsView() {
           <ViewportToolbar />
           <CloudModelLoadingModal />
         </section>
+
+        {isDrawingEditorTab && (
+          <div className="flex flex-1 min-h-0 w-full">
+            <DrawingEditorBoard />
+            <div className="w-48 shrink-0 flex flex-col min-h-0 border-l border-t border-border bg-surface">
+              <div className="flex h-8 shrink-0 items-center justify-center border-b border-border bg-surface-alt">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-muted">Levels</span>
+              </div>
+              <DrawingEditorPanel />
+            </div>
+          </div>
+        )}
 
         <RightPanel
           icon="SETTINGS"

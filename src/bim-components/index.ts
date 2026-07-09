@@ -2,6 +2,7 @@
 export * from "./setup";
 export * from "./ClashImport";
 export * from "./GisLayers";
+export * from "./DrawingEditorSetup";
 export * from "./PropertyTable";
 export * from "./MiniMap";
 export * from "./SmartViews";
