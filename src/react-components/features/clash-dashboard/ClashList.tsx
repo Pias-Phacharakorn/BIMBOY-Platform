@@ -4,6 +4,7 @@ import * as OBC from "@thatopen/components";
 import { useClashStore } from "@/react-components/store/clashStore";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { useClashViewpoints } from "./useClashViewpoints";
+import { getClashSeqId, statusAccentClassMap } from "./clashDisplayHelpers";
 import { Icon } from "@/react-components/components/ui";
 import { cn, capitalize } from "@/lib/utils";
 import type { ClashItem } from "@/types";
@@ -19,13 +20,6 @@ const STATUS_FILTERS: StatusFilter[] = ["All", "Open", "Resolved"];
 const OPEN_STATUSES: ClashItem["status"][] = ["new", "unresolved"];
 const RESOLVED_STATUSES: ClashItem["status"][] = ["resolved", "approved_as_note"];
 
-const statusBarClassMap: Record<ClashItem["status"], string> = {
-  new: "bg-status-danger",
-  unresolved: "bg-status-warn",
-  resolved: "bg-status-ok",
-  approved_as_note: "bg-status-ok",
-};
-
 export function ClashList({ projectId }: ClashListProps) {
   const { selectedClashId, setSelectedClashId } = useClashStore();
   const { world, components } = useBimStore();
@@ -38,7 +32,7 @@ export function ClashList({ projectId }: ClashListProps) {
   const reversedItems = useMemo(() => {
     const withSeqId = clashItems.map((item, index) => ({
       ...item,
-      seqId: clashItems.length - index,
+      seqId: getClashSeqId(clashItems, index),
     }));
     return [...withSeqId].reverse();
   }, [clashItems]);
@@ -172,7 +166,7 @@ export function ClashList({ projectId }: ClashListProps) {
                 )}
               >
                 {/* Left status bar */}
-                <span className={cn("w-1 shrink-0", statusBarClassMap[item.status])} />
+                <span className={cn("w-1 shrink-0", statusAccentClassMap[item.status])} />
 
                 <div className="flex flex-col gap-1 p-2.5 flex-1 min-w-0">
                   {isSelected && (

@@ -5,6 +5,8 @@ interface ClashState {
   setClashes: (clashes: any[]) => void
   selectedClashId: string | null
   setSelectedClashId: (id: string | null) => void
+  isClashModalOpen: boolean
+  setIsClashModalOpen: (open: boolean) => void
   filters: Record<string, any>
   setFilters: (filters: Record<string, any>) => void
   activeTab: "Dashboard" | "Clash Reports" | "Matrix" | "History"
@@ -24,6 +26,8 @@ export const useClashStore = create<ClashState>((set) => ({
   setClashes: (clashes) => set({ clashes }),
   selectedClashId: null,
   setSelectedClashId: (selectedClashId) => set({ selectedClashId }),
+  isClashModalOpen: false,
+  setIsClashModalOpen: (isClashModalOpen) => set({ isClashModalOpen }),
   filters: {},
   setFilters: (filters) => set({ filters }),
   activeTab: "Dashboard",

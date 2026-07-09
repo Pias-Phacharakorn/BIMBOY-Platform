@@ -1,41 +1,19 @@
-import { useMemo } from "react";
 import { format } from "date-fns";
 import { useClashStore } from "@/react-components/store/clashStore";
-import { useClashViewpoints } from "@/react-components/features/clash-dashboard/useClashViewpoints";
+import { useFilteredClashItems } from "@/react-components/features/clash-dashboard/useFilteredClashItems";
 import { Icon } from "@/react-components/components/ui/Icon";
 import { useClashTable } from "./useClashTable";
 import { BulkEditClashModal } from "./BulkEditClashModal";
-import type { ClashItem } from "@/types";
+import {
+  statusLabelMap,
+  statusToneClassMap,
+  typeLabelMap,
+  typeDotClassMap,
+} from "@/react-components/features/clash-dashboard/clashDisplayHelpers";
 
 interface ClashTableProps {
   projectId: string;
 }
-
-const statusLabelMap: Record<ClashItem["status"], string> = {
-  new: "NEW",
-  unresolved: "UNRESOLVED",
-  resolved: "RESOLVED",
-  approved_as_note: "APPROVED",
-};
-
-const statusToneClassMap: Record<ClashItem["status"], string> = {
-  new: "border-[oklch(63%_0.18_28_/_42%)] bg-[oklch(63%_0.18_28_/_13%)] text-status-danger",
-  unresolved: "border-[oklch(70%_0.17_55_/_42%)] bg-[oklch(70%_0.17_55_/_13%)] text-[oklch(70%_0.17_55)]",
-  resolved: "border-[oklch(77%_0.14_76_/_42%)] bg-[oklch(77%_0.14_76_/_13%)] text-status-warn",
-  approved_as_note: "border-[oklch(70%_0.14_150_/_42%)] bg-[oklch(70%_0.14_150_/_13%)] text-status-ok",
-};
-
-const typeLabelMap: Record<ClashItem["type"], string> = {
-  major: "MAJOR",
-  minor: "MINOR",
-  regulation: "REGULATION",
-};
-
-const typeDotClassMap: Record<ClashItem["type"], string> = {
-  major: "bg-status-danger ring-status-danger/20",
-  minor: "bg-status-warn ring-status-warn/20",
-  regulation: "bg-muted ring-muted/20",
-};
 
 interface Column {
   key: string;
@@ -56,28 +34,8 @@ const COLUMNS: Column[] = [
 ];
 
 export function ClashTable({ projectId }: ClashTableProps) {
-  const { selectedReportId, quickFilters, selectedClashId, setSelectedClashId } = useClashStore();
-  const { data: clashItems = [], isLoading: isLoadingClashes } = useClashViewpoints(projectId, selectedReportId);
-
-  const filteredClashes = useMemo(() => {
-    return clashItems.filter((item) => {
-      if (quickFilters.onlyCritical && item.type !== "major") {
-        return false;
-      }
-      if (quickFilters.unassigned && item.createdBy !== null) {
-        return false;
-      }
-      if (quickFilters.arcVsMep) {
-        const text = `${item.name || ""} ${item.path || ""}`.toLowerCase();
-        const hasArchitecture = text.includes("ar") || text.includes("arc");
-        const hasMep = text.includes("me") || text.includes("mep");
-        if (!(hasArchitecture && hasMep)) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [clashItems, quickFilters]);
+  const { selectedClashId, setSelectedClashId, setIsClashModalOpen } = useClashStore();
+  const { data: filteredClashes, isLoading: isLoadingClashes } = useFilteredClashItems(projectId);
 
   const {
     selectedRowIds,
@@ -115,7 +73,15 @@ export function ClashTable({ projectId }: ClashTableProps) {
         return <span className="font-mono text-muted">#{item.seqId}</span>;
       case "title":
         return (
-          <span className="text-fg font-medium w-full truncate inline-block align-middle" title={item.name}>
+          <span
+            className="text-fg font-medium w-full truncate inline-block align-middle hover:underline hover:text-accent cursor-pointer transition-colors"
+            title={item.name}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedClashId(item.id);
+              if (item.imageUrl) setIsClashModalOpen(true);
+            }}
+          >
             {item.name}
           </span>
         );

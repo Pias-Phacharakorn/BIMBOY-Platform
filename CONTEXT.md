@@ -397,3 +397,43 @@ for every project.
 See `.agents/docs/bim-viewer.md` (mirrored `.claude/docs/bim-viewer.md`) for
 the BIM Viewer guide's Cloud Models section — update both once this is
 implemented, per `CLAUDE.md`'s "Keep the Domain Guides in sync" rule.
+
+## Clash Preview click-to-edit fields
+
+Reworking the Clash Preview sidebar panel
+(`src/react-components/features/clash-dashboard/ClashPreview.tsx`) so Name,
+Status, Type, Comments, and Solution use a pencil-icon click-to-edit row
+pattern (from `clash_Preview_panel_redesign.html`) instead of always-visible
+`<select>`/`<textarea>` controls.
+
+### Decisions
+
+- **Name becomes genuinely editable**: previously read-only display text with
+  no rename feature, even though the underlying `name` column was already
+  updatable via `updateClashViewpoint`. Now wired to a real rename: click the
+  row → inline text input → saves on blur/Enter via the same mutation.
+- **Status and Type also convert to click-to-edit** (not just Name/Comments/
+  Solution): view mode shows the same colored badge/dot styling as
+  `ClashTable` (via `clashDisplayHelpers.ts`), click the row to reveal the
+  underlying `<select>`, which saves immediately on change and returns to
+  badge view.
+- **Save-on-blur per field, no batch button**: matches the pattern already
+  used by the full-screen modal's Comments/Solution fields. The sidebar
+  panel's old shared "Save Changes" button (for Comments+Solution together)
+  is removed — each field now saves independently when it loses focus.
+- **Modal's Comments/Solution fields also convert** to the same click-to-edit
+  pattern for consistency, even though the modal has room for always-visible
+  fields. The modal's Name/Status/Type stay as static display (badges/text) —
+  not asked for, out of scope for now.
+- **Whole row is the click target**, not just the pencil icon — matches the
+  mockup (`cursor-pointer` on the full label+value+pencil row), gives a
+  larger, more forgiving hit area.
+- **Escape reverts the draft** on text fields (Name, Comments, Solution)
+  without saving — standard inline-edit convention so an accidental edit
+  doesn't get committed.
+- **Shared implementation**: extracted `EditableTextField` and
+  `EditableSelectField` into `EditableClashField.tsx` so the click-to-edit
+  behavior (draft state, blur-to-save, Escape-to-cancel, autofocus) isn't
+  duplicated across the ~7 field instances (5 in the sidebar, 2 in the
+  modal) — avoids the kind of drift that already caused mismatched
+  status/type badge colors between `ClashTable` and `ClashPreview` earlier.

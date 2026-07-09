@@ -1,6 +1,7 @@
 import { useState, useMemo, type MouseEvent as ReactMouseEvent } from "react";
 import type { ClashItem, ClashStatus, ClashType } from "@/types";
 import { useDeleteClashViewpoints, useBulkUpdateClashViewpoints } from "../clash-dashboard/useClashViewpoints";
+import { getClashSeqId } from "../clash-dashboard/clashDisplayHelpers";
 
 export function useClashTable(projectId: string, clashItems: ClashItem[]) {
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
@@ -11,9 +12,9 @@ export function useClashTable(projectId: string, clashItems: ClashItem[]) {
     new Set(["id", "title", "status", "type", "assignedTo", "dueDate", "startDate"])
   );
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
-    id: 70,
+    id: 50,
     title: 240,
-    status: 100,
+    status: 120,
     type: 130,
     assignedTo: 120,
     dueDate: 120,
@@ -31,7 +32,7 @@ export function useClashTable(projectId: string, clashItems: ClashItem[]) {
   const itemsWithSeqId = useMemo(() => {
     return clashItems.map((item, index) => ({
       ...item,
-      seqId: clashItems.length - index,
+      seqId: getClashSeqId(clashItems, index),
     }));
   }, [clashItems]);
 

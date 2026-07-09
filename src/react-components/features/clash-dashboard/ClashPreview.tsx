@@ -1,31 +1,49 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, ZoomIn, ZoomOut, RotateCcw, Pencil } from "lucide-react";
+import { X, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { useClashStore } from "@/react-components/store/clashStore";
-import { useClashViewpoints, useUpdateClashViewpoint } from "./useClashViewpoints";
+import { useUpdateClashViewpoint } from "./useClashViewpoints";
+import { useFilteredClashItems } from "./useFilteredClashItems";
+import type { ClashViewpointRow } from "./clashService";
+import { statusLabelMap, statusToneClassMap, typeLabelMap, typeDotClassMap, TYPE_DOT_BASE_CLASS, getClashSeqId } from "./clashDisplayHelpers";
+import { EditableTextField, EditableSelectField } from "./EditableClashField";
 import { format } from "date-fns";
+
+const STATUS_OPTIONS = [
+  { value: "new", label: statusLabelMap.new },
+  { value: "unresolved", label: statusLabelMap.unresolved },
+  { value: "resolved", label: statusLabelMap.resolved },
+  { value: "approved_as_note", label: statusLabelMap.approved_as_note },
+];
+
+const TYPE_OPTIONS = [
+  { value: "major", label: typeLabelMap.major },
+  { value: "minor", label: typeLabelMap.minor },
+  { value: "regulation", label: typeLabelMap.regulation },
+];
 
 interface ClashPreviewProps {
   projectId: string;
 }
 
 export function ClashPreview({ projectId }: ClashPreviewProps) {
-  const { selectedClashId, setSelectedClashId } = useClashStore();
-  const { data: clashItems = [] } = useClashViewpoints(projectId);
+  const {
+    selectedClashId,
+    setSelectedClashId,
+    isClashModalOpen: isModalOpen,
+    setIsClashModalOpen: setIsModalOpen,
+  } = useClashStore();
+  // Same report/quick-filtered set as ClashTable, so the same clash gets the same #ID in both places.
+  const { data: clashItems } = useFilteredClashItems(projectId);
   const updateMutation = useUpdateClashViewpoint();
 
   // Find the selected clash item from the fetched list
   const item = clashItems.find((c) => c.id === selectedClashId);
-  const clashIndex = selectedClashId ? clashItems.findIndex((c) => c.id === selectedClashId) + 1 : 0;
+  const selectedIndex = selectedClashId ? clashItems.findIndex((c) => c.id === selectedClashId) : -1;
+  const clashIndex = selectedIndex >= 0 ? getClashSeqId(clashItems, selectedIndex) : 0;
 
-  // Local state for comments, solution edits, and image pop-up modal
-  const [comments, setComments] = useState("");
-  const [solution, setSolution] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // Gallery Active Image Key state and solution notes edit state
+  // Gallery Active Image Key state
   const [activeImageKey, setActiveImageKey] = useState<"viewpoint" | "plan" | "section">("viewpoint");
-  const [modalSolution, setModalSolution] = useState("");
 
   // Zoom & Pan states
   const [zoomScale, setZoomScale] = useState(1);
@@ -39,28 +57,20 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
     setIsDragging(false);
   };
 
-  // Reset zoom, pan, and active tab when modal closes
+  // Reset zoom & pan when modal closes
   useEffect(() => {
-    if (!isModalOpen) {
-      resetZoomPan();
-      setActiveImageKey("viewpoint");
-    } else if (item) {
-      setModalSolution(item.solution || "");
-    }
-  }, [isModalOpen, item]);
+    if (!isModalOpen) resetZoomPan();
+  }, [isModalOpen]);
 
-  // Sync local state when selected item changes
+  // isClashModalOpen lives in the global store (so ClashTable's title click can
+  // open it too), which means it survives this component unmounting. Close it
+  // on unmount so switching tabs/views away and back doesn't reopen a stale modal.
   useEffect(() => {
-    if (item) {
-      setComments(item.comments || "");
-      setSolution(item.solution || "");
-      setModalSolution(item.solution || "");
-    } else {
-      setComments("");
-      setSolution("");
-      setModalSolution("");
-    }
-    setIsModalOpen(false); // Close image preview modal on item change
+    return () => setIsModalOpen(false);
+  }, [setIsModalOpen]);
+
+  // Reset the active gallery tab when the selected item changes
+  useEffect(() => {
     setActiveImageKey("viewpoint");
   }, [item]);
 
@@ -138,160 +148,132 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
     );
   }
 
-  const handleStatusChange = (newStatus: any) => {
-    updateMutation.mutate({
-      id: item.id,
-      updates: { status: newStatus },
-    });
-  };
-
-  const handleSeverityChange = (newSeverity: any) => {
-    updateMutation.mutate({
-      id: item.id,
-      updates: { type: newSeverity },
-    });
-  };
-
-  const handleSaveTextChanges = () => {
-    updateMutation.mutate({
-      id: item.id,
-      updates: { comments, solution },
-    });
-  };
-
-  const handleSaveModalSolution = (newVal: string) => {
-    setModalSolution(newVal);
-    updateMutation.mutate({
-      id: item.id,
-      updates: { solution: newVal },
-    });
+  const saveField = (updates: Partial<Pick<ClashViewpointRow, "name" | "status" | "type" | "comments" | "solution">>) => {
+    updateMutation.mutate({ id: item.id, updates });
   };
 
   const isSaving = updateMutation.isPending;
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Title Header */}
-      <div className="flex items-center justify-between">
-        <div className="text-muted text-[10px] font-bold tracking-wider uppercase">Clash Details</div>
+    <div className="flex flex-col gap-4">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-3 border-b border-border">
+        <h2 className="text-sm font-medium text-fg">Clash #{clashIndex}</h2>
         <button
-          className="text-muted hover:text-fg text-xs cursor-pointer bg-transparent border-0"
+          className="text-muted hover:text-fg p-1 cursor-pointer bg-transparent border-0 flex items-center justify-center transition-colors"
           type="button"
+          aria-label="Close panel"
           onClick={() => setSelectedClashId(null)}
         >
-          Close
+          <X className="w-4 h-4" />
         </button>
       </div>
 
       {/* Snapshot Preview */}
-      <div
-        className={`relative group overflow-hidden border border-border rounded-radius bg-surface-alt aspect-video flex items-center justify-center ${
-          item.imageUrl ? "cursor-pointer" : "select-none"
-        }`}
-        onClick={() => {
-          if (item.imageUrl) setIsModalOpen(true);
-        }}
-      >
-        {item.imageUrl ? (
-          <img
-            src={item.imageUrl}
-            alt={item.name}
-            className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-          />
-        ) : (
-          <div className="text-muted text-[11px] font-mono select-none">NO SNAPSHOT AVAILABLE</div>
-        )}
-        {isSaving && (
-          <div className="absolute inset-0 bg-bg/50 backdrop-blur-[1px] flex items-center justify-center">
-            <div className="w-5 h-5 border-2 border-border border-t-accent rounded-full animate-spin" />
-          </div>
-        )}
-      </div>
-
-      {/* Info Block */}
-      <div className="flex flex-col gap-1">
-        <h4 className="text-fg font-semibold text-sm leading-tight break-words">{item.name}</h4>
-        <div className="text-muted text-[11px] font-mono break-all mt-0.5">
-          GUID: <span className="text-fg/80">{item.guid}</span>
-        </div>
-        <div className="text-muted text-[11px] mt-0.5">
-          Disciplines: <span className="text-fg font-medium">{item.path || "(root)"}</span>
-        </div>
-        <div className="text-muted text-[11px] mt-0.5">
-          Created: <span className="text-fg font-mono">{format(new Date(item.occurredAt), "yyyy-MM-dd HH:mm")}</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-muted text-[10px] font-bold tracking-wider uppercase">Snapshot</label>
+        <div
+          className={`relative group overflow-hidden border border-border rounded-radius bg-surface-alt aspect-video flex items-center justify-center ${
+            item.imageUrl ? "cursor-pointer" : "select-none"
+          }`}
+          onClick={() => {
+            if (item.imageUrl) setIsModalOpen(true);
+          }}
+        >
+          {item.imageUrl ? (
+            <img
+              src={item.imageUrl}
+              alt={item.name}
+              className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+            />
+          ) : (
+            <div className="text-muted text-[11px] font-mono select-none">NO SNAPSHOT AVAILABLE</div>
+          )}
+          {isSaving && (
+            <div className="absolute inset-0 bg-bg/50 backdrop-blur-[1px] flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-border border-t-accent rounded-full animate-spin" />
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Status & Severity Selectors */}
-      <div className="grid grid-cols-2 gap-3 p-3 border border-border rounded-radius bg-surface-alt">
+      {/* Info Fields */}
+      <div className="flex flex-col gap-4">
+        <EditableTextField
+          label="Name"
+          value={item.name}
+          disabled={isSaving}
+          onSave={(newVal) => saveField({ name: newVal })}
+        />
+
+        <EditableSelectField
+          label="Status"
+          value={item.status}
+          options={STATUS_OPTIONS}
+          disabled={isSaving}
+          onSave={(newVal) => saveField({ status: newVal as ClashViewpointRow["status"] })}
+          renderView={(value) => (
+            <span
+              className={`inline-flex items-center min-h-6 px-2.5 py-1 border rounded-full text-[10px] font-bold tracking-wider uppercase ${statusToneClassMap[value as ClashViewpointRow["status"]]}`}
+            >
+              {statusLabelMap[value as ClashViewpointRow["status"]]}
+            </span>
+          )}
+        />
+
+        <EditableSelectField
+          label="Type"
+          value={item.type}
+          options={TYPE_OPTIONS}
+          disabled={isSaving}
+          onSave={(newVal) => saveField({ type: newVal as ClashViewpointRow["type"] })}
+          renderView={(value) => (
+            <span className="inline-flex items-center gap-2 text-sm text-fg font-medium">
+              <span className={`${TYPE_DOT_BASE_CLASS} ${typeDotClassMap[value as ClashViewpointRow["type"]]}`} />
+              {typeLabelMap[value as ClashViewpointRow["type"]]}
+            </span>
+          )}
+        />
+
         <div className="flex flex-col gap-1">
-          <label className="text-muted text-[10px] font-bold tracking-wider uppercase" htmlFor="clash-status-select">Status</label>
-          <select
-            id="clash-status-select"
-            value={item.status}
-            onChange={(e) => handleStatusChange(e.target.value)}
-            disabled={isSaving}
-            className="bg-bg text-fg border border-border rounded px-2 py-1 text-xs font-semibold focus:outline-none focus:border-accent cursor-pointer disabled:opacity-50"
-          >
-            <option value="new">New</option>
-            <option value="unresolved">Unresolved</option>
-            <option value="resolved">Resolved</option>
-            <option value="approved_as_note">Approved</option>
-          </select>
+          <label className="text-muted text-[10px] font-bold tracking-wider uppercase">Path</label>
+          <p className="text-sm text-fg font-medium">{item.path || "(root)"}</p>
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-muted text-[10px] font-bold tracking-wider uppercase" htmlFor="clash-severity-select">Severity</label>
-          <select
-            id="clash-severity-select"
-            value={item.type}
-            onChange={(e) => handleSeverityChange(e.target.value)}
-            disabled={isSaving}
-            className="bg-bg text-fg border border-border rounded px-2 py-1 text-xs font-semibold focus:outline-none focus:border-accent cursor-pointer disabled:opacity-50"
-          >
-            <option value="major">Major</option>
-            <option value="minor">Minor</option>
-            <option value="regulation">Regulation</option>
-          </select>
+          <label className="text-muted text-[10px] font-bold tracking-wider uppercase">Created</label>
+          <p className="text-sm text-fg font-mono">{format(new Date(item.occurredAt), "yyyy-MM-dd HH:mm")}</p>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-muted text-[10px] font-bold tracking-wider uppercase">GUID</label>
+          <p className="text-xs text-muted font-mono break-all">{item.guid}</p>
         </div>
       </div>
 
       {/* Editable Fields */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-muted text-[10px] font-bold tracking-wider uppercase" htmlFor="clash-comments-input">Comments</label>
-          <textarea
-            id="clash-comments-input"
-            rows={2}
-            value={comments}
-            onChange={(e) => setComments(e.target.value)}
+      <div className="flex flex-col gap-3 pt-1 border-t border-border">
+        <div className="mt-3">
+          <EditableTextField
+            label="Comments"
+            value={item.comments || ""}
+            multiline
             disabled={isSaving}
             placeholder="Add comments about this clash..."
-            className="bg-surface border border-border rounded p-2 text-xs text-fg leading-normal focus:outline-none focus:border-accent resize-none disabled:opacity-50"
+            valueClassName="text-xs text-fg"
+            onSave={(newVal) => saveField({ comments: newVal })}
           />
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-muted text-[10px] font-bold tracking-wider uppercase" htmlFor="clash-solution-input">Solution Notes</label>
-          <textarea
-            id="clash-solution-input"
-            rows={2}
-            value={solution}
-            onChange={(e) => setSolution(e.target.value)}
-            disabled={isSaving}
-            placeholder="Add mitigation or solution details..."
-            className="bg-surface border border-border rounded p-2 text-xs text-fg leading-normal focus:outline-none focus:border-accent resize-none disabled:opacity-50"
-          />
-        </div>
-
-        <button
-          onClick={handleSaveTextChanges}
-          disabled={isSaving || (comments === (item.comments || "") && solution === (item.solution || ""))}
-          className="inline-flex items-center justify-center min-h-8 px-3 border border-border-strong rounded-radius bg-gradient-to-b from-surface-raised to-surface-alt text-fg cursor-pointer text-xs font-semibold hover:border-[oklch(50%_0.05_252)] hover:bg-[oklch(25%_0.026_255)] active:translate-y-0 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-          type="button"
-        >
-          {isSaving ? "Saving..." : "Save Changes"}
-        </button>
+        <EditableTextField
+          label="Solution Notes"
+          value={item.solution || ""}
+          multiline
+          disabled={isSaving}
+          placeholder="Add mitigation or solution details..."
+          valueClassName="text-xs text-fg"
+          onSave={(newVal) => saveField({ solution: newVal })}
+        />
       </div>
 
       {/* Redline Markup display */}
@@ -425,24 +407,13 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
               {/* Badges */}
               <div className="flex gap-2 mb-6">
                 <span
-                  className={`inline-flex items-center min-h-5 px-2.5 py-0.5 border rounded-full text-[10px] font-bold tracking-wider uppercase ${
-                    item.type === "major"
-                      ? "border-[oklch(63%_0.18_28_/_42%)] bg-[oklch(63%_0.18_28_/_13%)] text-status-danger"
-                      : item.type === "regulation"
-                      ? "border-[oklch(77%_0.14_76_/_42%)] bg-[oklch(77%_0.14_76_/_13%)] text-status-warn"
-                      : "border-border-strong bg-[oklch(18%_0.02_255)] text-muted"
-                  }`}
+                  className={`inline-flex items-center min-h-5 px-2.5 py-0.5 border rounded-full text-[10px] font-bold tracking-wider uppercase ${statusToneClassMap[item.status]}`}
                 >
-                  {item.type}
+                  {statusLabelMap[item.status]}
                 </span>
-                <span
-                  className={`inline-flex items-center min-h-5 px-2.5 py-0.5 border rounded-full text-[10px] font-bold tracking-wider uppercase ${
-                    item.status === "resolved" || item.status === "approved_as_note"
-                      ? "border-[oklch(70%_0.14_150_/_42%)] bg-[oklch(70%_0.14_150_/_13%)] text-status-ok"
-                      : "border-[oklch(77%_0.14_76_/_42%)] bg-[oklch(77%_0.14_76_/_13%)] text-status-warn"
-                  }`}
-                >
-                  {item.status === "approved_as_note" ? "approved" : item.status.replace(/_/g, " ")}
+                <span className="inline-flex items-center gap-1.5 min-h-5 px-2.5 py-0.5 border border-border-strong rounded-full text-[10px] font-bold tracking-wider uppercase text-fg">
+                  <span className={`${TYPE_DOT_BASE_CLASS} ${typeDotClassMap[item.type]}`} />
+                  {typeLabelMap[item.type]}
                 </span>
               </div>
 
@@ -462,20 +433,32 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
                 </div>
               </div>
 
+              {/* Comments */}
+              <div className="mb-5">
+                <EditableTextField
+                  label="Comments"
+                  value={item.comments || ""}
+                  multiline
+                  disabled={isSaving}
+                  placeholder="No comments available"
+                  valueClassName="text-xs text-muted"
+                  editClassName="w-full bg-surface-alt/40 border border-border rounded px-3 py-2 text-xs text-fg resize-none focus:outline-none focus:border-accent leading-normal"
+                  onSave={(newVal) => saveField({ comments: newVal })}
+                />
+              </div>
+
               {/* Solution Notes */}
-              <div className="flex flex-col gap-1.5 mb-6">
-                <span className="text-muted text-[10px] font-bold tracking-wider uppercase">Solution</span>
-                <div className="relative border border-border rounded bg-surface-alt/40 focus-within:border-accent flex items-center">
-                  <textarea
-                    value={modalSolution}
-                    onChange={(e) => setModalSolution(e.target.value)}
-                    onBlur={() => handleSaveModalSolution(modalSolution)}
-                    placeholder="No solution details available"
-                    rows={2}
-                    className="w-full bg-transparent border-0 outline-none text-xs text-fg px-3 py-2 resize-none pr-8 focus:ring-0 leading-normal"
-                  />
-                  <Pencil className="w-3.5 h-3.5 text-muted absolute right-2.5 top-2.5 pointer-events-none" />
-                </div>
+              <div className="mb-6">
+                <EditableTextField
+                  label="Solution"
+                  value={item.solution || ""}
+                  multiline
+                  disabled={isSaving}
+                  placeholder="No solution details available"
+                  valueClassName="text-xs text-muted"
+                  editClassName="w-full bg-surface-alt/40 border border-border rounded px-3 py-2 text-xs text-fg resize-none focus:outline-none focus:border-accent leading-normal"
+                  onSave={(newVal) => saveField({ solution: newVal })}
+                />
               </div>
 
               {/* Gallery Thumbnails Grid */}
