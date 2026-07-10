@@ -5,21 +5,30 @@ import { useClashStore } from "@/react-components/store/clashStore";
 import { useUpdateClashViewpoint } from "./useClashViewpoints";
 import { useFilteredClashItems } from "./useFilteredClashItems";
 import type { ClashViewpointRow } from "./clashService";
-import { statusLabelMap, statusToneClassMap, typeLabelMap, typeDotClassMap, TYPE_DOT_BASE_CLASS, getClashSeqId } from "./clashDisplayHelpers";
+import {
+  statusLabelMap,
+  statusToneClassMap,
+  statusAccentClassMap,
+  typeLabelMap,
+  typeDotClassMap,
+  typeAccentClassMap,
+  TYPE_DOT_BASE_CLASS,
+  getClashSeqId,
+} from "./clashDisplayHelpers";
 import { EditableTextField, EditableSelectField } from "./EditableClashField";
 import { format } from "date-fns";
 
 const STATUS_OPTIONS = [
-  { value: "new", label: statusLabelMap.new },
-  { value: "unresolved", label: statusLabelMap.unresolved },
-  { value: "resolved", label: statusLabelMap.resolved },
-  { value: "approved_as_note", label: statusLabelMap.approved_as_note },
+  { value: "new", label: statusLabelMap.new, accentClassName: statusAccentClassMap.new },
+  { value: "unresolved", label: statusLabelMap.unresolved, accentClassName: statusAccentClassMap.unresolved },
+  { value: "resolved", label: statusLabelMap.resolved, accentClassName: statusAccentClassMap.resolved },
+  { value: "approved_as_note", label: statusLabelMap.approved_as_note, accentClassName: statusAccentClassMap.approved_as_note },
 ];
 
 const TYPE_OPTIONS = [
-  { value: "major", label: typeLabelMap.major },
-  { value: "minor", label: typeLabelMap.minor },
-  { value: "regulation", label: typeLabelMap.regulation },
+  { value: "major", label: typeLabelMap.major, accentClassName: typeAccentClassMap.major },
+  { value: "minor", label: typeLabelMap.minor, accentClassName: typeAccentClassMap.minor },
+  { value: "regulation", label: typeLabelMap.regulation, accentClassName: typeAccentClassMap.regulation },
 ];
 
 interface ClashPreviewProps {

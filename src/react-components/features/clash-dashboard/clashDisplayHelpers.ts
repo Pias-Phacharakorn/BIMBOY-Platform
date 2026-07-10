@@ -44,5 +44,12 @@ export const typeDotClassMap: Record<ClashItem["type"], string> = {
   regulation: "bg-muted ring-muted/20",
 };
 
+/** Same per-type color as typeDotClassMap, without the ring — for indicators (e.g. the Type dropdown's option bars) that don't want the dot's ring styling. */
+export const typeAccentClassMap: Record<ClashItem["type"], string> = {
+  major: "bg-status-danger",
+  minor: "bg-status-warn",
+  regulation: "bg-muted",
+};
+
 /** Shared size/ring classes for the type-dot indicator, so every usage renders identically. */
 export const TYPE_DOT_BASE_CLASS = "inline-block w-2 h-2 rounded-full ring-[3px] shrink-0";

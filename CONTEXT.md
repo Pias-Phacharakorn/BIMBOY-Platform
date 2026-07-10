@@ -561,3 +561,60 @@ pattern (from `clash_Preview_panel_redesign.html`) instead of always-visible
   duplicated across the ~7 field instances (5 in the sidebar, 2 in the
   modal) — avoids the kind of drift that already caused mismatched
   status/type badge colors between `ClashTable` and `ClashPreview` earlier.
+
+## Clash Preview/Modal — explicit confirm/cancel + Notion-style status/type dropdown
+
+Follow-up to the click-to-edit pattern above, changing `EditableTextField`'s
+commit behavior and replacing `EditableSelectField`'s native `<select>` with a
+custom listbox, per a reference screenshot of a Notion/Linear-style status
+picker (colored bar per option, selected row highlighted, checkmark on the
+selected option).
+
+### Decisions
+
+- **Text fields (`EditableTextField`: Name, Comments, Solution) drop
+  blur-to-save.** Entering edit mode no longer commits on blur — only an
+  explicit ✔️ (confirm) or ❌ (cancel) click commits/reverts the draft.
+  Escape still cancels (same as ❌), matching the existing convention. This
+  is a real behavior change from the "save-on-blur" decision documented
+  above, not just a visual reskin.
+- **Select fields (`EditableSelectField`: Status, Type) do *not* get ✔️/❌.**
+  Clicking an option in the (new custom) dropdown list commits immediately
+  and closes it — the click itself is the confirm action, so a separate
+  confirm/cancel pair would be redundant. Only the text fields get the new
+  icon pair.
+- **Confirm/cancel icon placement**: below the input/textarea, right-aligned,
+  cancel (❌) left of confirm (✔️) — one layout for both single-line and
+  multiline fields rather than an inline-row treatment for Name and a
+  below-row treatment for Comments/Solution.
+- **Confirm/cancel icon color**: neutral at rest (`text-muted`), colored on
+  hover only (`hover:text-status-ok` / `hover:text-status-danger`) — matches
+  this codebase's existing quiet icon-button convention (e.g. the `Pencil`
+  hint) rather than permanently-loud green/red icons.
+- **Custom dropdown, not a restyled native `<select>`**: native `<option>`
+  elements can't render the screenshot's colored left bar, highlighted
+  selected row, or right-side checkmark. Hand-rolled (no Radix/Headless
+  UI/downshift/react-select in `package.json`) — a button trigger + an
+  absolutely-positioned `<ul role="listbox">` popup, no portal. Accepted
+  tradeoff: the popup can get visually clipped by the panel's
+  `overflow-y-auto` if opened very close to the bottom edge, same class of
+  edge case as any other non-portaled popover already in this codebase.
+- **No custom keyboard roving/arrow-key navigation** in the new listbox —
+  click-to-select, Escape/click-outside to close without changing. Matches
+  the complexity level of the rest of this feature's custom UI; each
+  dropdown only has 3–4 options, so arrow-key nav wasn't judged worth the
+  implementation cost. `role="listbox"`/`role="option"` still present for
+  screen readers.
+- **Dropdown trigger (edit-mode closed state) is a new bordered-box style**,
+  not the plain view-mode pill badge with a chevron tacked on: reuses the
+  same colored dot/text as `renderView` (screenshot's own trigger is a plain
+  box, not a pill) inside `border border-border-strong rounded-radius`
+  (DESIGN.md's dropdown radius token) with a `ChevronDown`/`ChevronUp` that
+  flips on open state. Non-editing view mode is unchanged (still the pill
+  badge from the click-to-edit decision above).
+- **Icon system**: new icons (`Check`/`X` for confirm/cancel, `ChevronDown`/
+  `ChevronUp` for the dropdown) are imported directly from `lucide-react` in
+  `EditableClashField.tsx`, matching this file's existing (DESIGN.md-
+  noncompliant) direct-import pattern (`Pencil`, `X`, `ZoomIn`, etc. in
+  `ClashPreview.tsx`) — not migrated to the `appIcons`/`<Icon />` system as a
+  drive-by fix in this unrelated change.

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type KeyboardEvent } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil, Check, X, ChevronDown, ChevronUp } from "lucide-react";
 
 interface EditableTextFieldProps {
   label: string;
@@ -14,8 +14,9 @@ interface EditableTextFieldProps {
 
 /**
  * Click-anywhere-on-the-row field: shows static text + a pencil hint in view
- * mode, swaps to an input/textarea on click, and saves on blur. Escape
- * reverts the draft without saving (matches the mockup's editable-field rows).
+ * mode, swaps to an input/textarea on click. Commit only happens via the
+ * explicit confirm icon (or Enter on single-line) — clicking away no longer
+ * saves. Escape or the cancel icon reverts the draft without saving.
  */
 export function EditableTextField({
   label,
@@ -43,8 +44,8 @@ export function EditableTextField({
   }, [isEditing]);
 
   const commit = () => {
-    setIsEditing(false);
     if (draft !== value) onSave(draft);
+    setIsEditing(false);
   };
 
   const cancel = () => {
@@ -69,31 +70,49 @@ export function EditableTextField({
     <div className="flex flex-col gap-1">
       <label className="text-muted text-[10px] font-bold tracking-wider uppercase">{label}</label>
       {isEditing ? (
-        multiline ? (
-          <textarea
-            ref={inputRef as React.RefObject<HTMLTextAreaElement>}
-            rows={2}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            disabled={disabled}
-            className={editClassName || `${defaultEditClassName} text-xs leading-normal resize-none`}
-          />
-        ) : (
-          <input
-            ref={inputRef as React.RefObject<HTMLInputElement>}
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            disabled={disabled}
-            className={editClassName || defaultEditClassName}
-          />
-        )
+        <div className="flex flex-col gap-1.5">
+          {multiline ? (
+            <textarea
+              ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+              rows={2}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              disabled={disabled}
+              className={editClassName || `${defaultEditClassName} text-xs leading-normal resize-none`}
+            />
+          ) : (
+            <input
+              ref={inputRef as React.RefObject<HTMLInputElement>}
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              disabled={disabled}
+              className={editClassName || defaultEditClassName}
+            />
+          )}
+          <div className="flex items-center justify-end gap-1">
+            <button
+              type="button"
+              aria-label="Cancel edit"
+              onClick={cancel}
+              className="p-1 rounded text-muted hover:text-status-danger hover:bg-surface-raised transition-colors cursor-pointer border-0 bg-transparent flex items-center justify-center"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label="Confirm edit"
+              onClick={commit}
+              className="p-1 rounded text-muted hover:text-status-ok hover:bg-surface-raised transition-colors cursor-pointer border-0 bg-transparent flex items-center justify-center"
+            >
+              <Check className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
       ) : (
         <div
           role="button"
@@ -121,54 +140,107 @@ export function EditableTextField({
   );
 }
 
+interface SelectOption {
+  value: string;
+  label: string;
+  /** Solid bg- class rendered as a colored bar next to this option in the open list (e.g. statusAccentClassMap). */
+  accentClassName?: string;
+}
+
 interface EditableSelectFieldProps {
   label: string;
   value: string;
-  options: { value: string; label: string }[];
+  options: SelectOption[];
   disabled?: boolean;
   onSave: (value: string) => void;
   renderView: (value: string) => ReactNode;
 }
 
 /**
- * Same click-to-edit row pattern as EditableTextField, but swaps in a native
- * <select> instead of a text input, and saves immediately on change.
+ * Same click-to-edit row pattern as EditableTextField, but swaps in a
+ * hand-rolled listbox (native <select> can't style per-option colored bars/
+ * checkmarks) and saves immediately on option click — no confirm/cancel step,
+ * since picking an option is itself the commit.
  */
 export function EditableSelectField({ label, value, options, disabled = false, onSave, renderView }: EditableSelectFieldProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const selectRef = useRef<HTMLSelectElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isEditing) selectRef.current?.focus();
+    if (isEditing) setIsOpen(true);
   }, [isEditing]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+        setIsEditing(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  const closeEditing = () => {
+    setIsOpen(false);
+    setIsEditing(false);
+  };
 
   return (
     <div className="flex flex-col gap-1">
       <label className="text-muted text-[10px] font-bold tracking-wider uppercase">{label}</label>
       {isEditing ? (
-        <select
-          ref={selectRef}
-          value={value}
-          disabled={disabled}
-          onChange={(e) => {
-            onSave(e.target.value);
-            setIsEditing(false);
-          }}
-          onBlur={() => setIsEditing(false)}
+        <div
+          ref={containerRef}
+          className="relative w-fit"
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.preventDefault();
-              setIsEditing(false);
+              closeEditing();
             }
           }}
-          className="bg-bg text-fg border border-border rounded px-2 py-1.5 text-sm font-medium focus:outline-none focus:border-accent cursor-pointer w-fit"
         >
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => setIsOpen((prev) => !prev)}
+            className="flex items-center gap-2 pl-2.5 pr-2 py-1.5 border border-border-strong rounded-radius bg-bg text-sm font-medium focus:outline-none focus:border-accent cursor-pointer"
+          >
+            {renderView(value)}
+            {isOpen ? <ChevronUp className="w-3.5 h-3.5 text-muted" /> : <ChevronDown className="w-3.5 h-3.5 text-muted" />}
+          </button>
+
+          {isOpen && (
+            <ul
+              role="listbox"
+              className="absolute left-0 z-20 mt-1 min-w-full w-max border border-border rounded-radius bg-surface-raised shadow-lg py-1 overflow-hidden"
+            >
+              {options.map((opt) => {
+                const selected = opt.value === value;
+                return (
+                  <li key={opt.value} role="option" aria-selected={selected}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSave(opt.value);
+                        closeEditing();
+                      }}
+                      className={`w-full flex items-center gap-2 pl-2.5 pr-3 py-1.5 text-sm text-left cursor-pointer border-0 transition-colors ${
+                        selected ? "bg-accent-muted/40 text-fg font-medium" : "bg-transparent text-fg hover:bg-surface-alt"
+                      }`}
+                    >
+                      <span className={`inline-block w-1 h-4 rounded-full shrink-0 ${opt.accentClassName || "bg-border-strong"}`} />
+                      <span className="flex-1 whitespace-nowrap">{opt.label}</span>
+                      {selected && <Check className="w-3.5 h-3.5 text-accent shrink-0" />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       ) : (
         <div
           role="button"
