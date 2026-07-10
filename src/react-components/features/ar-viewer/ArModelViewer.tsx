@@ -38,6 +38,20 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState<string>("");
 
+  // "shown" fully opaque, "fading" transitioning to 0, "hidden" unmounted.
+  const [hintPhase, setHintPhase] = useState<"shown" | "fading" | "hidden">("hidden");
+
+  // Refs the pointer-drag handlers read without re-subscribing on every render.
+  const inSessionRef = useRef(false);
+  const draggingRef = useRef(false);
+  const lastPointerXRef = useRef(0);
+  const hintTimersRef = useRef<number[]>([]);
+
+  // Keep the drag handlers' view of session state current (they're bound once).
+  useEffect(() => {
+    inSessionRef.current = inSession;
+  }, [inSession]);
+
   const sortedFiles = useMemo(
     () => [...fragFiles].sort((a, b) => a.name.localeCompare(b.name)),
     [fragFiles]
@@ -116,6 +130,67 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
     };
   }, []);
 
+  // ─── One-finger drag → spin the whole model group on its Y axis (turntable) ───
+  // Bound once to the container. Vertical drag is ignored (never a free trackball,
+  // so the building stays upright). Only active in-session with a model loaded.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const ROTATE_SPEED = 0.008; // radians of Y-spin per pixel of horizontal drag
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (!inSessionRef.current) return;
+      const group = modelGroupRef.current;
+      if (!group || group.children.length === 0) return;
+      draggingRef.current = true;
+      lastPointerXRef.current = e.clientX;
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (!draggingRef.current) return;
+      const group = modelGroupRef.current;
+      if (!group) return;
+      const dx = e.clientX - lastPointerXRef.current;
+      lastPointerXRef.current = e.clientX;
+      group.rotation.y += dx * ROTATE_SPEED;
+    };
+    const onPointerUp = () => {
+      draggingRef.current = false;
+    };
+
+    // pointerdown on the container (behind the pointer-events:none overlay, so
+    // taps on the picker panel never reach here); move/up on window so a drag
+    // that slides off-canvas still tracks and releases cleanly.
+    container.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+
+    return () => {
+      container.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+    };
+  }, []);
+
+  // Flash the "Drag to rotate" hint, then fade it out. Clears any pending timers
+  // so repeated loads restart the hint rather than stacking overlapping fades.
+  const flashRotateHint = () => {
+    hintTimersRef.current.forEach((id) => window.clearTimeout(id));
+    hintTimersRef.current = [];
+    setHintPhase("shown");
+    hintTimersRef.current.push(
+      window.setTimeout(() => setHintPhase("fading"), 2500),
+      window.setTimeout(() => setHintPhase("hidden"), 3300)
+    );
+  };
+
+  useEffect(
+    () => () => hintTimersRef.current.forEach((id) => window.clearTimeout(id)),
+    []
+  );
+
   // ─── Recenter + scale-to-fit the accumulated model group, place in front ──────
   const recenterAndScale = () => {
     const group = modelGroupRef.current;
@@ -170,6 +245,7 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
       }
     }
     recenterAndScale();
+    flashRotateHint();
     setStatus("");
     setIsLoading(false);
   };
@@ -202,6 +278,19 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
             Tap <strong>START AR</strong> below to open the camera, then choose a
             model to load.
           </div>
+        </div>
+      )}
+
+      {/* Transient "drag to rotate" hint — non-interactive so it never eats the
+          drag gesture; fades out a few seconds after a model loads. */}
+      {hintPhase !== "hidden" && (
+        <div
+          style={{
+            ...rotateHintStyle,
+            opacity: hintPhase === "shown" ? 1 : 0,
+          }}
+        >
+          ↻ Drag to rotate
         </div>
       )}
 
@@ -293,6 +382,21 @@ const introStyle: React.CSSProperties = {
   color: "#fff",
   font: "400 14px system-ui, sans-serif",
   padding: 24,
+};
+
+const rotateHintStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 24,
+  left: "50%",
+  transform: "translateX(-50%)",
+  zIndex: 10,
+  padding: "8px 16px",
+  borderRadius: 999,
+  background: "rgba(0,0,0,0.6)",
+  color: "#fff",
+  font: "600 13px system-ui, sans-serif",
+  pointerEvents: "none",
+  transition: "opacity 0.8s ease",
 };
 
 const pickerStyle: React.CSSProperties = {

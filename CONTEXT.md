@@ -522,6 +522,47 @@ See `.agents/docs/bim-viewer.md` (mirrored `.claude/docs/bim-viewer.md`) for
 the BIM Viewer guide's Cloud Models section — update both once this is
 implemented, per `CLAUDE.md`'s "Keep the Domain Guides in sync" rule.
 
+## AR viewer — drag-to-rotate instead of real-world (1:1) placement
+
+Grilled against the actual AR code (not assumptions from the tutorial-era
+docs, which were stale). Two AR implementations exist in the repo:
+
+- **Live**: `src/react-components/features/ar-viewer/ArModelViewer.tsx`,
+  reached via the standalone `/ar/$projectId` route (`ModelsView`'s "AR" tab
+  navigates here). Single WebGL context, no OBC engine. Already does **not**
+  attempt real-world (1:1) scale or hit-test placement — it auto-scales the
+  loaded model(s) to fit ~1.5m and drops them fixed 2m in front of the
+  camera. It has **no manual manipulation** (no rotate/pan/zoom) today.
+- **Dormant**: `src/bim-components/ArSession/src/ArSession.ts` +
+  `useArSession.ts` + `ArViewerPanel.tsx` — a hit-test/reticle,
+  tap-to-place-at-real-scale approach, kept in the repo per its own code
+  comment ("dormant, not imported, for the later 'real BIM model in AR'
+  step") but not wired into any route today.
+
+### Decisions
+
+- **Scope is the live `/ar/$projectId` page (`ArModelViewer.tsx`) only.**
+  `ArSession.ts`/`ArViewerPanel.tsx` stay untouched and dormant — real-world
+  1:1 placement (needing a coordinate/georeferencing snap this project
+  doesn't have yet) is explicitly not being pursued right now.
+- **Gesture: rotate only**, no pinch-to-scale or drag-to-reposition in this
+  round. Matches the ask ("overall model spin like AR example") without
+  expanding scope to a full manipulation gesture set.
+- **Turntable, Y-axis only**: one-finger horizontal drag spins the whole
+  `modelGroup` around the vertical axis; vertical drag component is ignored.
+  Never free-trackball — keeps the building upright, can't end up tilted or
+  upside-down.
+- **Applies to the whole `modelGroup`**, not per individual loaded `.frag`
+  model — consistent with `recenterAndScale` already treating all loaded
+  models as one accumulated group.
+- **Hint UI**: a brief "Drag to rotate" text hint appears after a model
+  loads, then fades out after a few seconds — not a permanent on-screen
+  label, not silent/no-hint.
+
+See `.agents/docs/ar-webxr.md` (mirrored `.claude/docs/ar-webxr.md`) —
+updated in the same change to correct the stale "two active entry points /
+ArSession manages the session" description and document which path is live.
+
 ## Clash Preview click-to-edit fields
 
 Reworking the Clash Preview sidebar panel

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Plan: Clash field confirm/cancel + status dropdown</title>
+<title>Plan: AR drag-to-rotate turntable</title>
 <style>
   :root { color-scheme: light dark; }
   body { font-family: system-ui, sans-serif; max-width: 1200px; margin: 2rem auto; padding: 0 1rem;
@@ -23,55 +23,74 @@
 <body>
 
 <h1>📌 Goal</h1>
-<p>Give Clash Preview/Modal's inline-edit fields explicit ✔️/❌ confirm-cancel controls for text fields, and restyle the Status/Type dropdowns as a Notion/Linear-style custom listbox (colored bar, highlighted selected row, checkmark) instead of a native &lt;select&gt;.</p>
+<p>Let the user spin the loaded BIM model in the live AR page (<code>/ar/$projectId</code>) with a one-finger drag, instead of pursuing real-world (1:1) hit-test placement that this project can't support yet (no coordinate/georeferencing snap).</p>
 
 <div class="diagrams">
   <div class="diagram-col">
     <h2>🔄 Current Flow</h2>
     <pre class="mermaid">
 flowchart TD
-  A["EditableTextField<br/>EditableClashField.tsx<br/>view: text + Pencil hint"] -->|click row| B["isEditing=true<br/>input/textarea shown"]
-  B -->|onBlur| C["commit(): save if draft changed"]
-  B -->|Escape| D["cancel(): revert draft"]
-
-  E["EditableSelectField<br/>EditableClashField.tsx<br/>view: renderView pill badge + Pencil"] -->|click row| F["isEditing=true<br/>native &lt;select&gt; shown"]
-  F -->|onChange| G["onSave immediately<br/>exit edit mode"]
+  A["ar.$projectId.tsx<br/>route (composition only)"] --> B["ArModelViewer.tsx<br/>three.js + WebXR session"]
+  B --> C["useArModelLoader.ts<br/>isolated .frag loader"]
+  C -->|"loadFrag() → THREE.Object3D"| B
+  B --> D["modelGroupRef<br/>THREE.Group, accumulates models"]
+  D --> E["recenterAndScale()<br/>fixed 2m in front, scale-to-fit 1.5m"]
+  E --> F["renderer.setAnimationLoop<br/>renders scene, camera fixed"]
+  F -.->|"no touch handling at all"| G["Model sits static<br/>no rotate / pan / zoom"]
     </pre>
   </div>
   <div class="diagram-col">
     <h2>✅ Proposed Flow</h2>
     <pre class="mermaid">
 flowchart TD
-  A["EditableTextField [MOD]<br/>view: text + Pencil hint"] -->|click row| B["isEditing=true<br/>input/textarea shown"]
-  B --> H["[NEW] Confirm/Cancel row<br/>❌ ✔️ below input, right-aligned"]
-  H -->|"✔️ click ★"| C["commit(): save if changed<br/>exit edit mode"]
-  H -->|❌ click / Escape| D["cancel(): revert draft<br/>exit edit mode"]
-
-  E["EditableSelectField [MOD]<br/>view: renderView pill badge + Pencil<br/>unchanged"] -->|click row| F["[NEW] Dropdown trigger<br/>bordered box + dot + label + Chevron"]
-  F -->|click trigger| I["[NEW] Listbox popup<br/>role=listbox, colored bar/option,<br/>selected row highlighted + checkmark"]
-  I -->|click option| G["onSave immediately<br/>exit edit mode"]
-  I -->|Escape / click-outside| J["close popup, no change"]
+  A["ar.$projectId.tsx<br/>route (composition only)"] --> B["ArModelViewer.tsx [MOD]<br/>three.js + WebXR session"]
+  B --> C["useArModelLoader.ts<br/>isolated .frag loader"]
+  C -->|"loadFrag() → THREE.Object3D"| B
+  B --> D["modelGroupRef<br/>THREE.Group, accumulates models"]
+  D --> E["recenterAndScale()<br/>unchanged: fixed 2m in front, scale-to-fit 1.5m"]
+  E --> H["'Drag to rotate' hint [NEW]<br/>fades out after a few seconds"]
+  B --> I["pointer/touch listeners [NEW]<br/>on renderer container, active only while inSession"]
+  I -->|"★ horizontal drag delta → modelGroup.rotation.y"| D
+  F["renderer.setAnimationLoop<br/>renders scene, camera fixed"] --> D
     </pre>
-    <p class="removed">Removed: native &lt;select&gt; element in EditableSelectField — replaced by the custom listbox popup.</p>
-    <p class="removed">Removed: blur-to-save in EditableTextField — commit now only happens via explicit ✔️ (or Enter for single-line).</p>
   </div>
 </div>
 
 <h2>⚖️ Pros &amp; Cons</h2>
 <table>
   <tr><th>Pros</th><th>Cons</th></tr>
-  <tr><td>Explicit confirm/cancel removes the "did clicking away just silently save that?" ambiguity in the current blur-to-save text fields.</td><td>Behavior change: users used to click-away-to-save must learn the new explicit-✔️ habit; a stray click that used to save now does nothing until confirmed.</td></tr>
-  <tr><td>Matches the requested Notion/Linear-style status picker exactly (colored bar, highlighted row, checkmark) using colors already defined in clashDisplayHelpers.ts — no new tokens.</td><td>Hand-rolled listbox (no Radix/Headless UI in this repo) has weaker keyboard support than a library component — no arrow-key roving nav, click/Escape only.</td></tr>
-  <tr><td>Zero new dependencies — everything built with existing lucide-react icons and Tailwind tokens already used in this file.</td><td>No portal for the popup, so it can be visually clipped if opened very near the bottom of a scrollable panel (accepted edge case, same as other non-portaled popovers here).</td></tr>
-  <tr><td>Select fields keep today's save-on-click simplicity (no redundant ✔️/❌ added there) — smaller behavior change than doing it everywhere.</td><td>Two distinct dropdown trigger states now exist (view-mode pill vs. edit-mode bordered box) — slightly more visual states to keep in sync than a single restyled control.</td></tr>
+  <tr>
+    <td>Matches the actual "AR example" reference the user pointed at (spin-the-model demos) without requiring any coordinate/georeferencing work this project doesn't have yet.</td>
+    <td>Model still floats at a fixed 2m offset with no real-world anchoring — it will visibly drift/clip through walls as the user walks around, since there's still no hit-test/floor lock. Not solved by this change, and looks odd if not expected.</td>
+  </tr>
+  <tr>
+    <td>Smallest possible diff: one file (<code>ArModelViewer.tsx</code>), no touch to the dormant <code>ArSession</code> hit-test path, no schema/route changes.</td>
+    <td>Y-axis-only turntable means the user can't tilt the model to inspect its underside/roofline from above/below — a deliberate simplification, not a limitation of the gesture code itself.</td>
+  </tr>
+  <tr>
+    <td>Turntable constraint (Y-axis only) keeps the building always upright — can't end up sideways or upside-down from an accidental gesture.</td>
+    <td>No pinch-to-scale in this round, so a model that's still awkwardly sized (too big/small relative to real surroundings) can't be manually corrected — only <code>recenterAndScale</code>'s fixed 1.5m target applies.</td>
+  </tr>
+  <tr>
+    <td>Reuses the existing pointer-based interaction pattern already common in this codebase (no new dependency — plain <code>pointerdown/pointermove/pointerup</code> on the renderer's DOM element).</td>
+    <td>Drag-to-rotate and the picker overlay panel both live in the same full-screen area; if the picker panel is open during a drag near the bottom of the screen, the two capture zones must be kept from fighting over touch events (picker keeps <code>pointer-events: auto</code>, rest of screen stays the drag surface).</td>
+  </tr>
 </table>
 
 <h2>📁 Files Changed</h2>
-<pre>src/react-components/features/clash-dashboard/EditableClashField.tsx [MOD] — add Check/X confirm-cancel row to EditableTextField (drop blur-to-save); replace EditableSelectField's native &lt;select&gt; with a hand-rolled listbox trigger + popup (ChevronDown/Up, colored bar per option, checkmark on selected)
-CONTEXT.md [MOD] — decisions already recorded (done during grill-with-docs)</pre>
+<pre>[MOD] src/react-components/features/ar-viewer/ArModelViewer.tsx
+      - add pointerdown/pointermove/pointerup listeners on the renderer's container,
+        active only while inSession, updating modelGroupRef.current.rotation.y from
+        horizontal drag delta (vertical delta ignored)
+      - add a "Drag to rotate" hint element (fades out a few seconds after
+        handleLoadSelected's recenterAndScale call), pointer-events: none
+
+(No changes to useArModelLoader.ts, ArSession.ts, useArSession.ts, ArViewerPanel.tsx,
+routes, or docs — CONTEXT.md / .agents/docs/ar-webxr.md / .claude/docs/ar-webxr.md
+already updated during the grill-with-docs session.)</pre>
 
 <h2>❓ Open Questions</h2>
-<p>No open questions — ready to implement upon approval. (ClashPreview.tsx needs no changes: it consumes EditableTextField/EditableSelectField through their existing prop interface, which is unchanged.)</p>
+<p>No open questions — ready to implement upon approval.</p>
 
 <script type="module">
   import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
