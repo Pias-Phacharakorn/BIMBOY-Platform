@@ -659,3 +659,110 @@ selected option).
   noncompliant) direct-import pattern (`Pencil`, `X`, `ZoomIn`, etc. in
   `ClashPreview.tsx`) — not migrated to the `appIcons`/`<Icon />` system as a
   drive-by fix in this unrelated change.
+
+## AR viewer — QR-code anchoring (anchored miniature) — v1
+
+Adds QR-code real-world anchoring to the live AR viewer
+(`src/react-components/features/ar-viewer/ArModelViewer.tsx`, reached via
+`/ar/$projectId`). Grilled against the `QR Code WebXR Anchoring.md` research
+note (a NotebookLM artifact) and the actual live/dormant AR code. The research
+note's pipeline assumed integration into the **dormant** `ArSession.ts`
+(hit-test/reticle) and pre-session `getUserMedia` scanning; both assumptions
+were corrected during grilling (see decisions). This section supersedes parts
+of the earlier "AR viewer — drag-to-rotate instead of real-world (1:1)
+placement" decision.
+
+### What this reverses / supersedes
+
+- The earlier "**real-world (1:1) placement is explicitly not being pursued**"
+  decision is **partially reversed**: real-world *positioning/orientation* via
+  a QR anchor **is** now being pursued — but still **not** true 1:1 building
+  scale. The model stays an auto-fit miniature; the QR only pins *where* and
+  *which way* it sits.
+- The shipped **one-finger drag-to-rotate turntable is removed** and replaced
+  by **pinch-to-zoom** (see decisions). The "keep the building upright"
+  principle from the turntable decision carries over to the anchor orientation.
+
+### Decisions
+
+- **Pipeline: extend the live `ArModelViewer.tsx`, not revive `ArSession.ts`.**
+  QR-anchoring attaches to the live `/ar/$projectId` path (what users actually
+  reach; already loads models, has the cloud-model picker, and already requests
+  `camera-access`). The dormant `ArSession.ts`/`ArViewerPanel.tsx` stay
+  untouched. Key reframe: **QR-anchoring does not need hit-test** — the QR pose
+  *is* the anchor — so `ArSession`'s reticle/hit-test machinery is not an asset
+  here.
+- **Scale: anchored miniature, not 1:1.** Keep today's ~1.5m auto-fit scale;
+  the QR fixes position + orientation only. True 1:1 (walk-inside) is explicitly
+  still deferred (unforgiving of PnP error, needs correct metric units).
+- **Scan timing: in-session, via WebXR Raw Camera Access** (the
+  `camera-access` feature `ArModelViewer` already requests) — **not** the
+  research note's pre-session `getUserMedia` + `jsQR`. Rationale: the in-session
+  frame carries the XR camera pose at decode time, which is exactly what's
+  needed to plant a world-locked anchor. This dissolves two gotchas the note
+  flagged as verify-on-device unknowns: the camera-release/handoff timing gap,
+  and the pre-session→session coordinate-frame mismatch (90°/180°).
+- **Target device: Android Chrome phones/tablets only** for v1. iOS is out of
+  scope (no WebXR at all → no raw camera access). Quest not targeted (raw camera
+  access is more variable there).
+- **Camera intrinsics come free** from the raw-camera-access `XRView`
+  projection matrix — no device-metadata lookup or calibration guess (the note
+  listed this as an open problem; it isn't one on this path).
+- **PnP: lightweight planar-homography pose (IPPE / homography decomposition),
+  not opencv.js.** A QR is 4 coplanar corners of known size — the planar case
+  has a compact closed-form solution. Avoids adding ~8MB of opencv.js wasm to a
+  Vite/Cloudflare-static bundle for one function. Accuracy is acceptable for a
+  forgiving miniature; the hand-rolled math needs careful testing.
+- **No reference-space swap.** The note's `getOffsetReferenceSpace()` mechanism
+  is for making the whole world/hit-test relative to the anchor. Since we place
+  a single miniature and use no hit-test, we instead set `modelGroup`'s
+  transform to the QR's world pose (QR-in-camera pose composed with the XR
+  camera pose from the same frame). Change stays localized to the placement
+  step.
+- **QR payload: ignored — any QR works, with a fixed known physical size.** The
+  model is already chosen by the existing picker, so the QR needn't select it.
+  PnP uses one global physical-size constant (e.g. `QR_PHYSICAL_SIZE_M`, to be
+  set to the actual printed size and documented). Lookup-key / direct-coordinate
+  payloads are deferred to a later round (per-anchor model/coordinate
+  association).
+- **Flow: additive, degrades gracefully.** Keep today's exact flow — the model
+  still loads fixed 2m in front. After load, auto-run a throttled decode loop
+  with a "Point at a QR to place it" hint; the first successful decode snaps the
+  miniature to the QR anchor. If no QR is ever found, the model simply stays 2m
+  in front (current behavior preserved). A "Reposition" affordance re-runs the
+  scan. First decode wins if multiple codes are visible.
+- **Anchor orientation: position + yaw, forced upright.** Use the QR for
+  position and heading (yaw about vertical); ignore its pitch/roll so the
+  building never tilts or lies on its side, regardless of whether the code is
+  table- or wall-mounted. Mirrors the turntable's upright principle.
+- **Manipulation: pinch-to-zoom replaces drag-to-rotate.** Two-finger pinch
+  scales the whole `modelGroup`, scaled about the anchored origin so the
+  miniature grows from where it's pinned. The one-finger turntable handler is
+  removed. The "Drag to rotate" hint copy changes accordingly.
+- **Decode cost: throttle + downscale.** Do not decode every frame — decode
+  every ~Nth frame and/or downscale the `readPixels` readback; continuous
+  full-res decode would tank framerate.
+- **Layer placement (per AGENTS.md):** PnP math → a pure, testable util
+  (`lib/` or a pure module under the feature); scan-loop + anchor orchestration
+  → a new `useArQrAnchor` hook in `features/ar-viewer/`, consumed by
+  `ArModelViewer.tsx` (keeps the component from ballooning, matches the
+  "logic/hooks live in `features/`" rule). Add the `jsQR` dependency
+  (decoder-only).
+
+### Open follow-ups (not this round)
+
+- True 1:1 building scale (walk-inside) — still deferred pending a
+  coordinate/metric-units solution.
+- `XRAnchor` API to fight drift — v1 relies on plain tracked-reference-space
+  placement; robustify later if drift is observed in the field.
+- Lookup-key QR payload → Supabase anchor record (per-anchor model/coordinate
+  association) once anchoring needs to select the model or carry project coords.
+- Quest Browser / iOS support (iOS would need a fully-userland WebGL/WebRTC
+  engine, a different architecture).
+- ARUCO-marker fallback if QR corner detection proves too motion-blur/focus
+  sensitive in the field.
+
+On implementation, update `.agents/docs/ar-webxr.md` **and** its
+`.claude/docs/ar-webxr.md` mirror in the same change (per `CLAUDE.md`'s
+"Keep the Domain Guides in sync" rule) — correct the "fixed 2m placement /
+turntable is the only manipulation" description and document the QR-anchor path.

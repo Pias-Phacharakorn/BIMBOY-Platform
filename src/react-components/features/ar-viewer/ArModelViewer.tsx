@@ -3,8 +3,13 @@
 // camera-access immersive-ar session skeleton; the user picks .frag model(s)
 // from an in-AR dom-overlay ("Load Cloud Model"), which are decoded via the
 // isolated useArModelLoader and dropped into the XR scene auto-centered +
-// scaled-to-fit ~2 m in front. Milestone: model just appears (fixed placement;
-// hit-test / 1:1 walk-around deferred).
+// scaled-to-fit ~1.5 m.
+//
+// Placement: the model loads at a fixed spot ~2 m in front (the fallback), then
+// an in-session QR scan (useArQrAnchor, via the camera-access raw camera frame)
+// snaps it onto a printed QR code — position + upright yaw. No QR found ⇒ it
+// just stays in front. Manipulation is pinch-to-zoom (scales the whole model
+// about its anchored base); the old drag-to-rotate turntable is gone.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import * as THREE from "three";
@@ -12,10 +17,18 @@ import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
 import { useProject } from "@/react-components/features/projects/useProjects";
 import { useCloudModelFiles } from "@/react-components/features/cloud-models/useCloudModels";
 import { useArModelLoader } from "./useArModelLoader";
+import { useArQrAnchor } from "./useArQrAnchor";
 
 interface ArModelViewerProps {
   projectId: string;
 }
+
+// Fallback placement (no QR anchored yet): base of the model, in metres,
+// relative to the session's starting reference space (~eye height origin).
+const FALLBACK_POSITION = new THREE.Vector3(0, -0.9, -2);
+// Pinch-to-zoom scale clamp (multiplier on the auto-fit miniature size).
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 4;
 
 export function ArModelViewer({ projectId }: ArModelViewerProps) {
   const router = useRouter();
@@ -24,9 +37,17 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  // Outer group = placement (position + upright yaw) and pinch-zoom (scale about
+  // its origin). Inner content group holds the loaded models, offset so their
+  // base-centre sits at the outer origin — so zoom grows the model from its base
+  // and anchoring plants that base on the QR.
   const modelGroupRef = useRef<THREE.Group | null>(null);
+  const contentGroupRef = useRef<THREE.Group | null>(null);
 
   const { loadFrag } = useArModelLoader();
+  const { status: anchorStatus, beginScan, processFrame, dispose: disposeAnchor } =
+    useArQrAnchor();
 
   const { data: project } = useProject(projectId);
   const prefix = project ? `${project.projectnumber}_${project.projectName}/02_frag` : "";
@@ -40,24 +61,35 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
 
   // "shown" fully opaque, "fading" transitioning to 0, "hidden" unmounted.
   const [hintPhase, setHintPhase] = useState<"shown" | "fading" | "hidden">("hidden");
+  const [hintText, setHintText] = useState<string>("");
 
-  // Refs the pointer-drag handlers read without re-subscribing on every render.
+  // Refs read by the animation loop / pinch handlers without re-subscribing.
   const inSessionRef = useRef(false);
-  const draggingRef = useRef(false);
-  const lastPointerXRef = useRef(0);
+  const anchoredRef = useRef(false);
+  const zoomRef = useRef(1);
+  const processFrameRef = useRef(processFrame);
   const hintTimersRef = useRef<number[]>([]);
 
-  // Keep the drag handlers' view of session state current (they're bound once).
+  // Pinch (two-pointer) gesture state.
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchStartDistRef = useRef(0);
+  const pinchStartZoomRef = useRef(1);
+
   useEffect(() => {
     inSessionRef.current = inSession;
   }, [inSession]);
+
+  // Keep the loop's view of processFrame current (it's bound once).
+  useEffect(() => {
+    processFrameRef.current = processFrame;
+  }, [processFrame]);
 
   const sortedFiles = useMemo(
     () => [...fragFiles].sort((a, b) => a.name.localeCompare(b.name)),
     [fragFiles]
   );
 
-  // ─── three.js + WebXR session setup (verbatim skeleton from ArWebXRTest) ──────
+  // ─── three.js + WebXR session setup ───────────────────────────────────────
   useEffect(() => {
     const container = containerRef.current;
     const overlay = overlayRef.current;
@@ -78,6 +110,9 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
     scene.add(dirLight);
 
     const modelGroup = new THREE.Group();
+    const contentGroup = new THREE.Group();
+    modelGroup.add(contentGroup);
+    modelGroup.position.copy(FALLBACK_POSITION);
     scene.add(modelGroup);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -88,7 +123,9 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
 
     sceneRef.current = scene;
     cameraRef.current = camera;
+    rendererRef.current = renderer;
     modelGroupRef.current = modelGroup;
+    contentGroupRef.current = contentGroup;
 
     const sessionInit: any = {
       requiredFeatures: ["camera-access"],
@@ -99,11 +136,19 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
     document.body.appendChild(arButton);
 
     const onSessionStart = () => setInSession(true);
-    const onSessionEnd = () => setInSession(false);
+    const onSessionEnd = () => {
+      setInSession(false);
+      anchoredRef.current = false;
+      disposeAnchor(renderer);
+    };
     renderer.xr.addEventListener("sessionstart", onSessionStart);
     renderer.xr.addEventListener("sessionend", onSessionEnd);
 
-    renderer.setAnimationLoop(() => {
+    // XR frame loop: drive the QR scan (throttled internally), then render.
+    renderer.setAnimationLoop((_time, frame) => {
+      if (frame) {
+        processFrameRef.current(renderer, frame, applyAnchor);
+      }
       renderer.render(scene, camera);
     });
 
@@ -119,6 +164,7 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
       renderer.xr.removeEventListener("sessionstart", onSessionStart);
       renderer.xr.removeEventListener("sessionend", onSessionEnd);
       renderer.setAnimationLoop(null);
+      disposeAnchor(renderer);
       arButton.remove();
       renderer.dispose();
       if (renderer.domElement.parentElement === container) {
@@ -126,41 +172,57 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
       }
       sceneRef.current = null;
       cameraRef.current = null;
+      rendererRef.current = null;
       modelGroupRef.current = null;
+      contentGroupRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── One-finger drag → spin the whole model group on its Y axis (turntable) ───
-  // Bound once to the container. Vertical drag is ignored (never a free trackball,
-  // so the building stays upright). Only active in-session with a model loaded.
+  // ─── Pinch-to-zoom → scale the whole model about its anchored base ────────
+  // Two-finger pinch only. Scaling the outer group (whose origin is the model's
+  // base-centre) grows/shrinks the miniature from where it's pinned. One-finger
+  // gestures do nothing (no free-trackball, no reposition-by-drag).
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const ROTATE_SPEED = 0.008; // radians of Y-spin per pixel of horizontal drag
+    const dist = () => {
+      const pts = [...pointersRef.current.values()];
+      if (pts.length < 2) return 0;
+      return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    };
 
     const onPointerDown = (e: PointerEvent) => {
       if (!inSessionRef.current) return;
       const group = modelGroupRef.current;
-      if (!group || group.children.length === 0) return;
-      draggingRef.current = true;
-      lastPointerXRef.current = e.clientX;
+      if (!group || contentGroupRef.current?.children.length === 0) return;
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointersRef.current.size === 2) {
+        pinchStartDistRef.current = dist();
+        pinchStartZoomRef.current = zoomRef.current;
+      }
     };
     const onPointerMove = (e: PointerEvent) => {
-      if (!draggingRef.current) return;
+      if (!pointersRef.current.has(e.pointerId)) return;
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointersRef.current.size !== 2 || pinchStartDistRef.current <= 0) return;
       const group = modelGroupRef.current;
       if (!group) return;
-      const dx = e.clientX - lastPointerXRef.current;
-      lastPointerXRef.current = e.clientX;
-      group.rotation.y += dx * ROTATE_SPEED;
+      const ratio = dist() / pinchStartDistRef.current;
+      const next = THREE.MathUtils.clamp(
+        pinchStartZoomRef.current * ratio,
+        MIN_ZOOM,
+        MAX_ZOOM
+      );
+      zoomRef.current = next;
+      group.scale.setScalar(next);
     };
-    const onPointerUp = () => {
-      draggingRef.current = false;
+    const onPointerUp = (e: PointerEvent) => {
+      pointersRef.current.delete(e.pointerId);
+      if (pointersRef.current.size < 2) pinchStartDistRef.current = 0;
     };
 
-    // pointerdown on the container (behind the pointer-events:none overlay, so
-    // taps on the picker panel never reach here); move/up on window so a drag
-    // that slides off-canvas still tracks and releases cleanly.
     container.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
@@ -174,15 +236,15 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
     };
   }, []);
 
-  // Flash the "Drag to rotate" hint, then fade it out. Clears any pending timers
-  // so repeated loads restart the hint rather than stacking overlapping fades.
-  const flashRotateHint = () => {
+  // Flash a transient hint, then fade it out.
+  const flashHint = (text: string) => {
     hintTimersRef.current.forEach((id) => window.clearTimeout(id));
     hintTimersRef.current = [];
+    setHintText(text);
     setHintPhase("shown");
     hintTimersRef.current.push(
-      window.setTimeout(() => setHintPhase("fading"), 2500),
-      window.setTimeout(() => setHintPhase("hidden"), 3300)
+      window.setTimeout(() => setHintPhase("fading"), 3000),
+      window.setTimeout(() => setHintPhase("hidden"), 3800)
     );
   };
 
@@ -191,16 +253,16 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
     []
   );
 
-  // ─── Recenter + scale-to-fit the accumulated model group, place in front ──────
+  // ─── Recenter + scale-to-fit the loaded content; base-centre at group origin ─
   const recenterAndScale = () => {
-    const group = modelGroupRef.current;
-    if (!group || group.children.length === 0) return;
+    const content = contentGroupRef.current;
+    if (!content || content.children.length === 0) return;
 
-    group.position.set(0, 0, 0);
-    group.scale.setScalar(1);
-    group.updateMatrixWorld(true);
+    content.position.set(0, 0, 0);
+    content.scale.setScalar(1);
+    content.updateMatrixWorld(true);
 
-    const box = new THREE.Box3().setFromObject(group);
+    const box = new THREE.Box3().setFromObject(content);
     if (box.isEmpty()) return;
 
     const size = box.getSize(new THREE.Vector3());
@@ -209,10 +271,30 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
 
     const targetSize = 1.5; // metres — miniature that fits comfortably in front
     const scale = targetSize / maxDim;
-    group.scale.setScalar(scale);
+    content.scale.setScalar(scale);
 
-    // Put the scaled model's centre at (0, 0, -2): ~2 m ahead, at eye height.
-    group.position.set(-scale * center.x, -scale * center.y, -2 - scale * center.z);
+    // Base-centre (x/z centre, y minimum) to the outer group's origin, so the
+    // model sits on whatever the group origin is placed at, and pinch-zoom grows
+    // it up from its base.
+    content.position.set(-scale * center.x, -scale * box.min.y, -scale * center.z);
+  };
+
+  // Apply the current placement (anchor if we have one, else the fallback).
+  const applyFallbackPlacement = () => {
+    const group = modelGroupRef.current;
+    if (!group) return;
+    group.position.copy(FALLBACK_POSITION);
+    group.rotation.set(0, 0, 0);
+  };
+
+  // Called by the anchor hook when a QR is decoded: pin base at the QR, upright.
+  const applyAnchor = (anchor: { position: THREE.Vector3; yaw: number }) => {
+    const group = modelGroupRef.current;
+    if (!group) return;
+    anchoredRef.current = true;
+    group.position.copy(anchor.position);
+    group.rotation.set(0, anchor.yaw, 0);
+    flashHint("✓ Placed on QR — pinch to zoom");
   };
 
   const toggle = (name: string) => {
@@ -224,7 +306,7 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
   };
 
   const handleLoadSelected = async () => {
-    if (!cameraRef.current || !modelGroupRef.current) return;
+    if (!cameraRef.current || !contentGroupRef.current) return;
     const toLoad = sortedFiles.filter(
       (f) => selected.has(f.name) && !loadedIds.has(f.modelId)
     );
@@ -236,7 +318,7 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
         setStatus(`Loading ${file.name}…`);
         const object = await loadFrag(prefix, file.name, file.modelId, cameraRef.current);
         if (object) {
-          modelGroupRef.current.add(object);
+          contentGroupRef.current.add(object);
           setLoadedIds((prev) => new Set(prev).add(file.modelId));
         }
       } catch (err) {
@@ -245,14 +327,22 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
       }
     }
     recenterAndScale();
-    flashRotateHint();
+    if (!anchoredRef.current) applyFallbackPlacement();
+    beginScan();
+    flashHint("Point at a QR code to place it");
     setStatus("");
     setIsLoading(false);
+  };
+
+  const handleReposition = () => {
+    beginScan();
+    flashHint("Point at a QR code to place it");
   };
 
   const hasSelection = sortedFiles.some(
     (f) => selected.has(f.name) && !loadedIds.has(f.modelId)
   );
+  const hasModel = loadedIds.size > 0;
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000" }}>
@@ -276,13 +366,12 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
           <div style={{ fontWeight: 700, fontSize: 16 }}>View this model in AR</div>
           <div style={{ opacity: 0.75, fontSize: 13, maxWidth: 260 }}>
             Tap <strong>START AR</strong> below to open the camera, then choose a
-            model to load.
+            model to load and point at a QR code to place it.
           </div>
         </div>
       )}
 
-      {/* Transient "drag to rotate" hint — non-interactive so it never eats the
-          drag gesture; fades out a few seconds after a model loads. */}
+      {/* Transient hint — non-interactive so it never eats a gesture. */}
       {hintPhase !== "hidden" && (
         <div
           style={{
@@ -290,11 +379,11 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
             opacity: hintPhase === "shown" ? 1 : 0,
           }}
         >
-          ↻ Drag to rotate
+          {hintText}
         </div>
       )}
 
-      {/* dom-overlay root — the in-AR model picker */}
+      {/* dom-overlay root — the in-AR model picker + reposition control */}
       <div ref={overlayRef} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
         {inSession && (
           <div style={pickerStyle}>
@@ -348,6 +437,20 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
             >
               {isLoading ? status || "Loading…" : "Load Cloud Model"}
             </button>
+
+            {hasModel && (
+              <button
+                type="button"
+                onClick={handleReposition}
+                style={repositionBtnStyle}
+              >
+                {anchorStatus === "scanning"
+                  ? "⟳ Scanning for QR…"
+                  : anchorStatus === "anchored"
+                  ? "⟳ Reposition on QR"
+                  : "⟳ Place on QR code"}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -422,5 +525,17 @@ const loadBtnStyle: React.CSSProperties = {
   background: "#3b82f6",
   color: "#fff",
   font: "700 14px system-ui, sans-serif",
+  cursor: "pointer",
+};
+
+const repositionBtnStyle: React.CSSProperties = {
+  marginTop: 8,
+  width: "100%",
+  padding: "9px 16px",
+  borderRadius: 8,
+  border: "1px solid rgba(255,255,255,0.25)",
+  background: "rgba(255,255,255,0.08)",
+  color: "#fff",
+  font: "600 13px system-ui, sans-serif",
   cursor: "pointer",
 };
