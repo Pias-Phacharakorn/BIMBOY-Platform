@@ -54,6 +54,18 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
   // Gallery Active Image Key state
   const [activeImageKey, setActiveImageKey] = useState<"viewpoint" | "plan" | "section">("viewpoint");
 
+  // Loading spinner state for the snapshot thumbnail and the full-screen modal's main image
+  const [isThumbLoaded, setIsThumbLoaded] = useState(false);
+  const [isMainImageLoaded, setIsMainImageLoaded] = useState(false);
+
+  useEffect(() => {
+    setIsThumbLoaded(false);
+  }, [item?.imageUrl]);
+
+  useEffect(() => {
+    setIsMainImageLoaded(false);
+  }, [activeImageKey, item?.imageUrl, item?.planImageUrl, item?.sectionImageUrl]);
+
   // Zoom & Pan states
   const [zoomScale, setZoomScale] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
@@ -190,11 +202,21 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
           }}
         >
           {item.imageUrl ? (
-            <img
-              src={item.imageUrl}
-              alt={item.name}
-              className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-            />
+            <>
+              {!isThumbLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-border border-t-accent rounded-full animate-spin" />
+                </div>
+              )}
+              <img
+                src={item.imageUrl}
+                alt={item.name}
+                onLoad={() => setIsThumbLoaded(true)}
+                className={`w-full h-full object-cover transition-transform transition-opacity duration-200 group-hover:scale-105 ${
+                  isThumbLoaded ? "opacity-100" : "opacity-0"
+                }`}
+              />
+            </>
           ) : (
             <div className="text-muted text-[11px] font-mono select-none">NO SNAPSHOT AVAILABLE</div>
           )}
@@ -315,13 +337,20 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
               onMouseLeave={handleMouseUp}
               style={{ cursor: zoomScale > 1 ? (isDragging ? "grabbing" : "grab") : "default" }}
             >
+              {!isMainImageLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center z-[5]">
+                  <div className="w-8 h-8 border-2 border-border border-t-accent rounded-full animate-spin" />
+                </div>
+              )}
+
               {activeImageKey === "plan" && item.planImageUrl ? (
                 <img
                   src={item.planImageUrl}
                   alt="Plan View"
-                  className={`max-w-full max-h-full object-contain rounded-sm select-none ${
-                    isDragging ? "" : "transition-transform duration-100 ease-out"
-                  }`}
+                  onLoad={() => setIsMainImageLoaded(true)}
+                  className={`max-w-full max-h-full object-contain rounded-sm select-none transition-opacity duration-150 ${
+                    isMainImageLoaded ? "opacity-100" : "opacity-0"
+                  } ${isDragging ? "" : "transition-transform duration-100 ease-out"}`}
                   draggable="false"
                   style={{
                     transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
@@ -331,9 +360,10 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
                 <img
                   src={item.sectionImageUrl}
                   alt="Section View"
-                  className={`max-w-full max-h-full object-contain rounded-sm select-none ${
-                    isDragging ? "" : "transition-transform duration-100 ease-out"
-                  }`}
+                  onLoad={() => setIsMainImageLoaded(true)}
+                  className={`max-w-full max-h-full object-contain rounded-sm select-none transition-opacity duration-150 ${
+                    isMainImageLoaded ? "opacity-100" : "opacity-0"
+                  } ${isDragging ? "" : "transition-transform duration-100 ease-out"}`}
                   draggable="false"
                   style={{
                     transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
@@ -343,9 +373,10 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
                 <img
                   src={item.imageUrl}
                   alt={item.name}
-                  className={`max-w-full max-h-full object-contain rounded-sm select-none ${
-                    isDragging ? "" : "transition-transform duration-100 ease-out"
-                  }`}
+                  onLoad={() => setIsMainImageLoaded(true)}
+                  className={`max-w-full max-h-full object-contain rounded-sm select-none transition-opacity duration-150 ${
+                    isMainImageLoaded ? "opacity-100" : "opacity-0"
+                  } ${isDragging ? "" : "transition-transform duration-100 ease-out"}`}
                   draggable="false"
                   style={{
                     transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
@@ -409,8 +440,14 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
               </div>
 
               {/* Clash Name */}
-              <div className="text-[13px] text-muted-2 font-medium break-all mb-4 leading-normal">
-                {item.name}
+              <div className="mb-4">
+                <EditableTextField
+                  label="Name"
+                  value={item.name}
+                  disabled={isSaving}
+                  valueClassName="text-[13px] text-muted-2 font-medium leading-normal"
+                  onSave={(newVal) => saveField({ name: newVal })}
+                />
               </div>
 
               {/* Badges */}
@@ -535,19 +572,6 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
                       )}
                     </button>
                   </div>
-                </div>
-              </div>
-
-              {/* Status Footer Banner */}
-              <div className="mt-auto pt-4">
-                <div className="p-3 rounded bg-status-danger/10 border border-status-danger/20 flex items-center justify-between gap-2 text-status-danger text-[11px] font-medium leading-normal">
-                  <div className="flex items-center gap-1.5">
-                    <span>⚠️</span>
-                    <span>{format(new Date(item.occurredAt), "yyyy-MM-dd HH:mm")}</span>
-                  </div>
-                  <span className="uppercase font-bold tracking-wide text-[10px]">
-                    {item.status === "new" || item.status === "unresolved" ? "Pending" : "Resolved"}
-                  </span>
                 </div>
               </div>
             </div>
