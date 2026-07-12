@@ -87,8 +87,25 @@ export const setupViewCube = (world: any, viewport: any, components?: OBC.Compon
     });
   };
 
-  // Keep the view cube updated as the user orbits the camera
-  world.camera.controls.addEventListener("update", updateOrientation);
+  // Keep the view cube updated as the user orbits the camera. Track the bound
+  // controls so we can rebind when the active camera is swapped (e.g. opening a
+  // 2D plan/elevation view replaces world.camera with the view's own camera —
+  // its controls fire "update", the original camera's no longer do).
+  let activeControls = world.camera.controls;
+  activeControls.addEventListener("update", updateOrientation);
+
+  const onCameraChanged = () => {
+    try {
+      activeControls.removeEventListener("update", updateOrientation);
+    } catch {
+      // stale controls already gone — ignore
+    }
+    activeControls = world.camera.controls;
+    activeControls.addEventListener("update", updateOrientation);
+    // Refresh once so the cube snaps to the new camera's orientation immediately.
+    updateOrientation();
+  };
+  world.onCameraChanged.add(onCameraChanged);
 
   const controls = world.camera.controls;
 
@@ -336,7 +353,12 @@ export const setupViewCube = (world: any, viewport: any, components?: OBC.Compon
 
   return () => {
     disposed = true;
-    world.camera.controls.removeEventListener("update", updateOrientation);
+    world.onCameraChanged.remove(onCameraChanged);
+    try {
+      activeControls.removeEventListener("update", updateOrientation);
+    } catch {
+      // controls already torn down — ignore
+    }
     viewCube.remove();
   };
 };

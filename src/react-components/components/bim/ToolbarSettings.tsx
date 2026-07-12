@@ -70,6 +70,19 @@ export function ToolbarSettings() {
     }
   }, [components, world, isSettingsOpen]);
 
+  // Reflect projection changes that happen outside this dropdown — notably
+  // opening/closing a 2D view (OBC.Views), which swaps world.camera to an
+  // orthographic camera and back. Keeps the dropdown honest.
+  useEffect(() => {
+    if (!world) return;
+    const sync = () => {
+      const camera = world.camera as any;
+      if (camera?.projection) setProjection(camera.projection.current);
+    };
+    world.onCameraChanged.add(sync);
+    return () => world.onCameraChanged.remove(sync);
+  }, [world]);
+
   const startRotationLoop = () => {
     if (!autoRotateRef.current.isRotating || !world) return;
     const camera = world.camera as any;

@@ -28,7 +28,10 @@ export function ModelsList({ searchQuery }: ModelsListProps) {
 
     // Apply layout styles to blend seamlessly
     table.style.width = "100%";
-    table.style.maxHeight = "calc(100vh - 200px)";
+    // Fill (and scroll within) the section's allotted height — the "Models List"
+    // section is now fullHeight (half the left panel), so cap to the container
+    // rather than the viewport.
+    table.style.maxHeight = "100%";
     table.style.border = "none";
     table.style.backgroundColor = "transparent";
     table.style.setProperty("--bim-ui_border", "transparent");
@@ -52,7 +55,7 @@ export function ModelsList({ searchQuery }: ModelsListProps) {
   return (
     <div
       ref={containerRef}
-      className="w-full"
+      className="w-full h-full overflow-y-auto"
     />
   );
 }
