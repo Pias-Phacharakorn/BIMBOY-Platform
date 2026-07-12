@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams, useNavigate } from "@tanstack/react-router";
 import { AppShell, WorkspaceHeader, LeftPanel, RightPanel, PanelSection } from "@/react-components/components/layout";
 import { Icon } from "@/react-components/components/ui";
-import { ViewportWrapper, ViewportRightToolbar, ViewportToolbar, ModelsList, CloudModelLoadingModal } from "@/react-components/components/bim";
+import { ViewportWrapper, ViewportRightToolbar, ViewportToolbar, ModelsList, Views2DList, CloudModelLoadingModal } from "@/react-components/components/bim";
 import { GisPanel } from "@/react-components/features/gis";
 import { PropertyPanel } from "@/react-components/features/property-panel";
 import { PropertyTable } from "@/react-components/features/property-table/PropertyTable";
@@ -111,8 +111,11 @@ export function ModelsView() {
           defaultOpen={true}
           className={activeTab === "Models" ? "" : "hidden"}
         >
-          <PanelSection label="Models List" icon="MODEL" defaultOpen={true} onSearch={setModelSearchQuery}>
+          <PanelSection label="Models List" icon="MODEL" defaultOpen={true} fullHeight={true} onSearch={setModelSearchQuery}>
             <ModelsList searchQuery={modelSearchQuery} />
+          </PanelSection>
+          <PanelSection label="2D Views" icon="LAYOUT" defaultOpen={true} fullHeight={true}>
+            <Views2DList />
           </PanelSection>
         </LeftPanel>
 

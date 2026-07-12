@@ -13,6 +13,7 @@ import {
   setupMinimap,
   setupClipperCursor,
   setupSmartViews,
+  setupViews,
   setupLengthMeasureCursor,
   setupAreaMeasureCursor,
   setupSurfaceMeasureCursor
@@ -41,6 +42,7 @@ export const setupComponents = async () => {
   setupMinimap(components, world)
   setupClipperCursor(components, world, viewport)
   setupSmartViews(components)
+  setupViews(components, world)
   setupLengthMeasureCursor(components, world)
   setupAreaMeasureCursor(components, world)
   setupSurfaceMeasureCursor(components, world)
