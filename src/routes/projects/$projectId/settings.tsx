@@ -6,7 +6,7 @@ import { projectsService } from '@/react-components/features/projects/projectsSe
 export const Route = createFileRoute('/projects/$projectId/settings')({
   beforeLoad: async ({ context, params, location }) => {
     // 1. Ensure user is logged in
-    if (!context.auth.isAuthenticated || !context.auth.user) {
+    if (!context.auth?.isAuthenticated || !context.auth.user) {
       throw redirect({
         to: '/login',
         search: {

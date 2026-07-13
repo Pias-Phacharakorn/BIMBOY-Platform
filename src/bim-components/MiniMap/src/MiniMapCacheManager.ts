@@ -54,13 +54,11 @@ export class MiniMapCacheManager {
 
     const fragments = this._components.get(OBC.FragmentsManager);
     const bbox = new THREE.Box3();
-    
-    console.log("[MiniMapCacheManager] updateCache called. fragments.list.size:", fragments.list.size);
-    for (const [id, model] of fragments.list) {
+
+    for (const [, model] of fragments.list) {
       try {
         model.object.updateMatrixWorld(true);
       } catch (e) {}
-      console.log(`[MiniMapCacheManager] checking model "${id}", object children count:`, model.object.children.length);
       bbox.expandByObject(model.object);
     }
 
@@ -68,14 +66,12 @@ export class MiniMapCacheManager {
     const size = new THREE.Vector3();
 
     if (bbox.isEmpty()) {
-      console.log("[MiniMapCacheManager] bounding box is empty, using fallback");
       // Default fallback bounds
       center.set(0, 0, 0);
       size.set(100, 100, 100);
     } else {
       bbox.getCenter(center);
       bbox.getSize(size);
-      console.log("[MiniMapCacheManager] bounding box computed:", bbox, "center:", center, "size:", size);
     }
 
     this.mapCenterY = center.y;

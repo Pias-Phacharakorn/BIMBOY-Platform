@@ -7,7 +7,7 @@ export const Route = createFileRoute('/login')({
     redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
   }),
   beforeLoad: ({ context, search }) => {
-    if (context.auth.isAuthenticated) {
+    if (context.auth?.isAuthenticated) {
       // Return the user to where they were headed. Guards store `location.href`,
       // which can include a query string/hash, so route it through `href` (not
       // `to`, which expects a path template). Only allow internal, non

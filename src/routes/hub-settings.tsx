@@ -4,7 +4,7 @@ import { HubSettingsView } from '@/react-components/views';
 export const Route = createFileRoute('/hub-settings')({
   beforeLoad: ({ context, location }) => {
     // Ensure the user is logged in
-    if (!context.auth.isAuthenticated) {
+    if (!context.auth?.isAuthenticated) {
       throw redirect({
         to: '/login',
         search: {

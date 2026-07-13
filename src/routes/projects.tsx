@@ -7,7 +7,7 @@ import { Outlet } from '@tanstack/react-router'
 // project sub-routes without remounting.
 export const Route = createFileRoute('/projects')({
   beforeLoad: ({ context, location }) => {
-    if (!context.auth.isAuthenticated) {
+    if (!context.auth?.isAuthenticated) {
       throw redirect({
         to: '/login',
         search: {
