@@ -12,24 +12,24 @@ BIM-BOY uses **Tailwind CSS v4** with an OKLCH-based `@theme {}` block in `src/s
 
 ### Color Palette (@theme)
 
-| Token                    | Value                     | Purpose                                                     |
-| :----------------------- | :------------------------ | :---------------------------------------------------------- |
-| `--color-bg`             | `oklch(10.5% 0.012 255)`  | Deep canvas background                                      |
-| `--color-surface`        | `oklch(14.5% 0.014 255)`  | Panels, sidebar background                                  |
-| `--color-surface-alt`    | `oklch(19% 0.018 255)`    | Intermediate elevated backdrops                             |
-| `--color-surface-raised` | `oklch(23% 0.02 255)`     | Cards, dropdowns, active states                             |
-| `--color-fg`             | `oklch(93% 0.012 250)`    | Primary text                                                |
-| `--color-muted`          | `oklch(68% 0.02 250)`     | Secondary text, inactive labels                             |
-| `--color-muted-2`        | `oklch(51% 0.018 250)`    | Subtitles, small details, separators                        |
-| `--color-border`         | `oklch(27% 0.018 255)`    | Subtle card/panel borders                                   |
-| `--color-border-strong`  | `oklch(38% 0.03 255)`     | Button and input borders                                    |
-| `--color-accent`         | `oklch(66% 0.17 252)`     | Primary indigo-blue brand accent                            |
-| `--color-accent-2`       | `oklch(74% 0.13 195)`     | Secondary teal/cyan accent                                  |
-| `--color-accent-muted`   | `oklch(31% 0.075 252)`    | Accent background highlights                                |
-| `--color-status-ok`      | `oklch(70% 0.14 150)`     | Green — Valid, Active, Approved, Closed                     |
-| `--color-status-warn`    | `oklch(77% 0.14 76)`      | Yellow — Review, Pending, In-progress                       |
-| `--color-status-danger`  | `oklch(63% 0.18 28)`      | Red — Critical, Overdue, Rejected                           |
-| `--color-status-info`    | `oklch(70% 0.13 235)`     | Blue — Informational indicator                              |
+| Token                    | Value                     | Purpose                                |
+| :----------------------- | :------------------------ | :--------------------------------------|
+| `--color-bg`             | `oklch(10.5% 0.012 255)`  | Deep canvas background                 |
+| `--color-surface`        | `oklch(14.5% 0.014 255)`  | Panels, sidebar background             |
+| `--color-surface-alt`    | `oklch(19% 0.018 255)`    | Intermediate elevated backdrops        |
+| `--color-surface-raised` | `oklch(23% 0.02 255)`     | Cards, dropdowns, active states        |
+| `--color-fg`             | `oklch(93% 0.012 250)`    | Primary text                           |
+| `--color-muted`          | `oklch(68% 0.02 250)`     | Secondary text, inactive labels        |
+| `--color-muted-2`        | `oklch(51% 0.018 250)`    | Subtitles, small details, separators   |
+| `--color-border`         | `oklch(27% 0.018 255)`    | Subtle card/panel borders              |
+| `--color-border-strong`  | `oklch(38% 0.03 255)`     | Button and input borders               |
+| `--color-accent`         | `oklch(66% 0.17 252)`     | Primary indigo-blue brand accent       |
+| `--color-accent-2`       | `oklch(74% 0.13 195)`     | Secondary teal/cyan accent             |
+| `--color-accent-muted`   | `oklch(31% 0.075 252)`    | Accent background highlights           |
+| `--color-status-ok`      | `oklch(70% 0.14 150)`     | Green — Valid, Active, Approved, Closed|
+| `--color-status-warn`    | `oklch(77% 0.14 76)`      | Yellow — Review, Pending, In-progress  |
+| `--color-status-danger`  | `oklch(63% 0.18 28)`      | Red — Critical, Overdue, Rejected      |
+| `--color-status-info`    | `oklch(70% 0.13 235)`     | Blue — Informational indicator         |
 
 #### Status Colour Usage Guide
 
@@ -108,14 +108,14 @@ const layout = LAYOUTS[clashLayout];
 
 All routes live under `src/routes/` and follow the `/projects/$projectId/<feature>` shape.
 
-| Path                               | View Component        | Description                                                              |
-| :--------------------------------- | :-------------------- | :----------------------------------------------------------------------- |
-| `/projects`                        | `ProjectsView`        | Portfolio grid/list with search & filter                                 |
-| `/projects/$projectId/model`       | `ModelsView`          | 3D viewport shell — model list, toolbar, property panel                  |
-| `/projects/$projectId/standard`    | `StandardView`        | BIM standards: BEP, naming conventions, CDE tasks                        |
-| `/projects/$projectId/clashes`     | `ClashView`           | Clash detection: stats, severity, disciplines, assigned status            |
-| `/projects/$projectId/documents`   | `DocumentsView`       | Document control: drawing lists, revisions, owners, deadlines            |
-| `/projects/$projectId/settings`    | `SettingsView`        | Project config: details, members, GIS coordinates, folder structure      |
+| Path                             | View Component  | Description                                                        |
+| :--------------------------------| :---------------| :------------------------------------------------------------------|
+| `/projects`                      | `ProjectsView`  | Portfolio grid/list with search & filter                           |
+| `/projects/$projectId/model`     | `ModelsView`    | 3D viewport shell — model list, toolbar, property panel            |
+| `/projects/$projectId/standard`  | `StandardView`  | BIM standards: BEP, naming conventions, CDE tasks                  |
+| `/projects/$projectId/clashes`   | `ClashView`     | Clash detection: stats, severity, disciplines, assigned status     |
+| `/projects/$projectId/documents` | `DocumentsView` | Document control: drawing lists, revisions, owners, deadlines      |
+| `/projects/$projectId/settings`  | `SettingsView`  | Project config: details, members, GIS coordinates, folder structure|
 
 > Route files are **composition only** — no hooks, no fetching. See `AGENTS.md`.
 
@@ -150,12 +150,12 @@ All interactive elements must follow these rules for a consistent premium feel.
 
 ### Hover & Active Transitions
 
-| Element type         | Class string                                                    |
-| :------------------- | :-------------------------------------------------------------- |
-| Nav / list items     | `transition-all duration-120 hover:bg-surface-alt hover:text-fg`|
-| Action buttons       | `transition-all duration-120 hover:-translate-y-[1px] active:translate-y-0` |
-| Icon buttons         | `transition-colors duration-120 hover:text-fg hover:bg-surface-raised` |
-| Cards                | `transition-all duration-150 hover:border-border-strong hover:bg-surface-alt` |
+| Element type         | Class string                                                                 |
+| :------------------- | :----------------------------------------------------------------------------|
+| Nav / list items     | `transition-all duration-120 hover:bg-surface-alt hover:text-fg`             |
+| Action buttons       | `transition-all duration-120 hover:-translate-y-[1px] active:translate-y-0`  |
+| Icon buttons         | `transition-colors duration-120 hover:text-fg hover:bg-surface-raised`       |
+| Cards                | `transition-all duration-150 hover:border-border-strong hover:bg-surface-alt`|
 
 ### Active Navigation Indicator
 
@@ -186,15 +186,15 @@ import { Icon } from "@/react-components/components/Icon";
 
 ### Icon Naming Conventions
 
-| Key prefix   | Domain                       |
-| :----------- | :--------------------------- |
-| `MODEL`      | BIM model operations         |
-| `CLASH`      | Clash detection              |
-| `DOCUMENT`   | Document management          |
-| `SETTINGS`   | Configuration & project info |
-| `FOLDER`     | File system / storage        |
-| `GIS`        | Geospatial features          |
-| `USER`       | Auth & member management     |
+| Key prefix   | Domain                      |
+| :----------- | :---------------------------|
+| `MODEL`      | BIM model operations        |
+| `CLASH`      | Clash detection             |
+| `DOCUMENT`   | Document management         |
+| `SETTINGS`   | Configuration & project info|
+| `FOLDER`     | File system / storage       |
+| `GIS`        | Geospatial features         |
+| `USER`       | Auth & member management    |
 
 > Adding a new icon: add the icon string to `appIcons` in `globals.ts` only. Do **not** import icon libraries directly in feature or view files.
 
