@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Plan: Compare Overlay + Export</title>
+<title>Plan: AR recenter button + lag fix</title>
 <style>
   :root { color-scheme: light dark; }
   body { font-family: system-ui, sans-serif; max-width: 1200px; margin: 2rem auto; padding: 0 1rem;
@@ -23,79 +23,63 @@
 <body>
 
 <h1>📌 Goal</h1>
-<p>Give reviewers a pixel-level "what changed between revisions" overlay and a shareable exported comparison PDF, added to the existing shop-drawing <em>Compare Revisions</em> modal — without a new route or a two-phase Compare screen.</p>
+<p>On the live <code>/ar/$projectId</code> viewer, replace the untested QR-anchoring flow with a simple one-shot "Recenter in front of me" button (move + face-me upright + reset zoom to default fit), make model-load do an implicit recenter, and fix the baseline in-session lag — while keeping the QR code dormant for a future round.</p>
 
 <div class="diagrams">
   <div class="diagram-col">
     <h2>🔄 Current Flow</h2>
     <pre class="mermaid">
 flowchart TD
-  Trigger["Compare Revision button<br/>(DrawingFolderExplorer / kebab)"]
-  Modal["CompareDrawingsModal.tsx<br/>revision + page selectors, zoom"]
-  Hook["usePdfSide()<br/>renders page → PNG data URL only"]
-  Slider["PdfSliderCompare.tsx<br/>clip-path A-over-B slider"]
-
-  Trigger --> Modal
-  Modal -->|"per side"| Hook
-  Hook -->|"preview data URL"| Modal
-  Modal -->|"★ only view: slider"| Slider
+  V["ArModelViewer.tsx<br/>scene + XR session setup"]
+  V -->|"requiredFeatures: camera-access"| S["XR immersive-ar session"]
+  V -->|"antialias:true, native XR res"| R["WebGLRenderer<br/>heavy fill cost = lag"]
+  V -->|"load → FALLBACK_POSITION<br/>(session-origin relative)"| M["modelGroup"]
+  V -->|"setAnimationLoop"| L["frame loop"]
+  L -->|"every frame"| PF["useArQrAnchor.ts<br/>processFrame"]
+  PF -->|"every 8th: readPixels + jsQR"| QP["qrPose.ts<br/>homography PnP"]
+  QP -->|"★ applyAnchor(pos, yaw)"| M
+  BTN["in-AR button<br/>Place on QR / Scanning"] -->|beginScan| PF
+  PINCH["pinch-to-zoom"] --> M
     </pre>
   </div>
   <div class="diagram-col">
     <h2>✅ Proposed Flow</h2>
     <pre class="mermaid">
 flowchart TD
-  Trigger["Compare Revision button"]
-  Modal["[MOD] CompareDrawingsModal.tsx<br/>+ Slider/Overlay toggle, legend, Export btn"]
-  Hook["[MOD] usePdfSide()<br/>also exposes rendered canvas"]
-  Utils["[NEW] lib/pdfCompareUtils.ts<br/>createDiffCanvas() + exportComparisonPdf()"]
-  Slider["PdfSliderCompare.tsx<br/>(unchanged)"]
-  Overlay["Overlay img<br/>diff canvas → data URL"]
-  jspdf["[NEW dep] jspdf<br/>3-page A4 landscape"]
-
-  Trigger --> Modal
-  Modal -->|"per side"| Hook
-  Hook -->|"★ canvas + preview"| Modal
-  Modal -->|"mode = slider"| Slider
-  Modal -->|"mode = overlay (live)"| Utils
-  Utils --> Overlay
-  Modal -->|"Export PDF"| Utils
-  Utils --> jspdf
+  V["[MOD] ArModelViewer.tsx<br/>scene + XR session setup"]
+  V -->|"drop camera-access"| S["XR immersive-ar session"]
+  V -->|"antialias:false<br/>xr.setFramebufferScaleFactor(~0.7)"| R["WebGLRenderer<br/>lower fill cost = smoother"]
+  V -->|"load = implicit recenter"| RC["[NEW] recenter()"]
+  BTN["[MOD] in-AR button<br/>one-shot Recenter"] --> RC
+  RC -->|"★ in front of CURRENT cam<br/>+ face-me upright + reset zoom"| M["modelGroup"]
+  PINCH["pinch-to-zoom"] --> M
+  L["frame loop<br/>render only"] --> R
+  DORM["useArQrAnchor.ts + qrPose.ts<br/>dormant, unimported"]
     </pre>
-    <p class="removed">Removed: nothing — Slider view and existing selectors/zoom are preserved.</p>
+    <p class="removed">Removed from live path (not deleted): QR scan wiring — beginScan / processFrame / applyAnchor calls in ArModelViewer.</p>
+    <p class="removed">Removed: camera-access requiredFeature + jsQR import from the live viewer.</p>
+    <p class="removed">Removed: session-origin FALLBACK_POSITION as load placement (replaced by current-pose recenter).</p>
   </div>
 </div>
 
 <h2>⚖️ Pros &amp; Cons</h2>
 <table>
   <tr><th>Pros</th><th>Cons</th></tr>
-  <tr>
-    <td>Reuses the existing live modal — no two-phase "Compare" screen, no new route/store to maintain.</td>
-    <td>Adds a runtime dependency (<code>jspdf</code>) — a new bundle-size cost, used only in this one feature.</td>
-  </tr>
-  <tr>
-    <td>Diff + export follow the currently-selected page on each side, so multi-page sheets work and what-you-see-is-what-you-export.</td>
-    <td>Pixel diff is raster-based: it flags any visual delta (incl. anti-aliasing/resampling noise), not semantic CAD changes. A threshold mitigates but won't eliminate this.</td>
-  </tr>
-  <tr>
-    <td>Pure diff/export helpers live in <code>lib/</code> and are unit-testable; <code>createDiffCanvas</code> normalizes sizes first, fixing the reference's flat-index misalignment bug.</td>
-    <td>Diff recomputes synchronously on every selection change; on very large pages the pixel loop can cause a brief hitch (acceptable — one pass, only when Overlay is active).</td>
-  </tr>
-  <tr>
-    <td>Legend swatches use design tokens (<code>status-danger</code>/<code>status-ok</code>); only raw canvas pixels use hardcoded RGB, so JSX token rules stay intact.</td>
-    <td>Modal stays in <code>components/shop-drawings/</code> though it holds fetch/pdfjs logic — a pre-existing layer deviation this change does not fix (out of scope).</td>
-  </tr>
+  <tr><td>Ships a robust, testable interaction (recenter) instead of an unverified raw-camera + hand-rolled-PnP pipeline.</td><td>Loses real-world / shared registration for now — the model no longer pins to a fixed physical spot.</td></tr>
+  <tr><td>Attacks the baseline lag with the correct in-XR lever (framebuffer scale factor + no antialias), not setPixelRatio.</td><td>Framebuffer downscale softens the rendered model's edges; the ~0.7 value is a starting guess needing on-device tuning.</td></tr>
+  <tr><td>Drops camera-access, the jsQR import, and the per-frame readPixels loop — smaller permission/compat surface, less work per frame.</td><td>jsQR stays in package.json unused (dead weight until QR is revived).</td></tr>
+  <tr><td>QR code kept dormant (like ArSession.ts), so the future site-walk anchoring use case isn't thrown away.</td><td>Dormant, unimported code can rot / drift from the live path until revisited.</td></tr>
 </table>
 
 <h2>📁 Files Changed</h2>
-<pre>[NEW dep] package.json — add jspdf
-[NEW]     src/lib/pdfCompareUtils.ts — createDiffCanvas(a,b) (size-normalized pixel diff) + exportComparisonPdf() (3-page A4 landscape via jspdf)
-[MOD]     src/react-components/components/shop-drawings/CompareDrawingsModal.tsx — usePdfSide exposes canvas; Slider/Overlay toggle + legend; live overlay recompute; Export PDF button
-[MOD]     .agents/docs/drawing.md — document overlay + export in the Compare Revisions section
-[MOD]     .claude/docs/drawing.md — mirror of the above (must not drift)</pre>
+<pre>[MOD] src/react-components/features/ar-viewer/ArModelViewer.tsx   - main change: recenter() helper, button relabel, load->recenter, drop QR wiring + camera-access, antialias:false + setFramebufferScaleFactor
+[MOD] .agents/docs/ar-webxr.md                                    - describe live path as load + recenter + pinch; mark QR dormant
+[MOD] .claude/docs/ar-webxr.md                                    - mirror of the above (must not drift, per CLAUDE.md)
+[DORMANT] src/react-components/features/ar-viewer/useArQrAnchor.ts - unchanged, now unimported
+[DORMANT] src/react-components/features/ar-viewer/qrPose.ts        - unchanged, now unimported</pre>
 
 <h2>❓ Open Questions</h2>
-<p>No open questions — all scope decisions resolved in the grill (overlay + export only, no new tab/route; diff uses selected pages; live auto-recompute; 3-page export; token-based legend). Ready to implement upon approval.</p>
+<p>No open questions — decisions crystallized in CONTEXT.md ("AR viewer — QR goes dormant; ship a recenter button + fix baseline lag"). Ready to implement upon approval. The one on-device tuning item (exact framebuffer scale factor) is a runtime adjustment, not a design blocker.</p>
 
 <script type="module">
   import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";

@@ -1,15 +1,17 @@
 // @ts-nocheck
-// Renders a real BIM model in AR. Uses the proven single-WebGL-context,
-// camera-access immersive-ar session skeleton; the user picks .frag model(s)
-// from an in-AR dom-overlay ("Load Cloud Model"), which are decoded via the
-// isolated useArModelLoader and dropped into the XR scene auto-centered +
-// scaled-to-fit ~1.5 m.
+// Renders a real BIM model in AR. Single-WebGL-context immersive-ar session;
+// the user picks .frag model(s) from an in-AR dom-overlay ("Load Cloud Model"),
+// which are decoded via the isolated useArModelLoader and dropped into the XR
+// scene auto-centered + scaled-to-fit ~1.5 m.
 //
-// Placement: the model loads at a fixed spot ~2 m in front (the fallback), then
-// an in-session QR scan (useArQrAnchor, via the camera-access raw camera frame)
-// snaps it onto a printed QR code — position + upright yaw. No QR found ⇒ it
-// just stays in front. Manipulation is pinch-to-zoom (scales the whole model
-// about its anchored base); the old drag-to-rotate turntable is gone.
+// Placement: on load (and whenever the user taps "Recenter") the model is
+// dropped ~2 m in front of the user's current camera, turned to face them
+// (yaw only, forced upright), with pinch-zoom reset to the default fit.
+// Manipulation is pinch-to-zoom (scales the whole model about its base).
+//
+// QR-code real-world anchoring (useArQrAnchor / qrPose) is DORMANT — kept in
+// the tree, unimported, for a future "pin to a fixed physical spot" round,
+// mirroring the dormant ArSession.ts. See CONTEXT.md.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import * as THREE from "three";
@@ -17,15 +19,20 @@ import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
 import { useProject } from "@/react-components/features/projects/useProjects";
 import { useCloudModelFiles } from "@/react-components/features/cloud-models/useCloudModels";
 import { useArModelLoader } from "./useArModelLoader";
-import { useArQrAnchor } from "./useArQrAnchor";
 
 interface ArModelViewerProps {
   projectId: string;
 }
 
-// Fallback placement (no QR anchored yet): base of the model, in metres,
-// relative to the session's starting reference space (~eye height origin).
-const FALLBACK_POSITION = new THREE.Vector3(0, -0.9, -2);
+// Where a recenter drops the model relative to the user's current camera:
+// DISTANCE metres straight ahead (horizontally), DROP metres below eye height
+// so it sits on an imaginary floor rather than floating at eye level.
+const RECENTER_DISTANCE_M = 2;
+const RECENTER_DROP_M = 0.9;
+// Initial group placement before the first model loads (session-start
+// relative). Once a model loads, recenter() takes over relative to the live
+// camera, so this is only ever the pre-load resting spot of an empty group.
+const INITIAL_POSITION = new THREE.Vector3(0, -0.9, -2);
 // Pinch-to-zoom scale clamp (multiplier on the auto-fit miniature size).
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 4;
@@ -41,13 +48,11 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
   // Outer group = placement (position + upright yaw) and pinch-zoom (scale about
   // its origin). Inner content group holds the loaded models, offset so their
   // base-centre sits at the outer origin — so zoom grows the model from its base
-  // and anchoring plants that base on the QR.
+  // and recenter plants that base in front of the user.
   const modelGroupRef = useRef<THREE.Group | null>(null);
   const contentGroupRef = useRef<THREE.Group | null>(null);
 
   const { loadFrag } = useArModelLoader();
-  const { status: anchorStatus, beginScan, processFrame, dispose: disposeAnchor } =
-    useArQrAnchor();
 
   const { data: project } = useProject(projectId);
   const prefix = project ? `${project.projectnumber}_${project.projectName}/02_frag` : "";
@@ -65,9 +70,7 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
 
   // Refs read by the animation loop / pinch handlers without re-subscribing.
   const inSessionRef = useRef(false);
-  const anchoredRef = useRef(false);
   const zoomRef = useRef(1);
-  const processFrameRef = useRef(processFrame);
   const hintTimersRef = useRef<number[]>([]);
 
   // Pinch (two-pointer) gesture state.
@@ -78,11 +81,6 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
   useEffect(() => {
     inSessionRef.current = inSession;
   }, [inSession]);
-
-  // Keep the loop's view of processFrame current (it's bound once).
-  useEffect(() => {
-    processFrameRef.current = processFrame;
-  }, [processFrame]);
 
   const sortedFiles = useMemo(
     () => [...fragFiles].sort((a, b) => a.name.localeCompare(b.name)),
@@ -112,13 +110,19 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
     const modelGroup = new THREE.Group();
     const contentGroup = new THREE.Group();
     modelGroup.add(contentGroup);
-    modelGroup.position.copy(FALLBACK_POSITION);
+    modelGroup.position.copy(INITIAL_POSITION);
     scene.add(modelGroup);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
+    // In an immersive-ar session the XR compositor governs render resolution
+    // (not setPixelRatio/setSize), defaulting to the device's native scale —
+    // often 2.5-3.5x on a phone, which tanks fill rate. Render the 3D layer at
+    // ~0.7x native so the session stays smooth; only the model's edges soften,
+    // the camera passthrough is unaffected. Tune on-device.
+    renderer.xr.setFramebufferScaleFactor(0.7);
     container.appendChild(renderer.domElement);
 
     sceneRef.current = scene;
@@ -127,8 +131,9 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
     modelGroupRef.current = modelGroup;
     contentGroupRef.current = contentGroup;
 
+    // No raw camera-access required anymore — nothing scans the frame. (QR
+    // anchoring, which needed it, is dormant.) dom-overlay stays for the picker.
     const sessionInit: any = {
-      requiredFeatures: ["camera-access"],
       optionalFeatures: ["dom-overlay"],
     };
     if (overlay) sessionInit.domOverlay = { root: overlay };
@@ -136,19 +141,12 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
     document.body.appendChild(arButton);
 
     const onSessionStart = () => setInSession(true);
-    const onSessionEnd = () => {
-      setInSession(false);
-      anchoredRef.current = false;
-      disposeAnchor(renderer);
-    };
+    const onSessionEnd = () => setInSession(false);
     renderer.xr.addEventListener("sessionstart", onSessionStart);
     renderer.xr.addEventListener("sessionend", onSessionEnd);
 
-    // XR frame loop: drive the QR scan (throttled internally), then render.
-    renderer.setAnimationLoop((_time, frame) => {
-      if (frame) {
-        processFrameRef.current(renderer, frame, applyAnchor);
-      }
+    // XR frame loop: just render. (No per-frame scanning anymore.)
+    renderer.setAnimationLoop(() => {
       renderer.render(scene, camera);
     });
 
@@ -164,7 +162,6 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
       renderer.xr.removeEventListener("sessionstart", onSessionStart);
       renderer.xr.removeEventListener("sessionend", onSessionEnd);
       renderer.setAnimationLoop(null);
-      disposeAnchor(renderer);
       arButton.remove();
       renderer.dispose();
       if (renderer.domElement.parentElement === container) {
@@ -179,9 +176,9 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── Pinch-to-zoom → scale the whole model about its anchored base ────────
+  // ─── Pinch-to-zoom → scale the whole model about its base ─────────────────
   // Two-finger pinch only. Scaling the outer group (whose origin is the model's
-  // base-centre) grows/shrinks the miniature from where it's pinned. One-finger
+  // base-centre) grows/shrinks the miniature from where it's planted. One-finger
   // gestures do nothing (no free-trackball, no reposition-by-drag).
   useEffect(() => {
     const container = containerRef.current;
@@ -279,22 +276,41 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
     content.position.set(-scale * center.x, -scale * box.min.y, -scale * center.z);
   };
 
-  // Apply the current placement (anchor if we have one, else the fallback).
-  const applyFallbackPlacement = () => {
+  // Recenter: one-shot drop of the model in front of the user's *current*
+  // camera, turned to face them (yaw only, forced upright), with pinch-zoom
+  // reset to the default fit. Also used as the implicit placement on load.
+  const recenter = () => {
     const group = modelGroupRef.current;
-    if (!group) return;
-    group.position.copy(FALLBACK_POSITION);
-    group.rotation.set(0, 0, 0);
-  };
+    const renderer = rendererRef.current;
+    if (!group || !renderer) return;
 
-  // Called by the anchor hook when a QR is decoded: pin base at the QR, upright.
-  const applyAnchor = (anchor: { position: THREE.Vector3; yaw: number }) => {
-    const group = modelGroupRef.current;
-    if (!group) return;
-    anchoredRef.current = true;
-    group.position.copy(anchor.position);
-    group.rotation.set(0, anchor.yaw, 0);
-    flashHint("✓ Placed on QR — pinch to zoom");
+    // Reset zoom so recenter always yields a clean, known size.
+    zoomRef.current = 1;
+    group.scale.setScalar(1);
+
+    // Current camera world pose (the live XR camera while presenting).
+    const cam = renderer.xr.isPresenting
+      ? renderer.xr.getCamera()
+      : cameraRef.current;
+    if (!cam) return;
+    const camPos = new THREE.Vector3();
+    const camQuat = new THREE.Quaternion();
+    cam.getWorldPosition(camPos);
+    cam.getWorldQuaternion(camQuat);
+
+    // Horizontal forward (camera looks down -z), flattened so the model never
+    // drops above/below the user when they're looking up or down.
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camQuat);
+    forward.y = 0;
+    if (forward.lengthSq() < 1e-6) forward.set(0, 0, -1);
+    forward.normalize();
+
+    group.position.copy(camPos).addScaledVector(forward, RECENTER_DISTANCE_M);
+    group.position.y = camPos.y - RECENTER_DROP_M;
+
+    // Face me: rotate so the model's local front (-Z) turns back toward the
+    // camera. Upright — yaw about world-up only, never pitch/roll.
+    group.rotation.set(0, Math.atan2(forward.x, forward.z), 0);
   };
 
   const toggle = (name: string) => {
@@ -327,16 +343,15 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
       }
     }
     recenterAndScale();
-    if (!anchoredRef.current) applyFallbackPlacement();
-    beginScan();
-    flashHint("Point at a QR code to place it");
+    recenter();
+    flashHint("Pinch to zoom · tap Recenter to bring it back");
     setStatus("");
     setIsLoading(false);
   };
 
-  const handleReposition = () => {
-    beginScan();
-    flashHint("Point at a QR code to place it");
+  const handleRecenter = () => {
+    recenter();
+    flashHint("Recentered · pinch to zoom");
   };
 
   const hasSelection = sortedFiles.some(
@@ -366,7 +381,8 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
           <div style={{ fontWeight: 700, fontSize: 16 }}>View this model in AR</div>
           <div style={{ opacity: 0.75, fontSize: 13, maxWidth: 260 }}>
             Tap <strong>START AR</strong> below to open the camera, then choose a
-            model to load and point at a QR code to place it.
+            model to load. It appears in front of you — pinch to zoom, or tap
+            Recenter to bring it back.
           </div>
         </div>
       )}
@@ -383,7 +399,7 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
         </div>
       )}
 
-      {/* dom-overlay root — the in-AR model picker + reposition control */}
+      {/* dom-overlay root — the in-AR model picker + recenter control */}
       <div ref={overlayRef} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
         {inSession && (
           <div style={pickerStyle}>
@@ -441,14 +457,10 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
             {hasModel && (
               <button
                 type="button"
-                onClick={handleReposition}
+                onClick={handleRecenter}
                 style={repositionBtnStyle}
               >
-                {anchorStatus === "scanning"
-                  ? "⟳ Scanning for QR…"
-                  : anchorStatus === "anchored"
-                  ? "⟳ Reposition on QR"
-                  : "⟳ Place on QR code"}
+                ⟳ Recenter in front of me
               </button>
             )}
           </div>
