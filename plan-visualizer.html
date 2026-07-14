@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Plan: QR-code AR anchoring (v1)</title>
+<title>Plan: Compare Overlay + Export</title>
 <style>
   :root { color-scheme: light dark; }
   body { font-family: system-ui, sans-serif; max-width: 1200px; margin: 2rem auto; padding: 0 1rem;
@@ -23,62 +23,46 @@
 <body>
 
 <h1>📌 Goal</h1>
-<p>Let an on-site user pin the already-loaded AR miniature to a physical spot by scanning any printed QR code — in-session, on Android Chrome — replacing the fixed "2m in front" placement (which stays as a graceful fallback) and swapping the drag-to-rotate turntable for pinch-to-zoom.</p>
+<p>Give reviewers a pixel-level "what changed between revisions" overlay and a shareable exported comparison PDF, added to the existing shop-drawing <em>Compare Revisions</em> modal — without a new route or a two-phase Compare screen.</p>
 
 <div class="diagrams">
   <div class="diagram-col">
     <h2>🔄 Current Flow</h2>
     <pre class="mermaid">
 flowchart TD
-  Route["ar.$projectId.tsx&lt;br/&gt;route (composition)"]
-  AMV["ArModelViewer.tsx&lt;br/&gt;three.js + XR session"]
-  ARBtn["ARButton&lt;br/&gt;immersive-ar, camera-access (requested, unused)"]
-  Picker["dom-overlay picker&lt;br/&gt;useCloudModelFiles"]
-  Loader["useArModelLoader.ts&lt;br/&gt;.frag → Object3D"]
-  Group["modelGroup&lt;br/&gt;recenterAndScale"]
-  Rotate["drag-to-rotate&lt;br/&gt;one-finger Y turntable"]
-  Loop["setAnimationLoop&lt;br/&gt;render(scene, camera)"]
+  Trigger["Compare Revision button<br/>(DrawingFolderExplorer / kebab)"]
+  Modal["CompareDrawingsModal.tsx<br/>revision + page selectors, zoom"]
+  Hook["usePdfSide()<br/>renders page → PNG data URL only"]
+  Slider["PdfSliderCompare.tsx<br/>clip-path A-over-B slider"]
 
-  Route --> AMV
-  AMV --> ARBtn
-  AMV --> Picker
-  Picker -->|Load Cloud Model| Loader
-  Loader --> Group
-  Group -->|★ fixed 2m in front| Loop
-  AMV --> Rotate
-  Rotate --> Group
+  Trigger --> Modal
+  Modal -->|"per side"| Hook
+  Hook -->|"preview data URL"| Modal
+  Modal -->|"★ only view: slider"| Slider
     </pre>
   </div>
   <div class="diagram-col">
     <h2>✅ Proposed Flow</h2>
     <pre class="mermaid">
 flowchart TD
-  Route["ar.$projectId.tsx&lt;br/&gt;route (unchanged)"]
-  AMV["[MOD] ArModelViewer.tsx&lt;br/&gt;wires anchor + zoom"]
-  ARBtn["ARButton&lt;br/&gt;camera-access NOW read (XRWebGLBinding)"]
-  Picker["dom-overlay picker&lt;br/&gt;useCloudModelFiles"]
-  Loader["useArModelLoader.ts&lt;br/&gt;.frag → Object3D"]
-  Group["modelGroup&lt;br/&gt;default 2m front = fallback"]
-  Anchor["[NEW] useArQrAnchor.ts&lt;br/&gt;throttled decode loop"]
-  QR["jsQR (dep)&lt;br/&gt;4 corners"]
-  Pose["[NEW] qrPose.ts&lt;br/&gt;homography PnP + XR pose compose"]
-  Zoom["[MOD] pinch-to-zoom&lt;br/&gt;scale about anchor origin"]
-  Loop["setAnimationLoop&lt;br/&gt;render(scene, camera)"]
+  Trigger["Compare Revision button"]
+  Modal["[MOD] CompareDrawingsModal.tsx<br/>+ Slider/Overlay toggle, legend, Export btn"]
+  Hook["[MOD] usePdfSide()<br/>also exposes rendered canvas"]
+  Utils["[NEW] lib/pdfCompareUtils.ts<br/>createDiffCanvas() + exportComparisonPdf()"]
+  Slider["PdfSliderCompare.tsx<br/>(unchanged)"]
+  Overlay["Overlay img<br/>diff canvas → data URL"]
+  jspdf["[NEW dep] jspdf<br/>3-page A4 landscape"]
 
-  Route --> AMV
-  AMV --> Picker
-  Picker -->|Load| Loader
-  Loader --> Group
-  Group --> Loop
-  AMV --> ARBtn
-  ARBtn -->|raw camera frame| Anchor
-  Anchor --> QR
-  QR --> Pose
-  Pose -->|★ QR world pose to modelGroup: pos+yaw upright| Group
-  AMV --> Zoom
-  Zoom --> Group
+  Trigger --> Modal
+  Modal -->|"per side"| Hook
+  Hook -->|"★ canvas + preview"| Modal
+  Modal -->|"mode = slider"| Slider
+  Modal -->|"mode = overlay (live)"| Utils
+  Utils --> Overlay
+  Modal -->|"Export PDF"| Utils
+  Utils --> jspdf
     </pre>
-    <p class="removed">Removed: drag-to-rotate turntable handler in ArModelViewer.tsx — replaced by pinch-to-zoom (one-finger horizontal → modelGroup.rotation.y gone).</p>
+    <p class="removed">Removed: nothing — Slider view and existing selectors/zoom are preserved.</p>
   </div>
 </div>
 
@@ -86,33 +70,32 @@ flowchart TD
 <table>
   <tr><th>Pros</th><th>Cons</th></tr>
   <tr>
-    <td>Purely additive: model still loads 2m-in-front, so a decode failure or no-QR degrades to today's exact behavior — nothing that works is lost.</td>
-    <td>Reverses two just-shipped decisions (no-1:1-placement note + the drag-to-rotate turntable from 6 commits ago); the turntable code is deleted.</td>
+    <td>Reuses the existing live modal — no two-phase "Compare" screen, no new route/store to maintain.</td>
+    <td>Adds a runtime dependency (<code>jspdf</code>) — a new bundle-size cost, used only in this one feature.</td>
   </tr>
   <tr>
-    <td>In-session raw camera access gives the XR camera pose at decode time → clean world-lock; sidesteps the doc's camera-handoff and 90°/180° frame-mismatch unknowns.</td>
-    <td>Raw Camera Access + XRWebGLBinding + readPixels readback is real, device-specific plumbing that can only be fully validated on an Android Chrome device — not desktop.</td>
+    <td>Diff + export follow the currently-selected page on each side, so multi-page sheets work and what-you-see-is-what-you-export.</td>
+    <td>Pixel diff is raster-based: it flags any visual delta (incl. anti-aliasing/resampling noise), not semantic CAD changes. A threshold mitigates but won't eliminate this.</td>
   </tr>
   <tr>
-    <td>Lightweight homography PnP + jsQR (decoder-only) keep the Cloudflare-static bundle lean — no ~8MB opencv.js.</td>
-    <td>Hand-rolled planar-pose math needs careful testing; homography decomposition is sensitive to corner-detection noise / motion blur.</td>
+    <td>Pure diff/export helpers live in <code>lib/</code> and are unit-testable; <code>createDiffCanvas</code> normalizes sizes first, fixing the reference's flat-index misalignment bug.</td>
+    <td>Diff recomputes synchronously on every selection change; on very large pages the pixel loop can cause a brief hitch (acceptable — one pass, only when Overlay is active).</td>
   </tr>
   <tr>
-    <td>Logic isolated in a testable pure util (qrPose.ts) + a hook (useArQrAnchor.ts) per AGENTS.md layering; ArModelViewer stays a composition of hooks.</td>
-    <td>Fixed global QR_PHYSICAL_SIZE_M means every printed code must be one standard size until a lookup-key payload is added later.</td>
+    <td>Legend swatches use design tokens (<code>status-danger</code>/<code>status-ok</code>); only raw canvas pixels use hardcoded RGB, so JSX token rules stay intact.</td>
+    <td>Modal stays in <code>components/shop-drawings/</code> though it holds fetch/pdfjs logic — a pre-existing layer deviation this change does not fix (out of scope).</td>
   </tr>
 </table>
 
 <h2>📁 Files Changed</h2>
-<pre>[DEP] package.json                                              — add jsQR (decoder-only)
-[NEW] src/react-components/features/ar-viewer/qrPose.ts         — pure util: 4 QR corners + intrinsics + known size → THREE.Matrix4 (planar-homography / IPPE PnP)
-[NEW] src/react-components/features/ar-viewer/useArQrAnchor.ts  — hook: throttled in-session decode loop (XRWebGLBinding → readPixels → jsQR → qrPose), composes QR pose with XR camera pose, sets modelGroup transform (position + yaw, forced upright); exposes reposition()
-[MOD] src/react-components/features/ar-viewer/ArModelViewer.tsx — consume useArQrAnchor; remove drag-to-rotate; add pinch-to-zoom (scale about anchor origin); update hint copy ("Point at a QR to place it" / pinch hint); add "Reposition" affordance
-[MOD] .agents/docs/ar-webxr.md                                 — correct "fixed 2m / turntable only" description; document QR-anchor path (implementation-time)
-[MOD] .claude/docs/ar-webxr.md                                 — mirror of the above (must not drift)</pre>
+<pre>[NEW dep] package.json — add jspdf
+[NEW]     src/lib/pdfCompareUtils.ts — createDiffCanvas(a,b) (size-normalized pixel diff) + exportComparisonPdf() (3-page A4 landscape via jspdf)
+[MOD]     src/react-components/components/shop-drawings/CompareDrawingsModal.tsx — usePdfSide exposes canvas; Slider/Overlay toggle + legend; live overlay recompute; Export PDF button
+[MOD]     .agents/docs/drawing.md — document overlay + export in the Compare Revisions section
+[MOD]     .claude/docs/drawing.md — mirror of the above (must not drift)</pre>
 
 <h2>❓ Open Questions</h2>
-<p>Two non-blocking inputs to confirm at/before implementation: (1) the real printed QR size to set <code>QR_PHYSICAL_SIZE_M</code> (a documented constant can ship with a placeholder e.g. 0.15m); (2) explicit OK to delete the just-shipped drag-to-rotate turntable in favor of pinch-to-zoom. Neither blocks starting — say approve to proceed.</p>
+<p>No open questions — all scope decisions resolved in the grill (overlay + export only, no new tab/route; diff uses selected pages; live auto-recompute; 3-page export; token-based legend). Ready to implement upon approval.</p>
 
 <script type="module">
   import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
