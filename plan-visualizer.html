@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Plan: AR recenter button + lag fix</title>
+<title>Plan: Measurement-tool lag fix</title>
 <style>
   :root { color-scheme: light dark; }
   body { font-family: system-ui, sans-serif; max-width: 1200px; margin: 2rem auto; padding: 0 1rem;
@@ -23,63 +23,69 @@
 <body>
 
 <h1>📌 Goal</h1>
-<p>On the live <code>/ar/$projectId</code> viewer, replace the untested QR-anchoring flow with a simple one-shot "Recenter in front of me" button (move + face-me upright + reset zoom to default fit), make model-load do an implicit recenter, and fix the baseline in-session lag — while keeping the QR code dormant for a future round.</p>
+<p>Kill the ~10&nbsp;s freeze (and ongoing hover lag) when activating the Length/Area measurement tools on a big model. The cursor guide should appear instantly; vertex-snapping should stay available without brute-forcing thousands of un-accelerated meshes on every mouse move.</p>
 
 <div class="diagrams">
   <div class="diagram-col">
     <h2>🔄 Current Flow</h2>
     <pre class="mermaid">
 flowchart TD
-  V["ArModelViewer.tsx<br/>scene + XR session setup"]
-  V -->|"requiredFeatures: camera-access"| S["XR immersive-ar session"]
-  V -->|"antialias:true, native XR res"| R["WebGLRenderer<br/>heavy fill cost = lag"]
-  V -->|"load → FALLBACK_POSITION<br/>(session-origin relative)"| M["modelGroup"]
-  V -->|"setAnimationLoop"| L["frame loop"]
-  L -->|"every frame"| PF["useArQrAnchor.ts<br/>processFrame"]
-  PF -->|"every 8th: readPixels + jsQR"| QP["qrPose.ts<br/>homography PnP"]
-  QP -->|"★ applyAnchor(pos, yaw)"| M
-  BTN["in-AR button<br/>Place on QR / Scanning"] -->|beginScan| PF
-  PINCH["pinch-to-zoom"] --> M
+  Btn["LengthMeasure.tsx / AreaMeasure.tsx<br/>button: highlighter.enabled=false"]
+  TM["ToolbarMeasure.tsx<br/>effect → cursor.enabled = true"]
+  Act["_activate() (length/area-measure-cursor.ts)"]
+  Setup["await _setupPickingMeshes()<br/>getItemsGeometry(WHOLE model) → 1000s of plain meshes → world.meshes"]
+  Hover["attach mousemove → castRay → CursorSurface.update"]
+  Cast["OBC castRay per move:<br/>GPU frag pick + CPU intersect(world.meshes, NO BVH)"]
+  Hoverer["OBF.Hoverer still enabled<br/>extra highlight per move"]
+
+  Btn --> TM --> Act
+  Act -->|"★ blocks ~10s"| Setup
+  Setup --> Hover
+  Hover --> Cast
+  Act -.still on.-> Hoverer
     </pre>
   </div>
   <div class="diagram-col">
     <h2>✅ Proposed Flow</h2>
     <pre class="mermaid">
 flowchart TD
-  V["[MOD] ArModelViewer.tsx<br/>scene + XR session setup"]
-  V -->|"drop camera-access"| S["XR immersive-ar session"]
-  V -->|"antialias:false<br/>xr.setFramebufferScaleFactor(~0.7)"| R["WebGLRenderer<br/>lower fill cost = smoother"]
-  V -->|"load = implicit recenter"| RC["[NEW] recenter()"]
-  BTN["[MOD] in-AR button<br/>one-shot Recenter"] --> RC
-  RC -->|"★ in front of CURRENT cam<br/>+ face-me upright + reset zoom"| M["modelGroup"]
-  PINCH["pinch-to-zoom"] --> M
-  L["frame loop<br/>render only"] --> R
-  DORM["useArQrAnchor.ts + qrPose.ts<br/>dormant, unimported"]
+  Btn["LengthMeasure.tsx / AreaMeasure.tsx<br/>button (unchanged)"]
+  TM["ToolbarMeasure.tsx<br/>effect → cursor.enabled = true"]
+  Act["[MOD] _activate()"]
+  Hover["attach mousemove → castRay → CursorSurface.update<br/>runs FIRST, synchronously"]
+  Setup["[NEW] buildMeasurePickingMeshes() (shared)<br/>background, per-model cache, computeBoundsTree = BVH"]
+  Cast["OBC castRay per move:<br/>GPU frag pick + CPU intersect(BVH-accelerated)"]
+  VRT["[MOD] ViewportRightToolbar.tsx<br/>effect: Hoverer.enabled=false while tool active"]
+
+  Btn --> TM --> Act
+  Act -->|"★ cursor shows instantly"| Hover
+  Act -.fire &amp; forget.-> Setup
+  Hover --> Cast
+  Setup -->|guarded: skip if disabled| Cast
+  VRT -.hover off.-> Cast
     </pre>
-    <p class="removed">Removed from live path (not deleted): QR scan wiring — beginScan / processFrame / applyAnchor calls in ArModelViewer.</p>
-    <p class="removed">Removed: camera-access requiredFeature + jsQR import from the live viewer.</p>
-    <p class="removed">Removed: session-origin FALLBACK_POSITION as load placement (replaced by current-pose recenter).</p>
+    <p class="removed">Removed: duplicated _setupPickingMeshes bodies in length-measure-cursor.ts + area-measure-cursor.ts (moved to one shared helper).</p>
+    <p class="removed">Removed: console.log("…Cursor initialized…") debug lines in both cursors.</p>
   </div>
 </div>
 
 <h2>⚖️ Pros &amp; Cons</h2>
 <table>
   <tr><th>Pros</th><th>Cons</th></tr>
-  <tr><td>Ships a robust, testable interaction (recenter) instead of an unverified raw-camera + hand-rolled-PnP pipeline.</td><td>Loses real-world / shared registration for now — the model no longer pins to a fixed physical spot.</td></tr>
-  <tr><td>Attacks the baseline lag with the correct in-XR lever (framebuffer scale factor + no antialias), not setPixelRatio.</td><td>Framebuffer downscale softens the rendered model's edges; the ~0.7 value is a starting guess needing on-device tuning.</td></tr>
-  <tr><td>Drops camera-access, the jsQR import, and the per-frame readPixels loop — smaller permission/compat surface, less work per frame.</td><td>jsQR stays in package.json unused (dead weight until QR is revived).</td></tr>
-  <tr><td>QR code kept dormant (like ArSession.ts), so the future site-walk anchoring use case isn't thrown away.</td><td>Dormant, unimported code can rot / drift from the live path until revisited.</td></tr>
+  <tr><td>Cursor guide appears instantly — the 10&nbsp;s wait is gone because the hover no longer waits on the mesh extraction.</td><td>For a brief moment after activating on a huge model, click-to-snap may not snap until the background build finishes (cursor + free placement still work).</td></tr>
+  <tr><td>BVH (computeBoundsTree) makes the per-move CPU intersect fast, so hovering stays smooth even with picking meshes present. Uses ThatOpen's already-installed accelerated raycast — no new dependency.</td><td>Building BVH adds work to the (now background) extraction and some memory per unique geometry.</td></tr>
+  <tr><td>Per-model cache means re-activating a tool / switching Length↔Area doesn't re-extract.</td><td>Cache needs invalidation when models load/unload mid-session — added logic + a correctness surface to get right.</td></tr>
+  <tr><td>Disabling OBF.Hoverer while a tool is active removes a redundant per-move raycast/highlight (your idea); CursorSurface is the guide.</td><td>Background build + enabled-guard adds a little async complexity vs. the current straight-line await.</td></tr>
 </table>
 
 <h2>📁 Files Changed</h2>
-<pre>[MOD] src/react-components/features/ar-viewer/ArModelViewer.tsx   - main change: recenter() helper, button relabel, load->recenter, drop QR wiring + camera-access, antialias:false + setFramebufferScaleFactor
-[MOD] .agents/docs/ar-webxr.md                                    - describe live path as load + recenter + pinch; mark QR dormant
-[MOD] .claude/docs/ar-webxr.md                                    - mirror of the above (must not drift, per CLAUDE.md)
-[DORMANT] src/react-components/features/ar-viewer/useArQrAnchor.ts - unchanged, now unimported
-[DORMANT] src/react-components/features/ar-viewer/qrPose.ts        - unchanged, now unimported</pre>
+<pre>[NEW] src/bim-components/setup/src/measure-picking-meshes.ts   - shared helper: build picking meshes for all loaded models, computeBoundsTree (BVH) per unique geometry, per-model cache + invalidation, add/remove from world.meshes, dispose bounds trees
+[MOD] src/bim-components/setup/src/length-measure-cursor.ts    - attach cursor/hover synchronously first (instant guide); call shared helper in background (not awaited) with an enabled-guard; drop duplicated setup + console.log
+[MOD] src/bim-components/setup/src/area-measure-cursor.ts      - same treatment as length cursor
+[MOD] src/react-components/components/bim/ViewportRightToolbar.tsx - central effect: OBF.Hoverer.enabled = false while activeTool is a tool (not select/null), restore otherwise</pre>
 
 <h2>❓ Open Questions</h2>
-<p>No open questions — decisions crystallized in CONTEXT.md ("AR viewer — QR goes dormant; ship a recenter button + fix baseline lag"). Ready to implement upon approval. The one on-device tuning item (exact framebuffer scale factor) is a runtime adjustment, not a design blocker.</p>
+<p>One design alternative, not blocking: instead of extracting + BVH-ing picking meshes at all, we could rely on the fragments' native snapping (<code>raycastWithSnapping</code> / <code>snappingClasses</code>, which castRay already supports) and drop the whole world.meshes extraction. That would be the leanest fix (no extraction, no memory, no cache) but is a larger behavioral change to vertex-snapping that I can't validate without on-device testing — so this plan keeps the safer "extract-in-background + BVH" path and leaves native snapping as a future simplification. Say <strong>approve</strong> to implement as planned, or tell me to pursue the native-snapping route instead.</p>
 
 <script type="module">
   import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
