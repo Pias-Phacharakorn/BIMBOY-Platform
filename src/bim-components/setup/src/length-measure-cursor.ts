@@ -3,6 +3,10 @@ import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
 import * as THREE from "three";
 import { CursorSurface } from "../../CursorSurface";
+import {
+  attachMeasurePickingMeshes,
+  clearMeasurePickingCache,
+} from "./measure-picking-meshes";
 
 export class LengthMeasureCursor extends OBC.Component implements OBC.Disposable {
   static readonly uuid = "2d1a37c0-ff4d-4ea7-90d0-ecdfc812d8a6" as const;
@@ -14,7 +18,11 @@ export class LengthMeasureCursor extends OBC.Component implements OBC.Disposable
   private _components: OBC.Components;
   private _world: OBC.World;
 
-  private _addedMeshes: THREE.Mesh[] = [];
+  // Detaches the background-built picking meshes from world.meshes on deactivate.
+  private _pickingDetach: (() => void) | null = null;
+  // Bumped on every activate/deactivate; also serves as the cancel token for the
+  // in-flight background picking-mesh build.
+  private _activationId = 0;
 
   // Event listeners
   private _viewportMouseMoveListener: (() => void) | null = null;
@@ -28,7 +36,6 @@ export class LengthMeasureCursor extends OBC.Component implements OBC.Disposable
     this._world = world;
 
     components.add(LengthMeasureCursor.uuid, this);
-    console.log("LengthMeasureCursor initialized with uuid: " + LengthMeasureCursor.uuid);
   }
 
   get enabled() {
@@ -46,20 +53,21 @@ export class LengthMeasureCursor extends OBC.Component implements OBC.Disposable
     this.onStateChanged.trigger();
   }
 
-  private async _activate() {
+  private _activate() {
     const measurer = this._components.get(OBF.LengthMeasurement);
     const cursorSurface = this._components.get(CursorSurface);
     const canvas = this._world.renderer?.three?.domElement;
 
-    // 1. Enable and configure measurer
+    // 1. Enable and configure the measurer for synchronous vertex snapping.
     measurer.world = this._world;
     measurer.enabled = true;
+    measurer.pickerMode = OBF.GraphicVertexPickerMode.SYNCHRONOUS;
+    measurer.delay = 0;
     cursorSurface.setWorld(this._world);
 
-    // 2. Setup Synchronous Picking meshes
-    await this._setupPickingMeshes();
-
-    // 3. Hover raycast
+    // 2. Hover raycast — attached immediately so the cursor guide appears
+    //    instantly (driven by the fast fragment pick), without waiting on the
+    //    picking-mesh build below.
     let raycastInProgress = false;
     this._viewportMouseMoveListener = () => {
       if (raycastInProgress) return;
@@ -91,7 +99,7 @@ export class LengthMeasureCursor extends OBC.Component implements OBC.Disposable
         });
     };
 
-    // 4. Click (pointerdown/pointerup) listeners to avoid camera drag clashes
+    // 3. Click (pointerdown/pointerup) listeners to avoid camera drag clashes
     let startX = 0;
     let startY = 0;
     this._viewportPointerDownListener = (e: PointerEvent) => {
@@ -118,12 +126,36 @@ export class LengthMeasureCursor extends OBC.Component implements OBC.Disposable
       canvas.addEventListener("pointerup", this._viewportPointerUpListener);
     }
     window.addEventListener("keydown", this._escapeKeyListener);
+
+    // 4. Build picking meshes for vertex snapping in the background (cached +
+    //    BVH-accelerated). An early deactivate cancels via the activation id.
+    const myId = ++this._activationId;
+    attachMeasurePickingMeshes(
+      this._components,
+      this._world,
+      () => myId !== this._activationId
+    )
+      .then((handle) => {
+        if (myId !== this._activationId) {
+          handle.detach();
+          return;
+        }
+        this._pickingDetach = handle.detach;
+      })
+      .catch((err) => console.error("measure picking mesh build failed:", err));
   }
 
   private _deactivate() {
     const measurer = this._components.get(OBF.LengthMeasurement);
     const cursorSurface = this._components.get(CursorSurface);
     const canvas = this._world.renderer?.three?.domElement;
+
+    // Cancel any in-flight background build and detach the picking meshes.
+    this._activationId++;
+    if (this._pickingDetach) {
+      this._pickingDetach();
+      this._pickingDetach = null;
+    }
 
     measurer.enabled = false;
     measurer.pickerMode = OBF.GraphicVertexPickerMode.DEFAULT;
@@ -148,73 +180,11 @@ export class LengthMeasureCursor extends OBC.Component implements OBC.Disposable
       window.removeEventListener("keydown", this._escapeKeyListener);
       this._escapeKeyListener = null;
     }
-
-    // Clean meshes from world.meshes
-    const disposer = this._components.get(OBC.Disposer);
-    for (const mesh of this._addedMeshes) {
-      this._world.meshes.delete(mesh);
-      disposer.destroy(mesh);
-    }
-    this._addedMeshes = [];
-  }
-
-  private async _setupPickingMeshes() {
-    const fragments = this._components.get(OBC.FragmentsManager);
-    const measurer = this._components.get(OBF.LengthMeasurement);
-    measurer.pickerMode = OBF.GraphicVertexPickerMode.SYNCHRONOUS;
-    measurer.delay = 0;
-
-    const meshesList: THREE.Mesh[] = [];
-    for (const [, model] of fragments.list) {
-      try {
-        const idsWithGeometry = await model.getItemsIdsWithGeometry();
-        const allMeshesData = await model.getItemsGeometry(idsWithGeometry);
-        const geometries = new Map<number, THREE.BufferGeometry>();
-
-        for (const itemId in allMeshesData) {
-          const meshData = allMeshesData[itemId];
-          for (const geomData of meshData) {
-            if (
-              !geomData.positions ||
-              !geomData.indices ||
-              !geomData.transform ||
-              !geomData.representationId
-            ) {
-              continue;
-            }
-
-            const representationId = geomData.representationId;
-            if (!geometries.has(representationId)) {
-              const geometry = new THREE.BufferGeometry();
-              geometry.setAttribute(
-                "position",
-                new THREE.Float32BufferAttribute(geomData.positions, 3)
-              );
-              geometry.setIndex(Array.from(geomData.indices));
-              geometries.set(representationId, geometry);
-            }
-
-            const geometry = geometries.get(representationId)!;
-            const mesh = new THREE.Mesh(geometry);
-            mesh.applyMatrix4(geomData.transform);
-            mesh.applyMatrix4(model.object.matrixWorld);
-            mesh.updateWorldMatrix(true, true);
-            meshesList.push(mesh);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to collect picking meshes:", err);
-      }
-    }
-
-    this._addedMeshes = meshesList;
-    for (const mesh of meshesList) {
-      this._world.meshes.add(mesh);
-    }
   }
 
   dispose() {
     this._deactivate();
+    clearMeasurePickingCache();
     this.onDisposed.trigger(LengthMeasureCursor.uuid);
     this.onDisposed.reset();
     this.onStateChanged.reset();
