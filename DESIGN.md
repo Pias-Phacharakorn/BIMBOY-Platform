@@ -117,7 +117,7 @@ All routes live under `src/routes/` and follow the `/projects/$projectId/<featur
 | `/projects/$projectId/documents` | `DocumentsView` | Document control: drawing lists, revisions, owners, deadlines      |
 | `/projects/$projectId/settings`  | `SettingsView`  | Project config: details, members, GIS coordinates, folder structure|
 
-> Route files are **composition only** — no hooks, no fetching. See `AGENTS.md`.
+> Route files are **composition only** — no hooks, no fetching. See [`CLAUDE.md`](./CLAUDE.md) (or [`AGENTS.md`](./AGENTS.md), which points to it).
 
 ---
 

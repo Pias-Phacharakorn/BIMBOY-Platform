@@ -5,7 +5,7 @@
 
 ## Overview
 
-The React layer is split into four tiers with strict isolation (see AGENTS.md layer table):
+The React layer is split into four tiers with strict isolation (see CLAUDE.md layer table):
 `components/` (pure UI) → `features/` (state + fetch + BIM logic) → `views/` (LAYOUTS composition) → `routes/` (composition only). Layout state lives in Zustand (`uiStore`), never React `useState`. Async data is always TanStack Query inside `features/`.
 
 ## Key files
@@ -23,7 +23,7 @@ The React layer is split into four tiers with strict isolation (see AGENTS.md la
 
 ## Patterns & conventions
 
-- **State location** (AGENTS.md table): layout→uiStore, projects→projectStore, clash→clashStore, world→bimStore, URL-shareable→router search params, async→TanStack Query, auth→AuthContext only (never Zustand).
+- **State location** (CLAUDE.md table): layout→uiStore, projects→projectStore, clash→clashStore, world→bimStore, URL-shareable→router search params, async→TanStack Query, auth→AuthContext only (never Zustand).
 - **Views** use a `LAYOUTS` const of grid-template definitions; layout state comes from the store, never local `useState`.
 - **Routes** are composition only — no fetching, state, or logic. Never edit `routeTree.gen.ts`.
 - **Imports** always via `@/*` alias, never relative `../../../`.
@@ -32,7 +32,7 @@ The React layer is split into four tiers with strict isolation (see AGENTS.md la
 
 ## Examples
 
-_(Moved verbatim from AGENTS.md — the rule stays in AGENTS.md, the illustration lives here.)_
+_(Moved verbatim from CLAUDE.md — the rule stays in CLAUDE.md, the illustration lives here.)_
 
 ### Routes Pattern
 
