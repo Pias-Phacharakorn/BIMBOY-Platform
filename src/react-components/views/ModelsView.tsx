@@ -161,8 +161,9 @@ export function ModelsView() {
             icon="SETTINGS"
             defaultOpen={true}
             noPadding={true}
+            fullHeight={true}
           >
-            <PropertyPanel />
+            <PropertyPanel fullHeight={true} />
           </PanelSection>
         </RightPanel>
 
