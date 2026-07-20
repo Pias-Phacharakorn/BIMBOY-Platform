@@ -1,7 +1,7 @@
 # BIM Viewer — ThatOpen / OBC wiring (this app)
 
 > Status: seed — expand as you work this area.
-> Documents how **this project** wires ThatOpen. How to *build* a generic OBC component → `_thatopen-bim-component` skill. ThatOpen API reference → `.agents/ThatOpen_docs/` via `thatopen-docs-navigator` skill. Do not duplicate those here.
+> Documents how **this project** wires ThatOpen. How to *build* a generic OBC component → `_thatopen-bim-component` skill. ThatOpen API reference → start at `.agents/ThatOpen_docs/INDEX.md`. Do not duplicate those here.
 
 ## Overview
 

@@ -172,7 +172,7 @@ Layout state always from the store (never `useState`); views compose via a `LAYO
 ## 🔬 BIM / ThatOpen
 
 **Before coding any OBC feature:**
-1. Read ThatOpen docs — use `thatopen-docs-navigator` skill
+1. Read ThatOpen docs — start at [`.agents/ThatOpen_docs/INDEX.md`](.agents/ThatOpen_docs/INDEX.md) (the navigation entry point: concepts, tutorials, full API symbol index)
 2. Check v3.4.x API (breaking changes from v2)
 
 **New OBC component:** follow the `_thatopen-bim-component` skill. → project wiring + step checklist in `.claude/docs/bim-viewer.md`.
@@ -188,7 +188,7 @@ Always use `@/*` alias. Never relative `../../../` paths. → example in `.claud
 You (Claude) are the **primary developer**. The developer is the final approver who reviews the diff and commits personally.
 
 **1. Read first**
-- OBC feature? → `thatopen-docs-navigator` skill
+- OBC feature? → read [`.agents/ThatOpen_docs/INDEX.md`](.agents/ThatOpen_docs/INDEX.md) first, then the relevant tutorial/API doc it points to
 - Custom OBC component? → `_thatopen-bim-component` skill
 - BUI patterns? → `.claude/skills/`
 
