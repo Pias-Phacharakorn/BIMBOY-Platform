@@ -1,6 +1,6 @@
 # GIS / Cesium — geospatial layers
 
-> Status: seed — partly roadmap (AGENTS.md roadmap item 5: BIM + GIS via Cesium 3D Tiles). Expand as this area is built out.
+> Status: seed — partly roadmap (CLAUDE.md roadmap item 5: BIM + GIS via Cesium 3D Tiles). Expand as this area is built out.
 
 ## Overview
 

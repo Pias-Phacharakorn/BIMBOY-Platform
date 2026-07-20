@@ -1,7 +1,7 @@
 # BIM Viewer — ThatOpen / OBC wiring (this app)
 
 > Status: seed — expand as you work this area.
-> Documents how **this project** wires ThatOpen. How to *build* a generic OBC component → `_thatopen-bim-component` skill. ThatOpen API reference → `.agents/ThatOpen_docs/` via `thatopen-docs-navigator` skill. Do not duplicate those here.
+> Documents how **this project** wires ThatOpen. How to *build* a generic OBC component → `_thatopen-bim-component` skill. ThatOpen API reference → start at `.agents/ThatOpen_docs/INDEX.md`. Do not duplicate those here.
 
 ## Overview
 
@@ -29,7 +29,7 @@ The 3D world is a singleton bootstrapped once in `bim-components/setup/` — nev
 - **Plans open in perspective, straight-down.** `OBC.Views.open(id)` sets `world.camera` to the view's own `OrthoPerspectiveCamera`, configured (at `world`-set time in the engine) as **Orthographic + "Plan" nav mode** (pan + zoom, rotation speed zeroed). For plan rows only, `Views2DList.applyPerspectivePlanCamera` flips just the projection to **Perspective** (`projection.set("Perspective")` + `updateAspect()`) and leaves everything else — the camera stays straight-down and Plan mode keeps it locked to a top view (no tilt, no orbit). It then calls **`camera.fitToItems()`** because OBC's ortho→perspective switch reuses a stale camera distance and would otherwise leave the model off-screen (user having to press Focus); `fitToItems` → `controls.fitToSphere` keeps the current straight-down direction, so it only re-frames and never reintroduces a tilt. Elevations skip all of this (stay orthographic). Exit is `views.close()` → OBC's `world.useDefaultCamera()`, so no cleanup is needed. Camera changes are made visible by `resyncPostproductionCamera` (`postproduction.updateCamera()`) — the composer otherwise keeps rendering the pre-swap camera. (A tilted "2.5D" variant was tried and reverted: straight-down perspective reads as a clean top view, whereas the tilt looked off.)
 - OBC bootstrap is a **singleton** in `setup/` — React never constructs the world.
 - **React ↔ custom-component pattern:** a custom `OBC.Component` owns all engine state and exposes methods/getters + an `onChanged` event; a React feature panel drives it via `components.get(...)` and re-renders on `onChanged`. Precedents: `GisPanel` ↔ `GisLayers`, `DrawingEditorPanel`/`DrawingEditorBoard` ↔ `DrawingEditorSetup`.
-- **New OBC component — step checklist** (moved from AGENTS.md; follow the `_thatopen-bim-component` skill for the full workflow):
+- **New OBC component — step checklist** (moved from CLAUDE.md; follow the `_thatopen-bim-component` skill for the full workflow):
   1. Use `_thatopen-bim-component` skill
   2. Place in `bim-components/`
   3. Extend `OBC.Component`, implement `OBC.Disposable`
