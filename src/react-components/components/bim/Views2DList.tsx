@@ -27,9 +27,41 @@ function resyncPostproductionCamera(world: OBC.World | null) {
 }
 
 /**
+ * Opens a plan view in perspective projection, looking straight down at the top of
+ * the model.
+ *
+ * OBC opens plan views with the view's own OrthoPerspectiveCamera in "Plan"
+ * navigation mode (pan + zoom, no rotation) + Orthographic projection. We flip the
+ * projection to Perspective (same call the ToolbarSettings toggle uses) and leave
+ * the rest as-is — the camera stays straight-down and Plan mode keeps it locked to
+ * a top view (no tilt, no orbit).
+ *
+ * OBC's ortho→perspective switch reuses a stale camera distance, so the model can
+ * land off-screen (the user would otherwise have to press Focus). fitToItems re-
+ * frames it — and because it uses controls.fitToSphere it keeps the current
+ * straight-down direction, so no tilt is reintroduced. Same call the Focus button
+ * makes. Elevations never call this: they stay orthographic drawings.
+ */
+async function applyPerspectivePlanCamera(world: OBC.World | null) {
+  const camera = world?.camera as any;
+  if (!camera?.projection) return;
+  await camera.projection.set("Perspective");
+  camera.updateAspect?.();
+  if (typeof camera.fitToItems === "function") {
+    try {
+      await camera.fitToItems();
+    } catch (err) {
+      console.warn("2D Views: failed to fit plan view to model", err);
+    }
+  }
+}
+
+/**
  * "2D Views" panel section. Auto-generates floor plans (from IFC storeys) and
  * elevations (from the models' bounding box) via the built-in OBC.Views whenever
  * a model finishes loading, and lets the user open a view or exit back to 3D.
+ * Plans open in perspective projection but straight-down (see
+ * applyPerspectivePlanCamera); elevations stay orthographic drawings.
  *
  * Engine wiring (views.world / defaultRange) lives in setup/src/views.ts — this
  * component only reads components.get(OBC.Views) and drives generate/open/close.
@@ -115,10 +147,14 @@ export function Views2DList() {
     };
   }, [components, world]);
 
-  const openView = (id: string) => {
+  const openView = async (id: string) => {
     if (!components) return;
     const views = components.get(OBC.Views);
     views.open(id);
+    // Plans open in perspective (straight-down top view); elevations stay ortho.
+    if (groups.plans.includes(id)) {
+      await applyPerspectivePlanCamera(world);
+    }
     resyncPostproductionCamera(world);
     setActiveId(id);
   };
