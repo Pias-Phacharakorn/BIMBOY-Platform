@@ -56,13 +56,18 @@ export const cloudModelsService = {
   },
 
   /**
-   * Downloads a single .frag file's bytes from storage.
+   * Downloads a single .frag file's bytes from storage. Pass an AbortSignal to
+   * tear down the in-flight request (used by the "Stop" button in the loading modal).
    */
-  async downloadFragFile(prefix: string, fileName: string): Promise<Uint8Array> {
+  async downloadFragFile(
+    prefix: string,
+    fileName: string,
+    signal?: AbortSignal
+  ): Promise<Uint8Array> {
     const fullPath = `${prefix}/${fileName}`;
     const { data, error } = await supabase.storage
       .from("project-files")
-      .download(fullPath);
+      .download(fullPath, {}, { signal });
 
     if (error) {
       console.error(`Error downloading frag file "${fullPath}":`, error);

@@ -24,16 +24,20 @@ interface LoadCloudModelVariables {
   prefix: string;
   file: CloudFragFile;
   components: OBC.Components;
+  signal?: AbortSignal;
 }
 
 /**
  * Mutation to download a single cloud model and load it into the viewer.
  * Shared by CloudModelModal (manual load) and useAutoLoadCloudModels (auto load).
+ * Pass a signal to abort the download and skip loading a cancelled file.
  */
 export function useLoadCloudModel() {
   return useMutation({
-    mutationFn: async ({ prefix, file, components }: LoadCloudModelVariables) => {
-      const bytes = await cloudModelsService.downloadFragFile(prefix, file.name);
+    mutationFn: async ({ prefix, file, components, signal }: LoadCloudModelVariables) => {
+      const bytes = await cloudModelsService.downloadFragFile(prefix, file.name, signal);
+      // Download resolved just before a cancel — don't load an aborted file.
+      if (signal?.aborted) return;
       const fragments = components.get(OBC.FragmentsManager);
       const model = await fragments.core.load(bytes, { modelId: file.modelId });
 
@@ -65,21 +69,41 @@ export function useLoadCloudModelBatch() {
   ): Promise<boolean> {
     if (files.length === 0) return false;
 
-    const { setModelLoading, setLoadingFiles, updateLoadingFileStatus } = useBimStore.getState();
+    const {
+      setModelLoading,
+      setLoadingFiles,
+      updateLoadingFileStatus,
+      setLoadingAbortController,
+    } = useBimStore.getState();
     setLoadingFiles(files.map((f) => ({ name: f.name, status: "pending" as const })));
+
+    // Controller for the "Stop" button — cancelModelLoading() aborts this.
+    const controller = new AbortController();
+    setLoadingAbortController(controller);
     setModelLoading(true);
 
     let hasError = false;
 
     for (let i = 0; i < files.length; i += MAX_PARALLEL) {
+      // Cancelled between waves — stop launching new downloads.
+      if (controller.signal.aborted) break;
       const batch = files.slice(i, i + MAX_PARALLEL);
       await Promise.all(
         batch.map(async (file) => {
           updateLoadingFileStatus(file.name, "loading");
           try {
-            await loadCloudModel.mutateAsync({ prefix, file, components });
-            updateLoadingFileStatus(file.name, "done");
+            await loadCloudModel.mutateAsync({
+              prefix,
+              file,
+              components,
+              signal: controller.signal,
+            });
+            // A cancel may have flipped this file to 'cancelled' already.
+            if (!controller.signal.aborted) updateLoadingFileStatus(file.name, "done");
           } catch (err) {
+            // An aborted download is a cancel, not a failure — cancelModelLoading
+            // owns the 'cancelled' status, so leave it be.
+            if (controller.signal.aborted) return;
             console.warn(`Failed to load cloud model "${file.name}"`, err);
             updateLoadingFileStatus(file.name, "error");
             hasError = true;
@@ -88,7 +112,14 @@ export function useLoadCloudModelBatch() {
       );
     }
 
-    if (!hasError) {
+    // This run's controller is spent — don't let it abort a later batch.
+    if (useBimStore.getState().loadingAbortController === controller) {
+      setLoadingAbortController(null);
+    }
+
+    // Keep the modal open on error (Close button) or cancel (Stop → Close);
+    // only auto-dismiss on a fully clean run.
+    if (!hasError && !controller.signal.aborted) {
       setTimeout(() => useBimStore.getState().setModelLoading(false), 1000);
     }
 

@@ -18,7 +18,7 @@ export type BimTool =
 export type BimPanel = 'properties' | 'tree' | 'minimap' | 'smartviews' | null
 
 // ─── Cloud Model Loading Progress ─────────────────────────────────────────────
-export type LoadingFileStatus = 'pending' | 'loading' | 'done' | 'error'
+export type LoadingFileStatus = 'pending' | 'loading' | 'done' | 'error' | 'cancelled'
 export interface LoadingFile {
   name: string
   status: LoadingFileStatus
@@ -39,6 +39,7 @@ interface BimState {
   engineReady: boolean
   isModelLoading: boolean
   loadingFiles: LoadingFile[]
+  loadingAbortController: AbortController | null
   loadedModelIds: string[]
   alignAngle: number
   aligningDirection: 'front' | 'back' | 'left' | 'right' | null
@@ -58,6 +59,8 @@ interface BimState {
   setModelLoading: (loading: boolean) => void
   setLoadingFiles: (files: LoadingFile[]) => void
   updateLoadingFileStatus: (name: string, status: LoadingFileStatus) => void
+  setLoadingAbortController: (controller: AbortController | null) => void
+  cancelModelLoading: () => void
   addLoadedModel: (modelId: string) => void
   removeLoadedModel: (modelId: string) => void
   resetLoadedModels: () => void
@@ -79,6 +82,7 @@ const initialState = {
   engineReady: false,
   isModelLoading: false,
   loadingFiles: [] as LoadingFile[],
+  loadingAbortController: null as AbortController | null,
   loadedModelIds: [] as string[],
   alignAngle: 0,
   aligningDirection: null as 'front' | 'back' | 'left' | 'right' | null,
@@ -119,6 +123,24 @@ export const useBimStore = create<BimState>()(
           f.name === name ? { ...f, status } : f
         ),
       })),
+
+    setLoadingAbortController: (controller) =>
+      set({ loadingAbortController: controller }),
+
+    // Stop an in-progress batch: abort in-flight downloads and mark every
+    // not-yet-terminal file 'cancelled' so the loading modal reads as done.
+    cancelModelLoading: () =>
+      set((state) => {
+        state.loadingAbortController?.abort()
+        return {
+          loadingAbortController: null,
+          loadingFiles: state.loadingFiles.map((f) =>
+            f.status === 'pending' || f.status === 'loading'
+              ? { ...f, status: 'cancelled' as const }
+              : f
+          ),
+        }
+      }),
 
     addLoadedModel: (modelId) =>
       set((state) => ({
