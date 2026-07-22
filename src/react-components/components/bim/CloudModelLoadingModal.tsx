@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { Loader2, Check, AlertCircle } from "lucide-react";
+import { Loader2, Check, AlertCircle, Ban, X } from "lucide-react";
 import { useBimStore } from "@/react-components/store/bimStore";
 
 /**
@@ -12,11 +12,12 @@ export function CloudModelLoadingModal() {
   const isModelLoading = useBimStore((s) => s.isModelLoading);
   const loadingFiles = useBimStore((s) => s.loadingFiles);
   const setModelLoading = useBimStore((s) => s.setModelLoading);
+  const cancelModelLoading = useBimStore((s) => s.cancelModelLoading);
 
   if (!isModelLoading) return null;
 
   const completedCount = loadingFiles.filter(
-    (f) => f.status === "done" || f.status === "error"
+    (f) => f.status === "done" || f.status === "error" || f.status === "cancelled"
   ).length;
   const hasError = loadingFiles.some((f) => f.status === "error");
   const isDone = loadingFiles.length > 0 && completedCount === loadingFiles.length;
@@ -68,18 +69,33 @@ export function CloudModelLoadingModal() {
                     <span>Failed</span>
                   </span>
                 )}
+                {file.status === "cancelled" && (
+                  <span className="flex items-center gap-0.5 text-muted font-semibold text-[10px]">
+                    <Ban className="w-3.5 h-3.5" />
+                    <span>Cancelled</span>
+                  </span>
+                )}
               </div>
             </div>
           ))}
         </div>
 
-        {isDone && hasError && (
+        {isDone ? (
           <button
             onClick={() => setModelLoading(false)}
             className="w-full min-h-9 py-2 px-4 rounded-radius bg-surface-raised border border-border hover:bg-surface-alt font-semibold text-xs text-fg transition-all cursor-pointer"
             type="button"
           >
             Close & View Viewer
+          </button>
+        ) : (
+          <button
+            onClick={cancelModelLoading}
+            className="w-full min-h-9 py-2 px-4 rounded-radius bg-surface-raised border border-border hover:border-status-danger hover:text-status-danger font-semibold text-xs text-fg transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            type="button"
+          >
+            <X className="w-3.5 h-3.5" />
+            <span>Stop Download</span>
           </button>
         )}
       </div>
