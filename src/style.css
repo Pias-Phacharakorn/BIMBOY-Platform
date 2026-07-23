@@ -154,3 +154,42 @@
   border-color: var(--border);
 }
 
+/* ── AR (WebXR) in-session dom-overlay glass controls ──────────────────────
+   The /ar page renders a glassmorphism overlay of 3 controls (Load / Recenter
+   / opacity). Utilities handle the panels; the vertical opacity range needs a
+   custom track + thumb that Tailwind utilities can't express. Rendered inside
+   the XR dom-overlay (normal page DOM, not shadow DOM) so these classes apply. */
+.ar-opacity-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  /* Long axis is width; the wrapper rotates it vertical. */
+  width: 150px;
+  height: 6px;
+  border-radius: 999px;
+  background: oklch(100% 0 0 / 25%);
+  outline: none;
+  cursor: pointer;
+}
+.ar-opacity-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: oklch(100% 0 0);
+  border: 2px solid var(--color-accent);
+  box-shadow: 0 0 10px oklch(0% 0 0 / 50%);
+  transition: transform 0.1s ease;
+}
+.ar-opacity-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+.ar-opacity-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: oklch(100% 0 0);
+  border: 2px solid var(--color-accent);
+  box-shadow: 0 0 10px oklch(0% 0 0 / 50%);
+}
+

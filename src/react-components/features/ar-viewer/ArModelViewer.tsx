@@ -18,6 +18,7 @@ import * as THREE from "three";
 import { ARButton } from "three/examples/jsm/webxr/ARButton.js";
 import { useProject } from "@/react-components/features/projects/useProjects";
 import { useCloudModelFiles } from "@/react-components/features/cloud-models/useCloudModels";
+import { cn } from "@/lib/utils";
 import { useArModelLoader } from "./useArModelLoader";
 
 interface ArModelViewerProps {
@@ -63,6 +64,11 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
   const [loadedIds, setLoadedIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState<string>("");
+  // "Load Model" opens a slide-up sheet holding the file list.
+  const [sheetOpen, setSheetOpen] = useState(false);
+  // AR-model opacity, 0–100 (%). 100 = fully solid. The real-world camera
+  // passthrough can't be dimmed in immersive-ar, so this affects the model only.
+  const [opacity, setOpacity] = useState(100);
 
   // "shown" fully opaque, "fading" transitioning to 0, "hidden" unmounted.
   const [hintPhase, setHintPhase] = useState<"shown" | "fading" | "hidden">("hidden");
@@ -72,6 +78,8 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
   const inSessionRef = useRef(false);
   const zoomRef = useRef(1);
   const hintTimersRef = useRef<number[]>([]);
+  // Persisted opacity (0–100) so newly loaded models inherit the current value.
+  const opacityRef = useRef(100);
 
   // Pinch (two-pointer) gesture state.
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
@@ -313,6 +321,34 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
     group.rotation.set(0, Math.atan2(forward.x, forward.z), 0);
   };
 
+  // Apply AR-model opacity (0–100) to every mesh in the loaded content. At 100%
+  // we restore opaque rendering (transparent=false, depthWrite=true) to avoid
+  // depth-sort artifacts; at 0% the meshes are hidden outright. In between, the
+  // model renders as a translucent ghost over the live camera.
+  const applyOpacity = (pct: number) => {
+    const content = contentGroupRef.current;
+    if (!content) return;
+    const o = THREE.MathUtils.clamp(pct, 0, 100) / 100;
+    content.traverse((child: any) => {
+      if (!child.isMesh) return;
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      mats.forEach((m: any) => {
+        if (!m) return;
+        m.transparent = o < 1;
+        m.opacity = o;
+        m.depthWrite = o >= 1;
+        m.needsUpdate = true;
+      });
+      child.visible = o > 0;
+    });
+  };
+
+  const handleOpacity = (pct: number) => {
+    setOpacity(pct);
+    opacityRef.current = pct;
+    applyOpacity(pct);
+  };
+
   const toggle = (name: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -344,6 +380,9 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
     }
     recenterAndScale();
     recenter();
+    // Newly loaded models inherit the current opacity (persistent view setting).
+    applyOpacity(opacityRef.current);
+    setSheetOpen(false);
     flashHint("Pinch to zoom · tap Recenter to bring it back");
     setStatus("");
     setIsLoading(false);
@@ -354,21 +393,26 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
     flashHint("Recentered · pinch to zoom");
   };
 
-  const hasSelection = sortedFiles.some(
+  const selectedCount = sortedFiles.filter(
     (f) => selected.has(f.name) && !loadedIds.has(f.modelId)
-  );
+  ).length;
+  const hasSelection = selectedCount > 0;
   const hasModel = loadedIds.size > 0;
 
+  // Glass control shared look (pill button over the camera passthrough).
+  const glassBtn =
+    "pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-2.5 font-semibold text-white shadow-xl backdrop-blur-md transition active:scale-95 disabled:opacity-50";
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000" }}>
-      <div ref={containerRef} style={{ position: "absolute", inset: 0 }} />
+    <div className="fixed inset-0 bg-black">
+      <div ref={containerRef} className="absolute inset-0" />
 
       {/* Back button — visible pre-session over the black page */}
       {!inSession && (
         <button
           type="button"
           onClick={() => router.history.back()}
-          style={backBtnStyle}
+          className={cn(glassBtn, "absolute left-4 top-4 z-10 text-[13px]")}
         >
           ← Back
         </button>
@@ -376,13 +420,13 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
 
       {/* Pre-AR instruction over the black landing page */}
       {!inSession && (
-        <div style={introStyle}>
-          <div style={{ fontSize: 22 }}>📷</div>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>View this model in AR</div>
-          <div style={{ opacity: 0.75, fontSize: 13, maxWidth: 260 }}>
+        <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2 p-6 text-center text-white">
+          <div className="text-2xl">📷</div>
+          <div className="text-base font-bold">View this model in AR</div>
+          <div className="max-w-[260px] text-[13px] opacity-75">
             Tap <strong>START AR</strong> below to open the camera, then choose a
-            model to load. It appears in front of you — pinch to zoom, or tap
-            Recenter to bring it back.
+            model to load. It appears in front of you — pinch to zoom, drag the
+            opacity slider to ghost it, or tap Recenter to bring it back.
           </div>
         </div>
       )}
@@ -390,164 +434,137 @@ export function ArModelViewer({ projectId }: ArModelViewerProps) {
       {/* Transient hint — non-interactive so it never eats a gesture. */}
       {hintPhase !== "hidden" && (
         <div
-          style={{
-            ...rotateHintStyle,
-            opacity: hintPhase === "shown" ? 1 : 0,
-          }}
+          className={cn(
+            "pointer-events-none absolute left-1/2 top-6 z-10 -translate-x-1/2 rounded-full border border-white/20 bg-black/60 px-4 py-2 text-[13px] font-semibold text-white backdrop-blur-md transition-opacity duration-700",
+            hintPhase === "shown" ? "opacity-100" : "opacity-0"
+          )}
         >
           {hintText}
         </div>
       )}
 
-      {/* dom-overlay root — the in-AR model picker + recenter control */}
-      <div ref={overlayRef} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+      {/* dom-overlay root — the 3 in-AR controls (Load / Recenter / opacity) */}
+      <div ref={overlayRef} className="pointer-events-none absolute inset-0">
         {inSession && (
-          <div style={pickerStyle}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>☁ Load Cloud Model</div>
-            {isListing ? (
-              <div style={{ opacity: 0.7 }}>Loading model list…</div>
-            ) : sortedFiles.length === 0 ? (
-              <div style={{ opacity: 0.7 }}>No .frag models in this project.</div>
-            ) : (
-              <div style={{ maxHeight: "40vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
-                {sortedFiles.map((f) => {
-                  const isLoaded = loadedIds.has(f.modelId);
-                  const isChecked = selected.has(f.name);
-                  return (
-                    <label
-                      key={f.name}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "6px 8px",
-                        borderRadius: 6,
-                        background: isChecked ? "rgba(80,160,255,0.18)" : "rgba(255,255,255,0.06)",
-                        opacity: isLoaded ? 0.5 : 1,
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked || isLoaded}
-                        disabled={isLoaded}
-                        onChange={() => toggle(f.name)}
-                      />
-                      <span style={{ fontSize: 13 }}>
-                        {f.name.replace(/\.frag$/i, "")}
-                        {isLoaded ? " ✓" : ""}
-                      </span>
-                    </label>
-                  );
-                })}
+          <>
+            {/* (3) Vertical opacity slider — AR model only, appears with a model */}
+            {hasModel && (
+              <div className="pointer-events-auto absolute right-3 top-1/2 z-20 flex -translate-y-1/2 flex-col items-center gap-2 rounded-2xl border border-white/15 bg-black/40 px-2 py-3 shadow-2xl backdrop-blur-md">
+                <span className="font-mono text-[10px] font-semibold text-white/85">
+                  {opacity}%
+                </span>
+                <div className="relative flex h-40 w-6 items-center justify-center">
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={opacity}
+                    onChange={(e) => handleOpacity(Number(e.target.value))}
+                    className="ar-opacity-slider -rotate-90"
+                    aria-label="AR model opacity"
+                  />
+                </div>
+                <span className="text-sm leading-none">🧊</span>
               </div>
             )}
 
-            <button
-              type="button"
-              disabled={!hasSelection || isLoading}
-              onClick={handleLoadSelected}
-              style={{
-                ...loadBtnStyle,
-                opacity: !hasSelection || isLoading ? 0.5 : 1,
-              }}
-            >
-              {isLoading ? status || "Loading…" : "Load Cloud Model"}
-            </button>
-
-            {hasModel && (
+            {/* (1)+(2) Bottom control bar: Load Model, Recenter */}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center justify-center gap-3 p-4">
               <button
                 type="button"
-                onClick={handleRecenter}
-                style={repositionBtnStyle}
+                onClick={() => setSheetOpen(true)}
+                className={cn(glassBtn, "text-[14px]")}
               >
-                ⟳ Recenter in front of me
+                📁 Load Model
               </button>
+              {hasModel && (
+                <button
+                  type="button"
+                  onClick={handleRecenter}
+                  className={cn(glassBtn, "text-[14px]")}
+                >
+                  ⟳ Recenter
+                </button>
+              )}
+            </div>
+
+            {/* (1) Slide-up sheet with the multi-select .frag list */}
+            {sheetOpen && (
+              <button
+                type="button"
+                aria-label="Close model list"
+                onClick={() => setSheetOpen(false)}
+                className="pointer-events-auto absolute inset-0 z-30 bg-black/40"
+              />
             )}
-          </div>
+            <div
+              className={cn(
+                "pointer-events-auto absolute inset-x-0 bottom-0 z-40 mx-auto max-w-md rounded-t-2xl border border-white/15 bg-black/70 p-4 text-white shadow-2xl backdrop-blur-md transition-transform duration-300",
+                sheetOpen ? "translate-y-0" : "translate-y-full"
+              )}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <div className="font-bold">☁ Load Cloud Model</div>
+                <button
+                  type="button"
+                  onClick={() => setSheetOpen(false)}
+                  className="p-1 text-lg text-white/70 transition hover:text-white"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {isListing ? (
+                <div className="opacity-70">Loading model list…</div>
+              ) : sortedFiles.length === 0 ? (
+                <div className="opacity-70">No .frag models in this project.</div>
+              ) : (
+                <div className="flex max-h-[40vh] flex-col gap-1 overflow-y-auto">
+                  {sortedFiles.map((f) => {
+                    const isLoaded = loadedIds.has(f.modelId);
+                    const isChecked = selected.has(f.name);
+                    return (
+                      <label
+                        key={f.name}
+                        className={cn(
+                          "flex items-center gap-2 rounded-md px-2 py-1.5",
+                          isChecked ? "bg-accent/20" : "bg-white/5",
+                          isLoaded && "opacity-50"
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked || isLoaded}
+                          disabled={isLoaded}
+                          onChange={() => toggle(f.name)}
+                        />
+                        <span className="text-[13px]">
+                          {f.name.replace(/\.frag$/i, "")}
+                          {isLoaded ? " ✓" : ""}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              <button
+                type="button"
+                disabled={!hasSelection || isLoading}
+                onClick={handleLoadSelected}
+                className="mt-3 w-full rounded-lg bg-accent px-4 py-2.5 text-[14px] font-bold text-white transition active:scale-95 disabled:opacity-50"
+              >
+                {isLoading
+                  ? status || "Loading…"
+                  : hasSelection
+                    ? `Load ${selectedCount} model${selectedCount > 1 ? "s" : ""}`
+                    : "Load Cloud Model"}
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>
   );
 }
-
-const backBtnStyle: React.CSSProperties = {
-  position: "absolute",
-  top: 16,
-  left: 16,
-  zIndex: 10,
-  padding: "8px 16px",
-  borderRadius: 8,
-  border: "1px solid rgba(255,255,255,0.25)",
-  background: "rgba(0,0,0,0.6)",
-  color: "#fff",
-  font: "600 13px system-ui, sans-serif",
-  cursor: "pointer",
-};
-
-const introStyle: React.CSSProperties = {
-  position: "absolute",
-  top: "50%",
-  left: "50%",
-  transform: "translate(-50%, -50%)",
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  gap: 8,
-  textAlign: "center",
-  color: "#fff",
-  font: "400 14px system-ui, sans-serif",
-  padding: 24,
-};
-
-const rotateHintStyle: React.CSSProperties = {
-  position: "absolute",
-  top: 24,
-  left: "50%",
-  transform: "translateX(-50%)",
-  zIndex: 10,
-  padding: "8px 16px",
-  borderRadius: 999,
-  background: "rgba(0,0,0,0.6)",
-  color: "#fff",
-  font: "600 13px system-ui, sans-serif",
-  pointerEvents: "none",
-  transition: "opacity 0.8s ease",
-};
-
-const pickerStyle: React.CSSProperties = {
-  position: "absolute",
-  left: 12,
-  right: 12,
-  bottom: 12,
-  padding: 12,
-  borderRadius: 12,
-  background: "rgba(15,16,20,0.88)",
-  color: "#fff",
-  font: "400 13px system-ui, sans-serif",
-  pointerEvents: "auto",
-  backdropFilter: "blur(6px)",
-};
-
-const loadBtnStyle: React.CSSProperties = {
-  marginTop: 10,
-  width: "100%",
-  padding: "10px 16px",
-  borderRadius: 8,
-  border: "none",
-  background: "#3b82f6",
-  color: "#fff",
-  font: "700 14px system-ui, sans-serif",
-  cursor: "pointer",
-};
-
-const repositionBtnStyle: React.CSSProperties = {
-  marginTop: 8,
-  width: "100%",
-  padding: "9px 16px",
-  borderRadius: 8,
-  border: "1px solid rgba(255,255,255,0.25)",
-  background: "rgba(255,255,255,0.08)",
-  color: "#fff",
-  font: "600 13px system-ui, sans-serif",
-  cursor: "pointer",
-};
