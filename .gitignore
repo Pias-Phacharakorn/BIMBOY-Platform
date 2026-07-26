@@ -54,3 +54,5 @@ Thumbs.db
 # Local scratch / unrelated project, not part of this repo
 ___QR Prompt Check/
 .env*
+plan-visualizer.html
+___ar_app_ui_showcase*.html
