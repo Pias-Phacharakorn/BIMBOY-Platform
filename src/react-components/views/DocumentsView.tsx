@@ -78,10 +78,6 @@ export function DocumentsView() {
         title="Document Status"
         tabs={["Tracking", "Approvals", "Revisions", "Sources"]}
         activeTab="Tracking"
-        actions={
-          <>
-          </>
-        }
       />
       <div className="relative flex-1 min-w-0 overflow-auto bg-gradient-to-b from-[oklch(12%_0.014_255)] to-[oklch(9.8%_0.012_255)]">
         <div className="flex gap-5 p-6 bg-[#090a0f] border-b border-border">

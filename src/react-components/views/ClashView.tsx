@@ -54,22 +54,6 @@ export function ClashView() {
         tabs={["Dashboard", "Clash Reports", "Matrix", "History"]}
         activeTab={activeTab}
         onTabChange={(tab: any) => setActiveTab(tab)}
-        actions={
-          <>
-            <button
-              className="inline-flex items-center justify-center gap-2 min-h-8 px-3 border border-border-strong rounded-radius bg-gradient-to-b from-surface-raised to-surface-alt text-fg cursor-pointer text-xs font-semibold no-underline hover:border-[oklch(50%_0.05_252)] hover:bg-[oklch(25%_0.026_255)] hover:-translate-y-[1px] active:translate-y-0 transition-all duration-120"
-              type="button"
-            >
-              Export CSV
-            </button>
-            <button
-              className="inline-flex items-center justify-center gap-2 min-h-8 px-3 border rounded-radius cursor-pointer text-xs font-semibold no-underline hover:-translate-y-[1px] active:translate-y-0 transition-all duration-120 border-[oklch(69%_0.15_252)] bg-gradient-to-b from-[oklch(70%_0.16_252)] to-[oklch(57%_0.16_252)] text-[oklch(99%_0.004_255)] hover:from-[oklch(73%_0.16_252)] hover:to-[oklch(60%_0.16_252)]"
-              type="button"
-            >
-              Run Test
-            </button>
-          </>
-        }
       />
 
       {/* Selected Report Batch Filter Banner */}

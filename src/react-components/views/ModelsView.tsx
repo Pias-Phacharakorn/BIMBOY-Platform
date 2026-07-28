@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "@tanstack/react-router";
 import { AppShell, WorkspaceHeader, LeftPanel, RightPanel, PanelSection } from "@/react-components/components/layout";
-import { Icon } from "@/react-components/components/ui";
 import { ViewportWrapper, ViewportRightToolbar, ViewportToolbar, ModelsList, Views2DList, CloudModelLoadingModal } from "@/react-components/components/bim";
 import { GisPanel } from "@/react-components/features/gis";
 import { PropertyPanel } from "@/react-components/features/property-panel";
@@ -75,18 +74,6 @@ export function ModelsView() {
         tabs={workspaceTabs}
         activeTab={activeTab}
         onTabChange={handleTabChange}
-        actions={
-          <>
-            <div className="flex items-center gap-2 p-[4px_12px] border border-border bg-surface/94 rounded-[20px] cursor-pointer text-xs font-medium text-fg hover:bg-surface-alt transition-colors duration-120">
-              <Icon name="MODEL" size={14} />
-              <span>Default Layout</span>
-              <Icon name="RIGHT" size={12} />
-            </div>
-            <button className="inline-flex items-center justify-center gap-2 min-h-8 px-3 border rounded-radius cursor-pointer text-xs font-semibold no-underline hover:-translate-y-[1px] active:translate-y-0 transition-all duration-120 border-accent bg-gradient-to-b from-accent to-accent-muted text-fg hover:from-accent hover:to-accent/90" type="button">
-              Share
-            </button>
-          </>
-        }
       />
       <div
         className={
