@@ -11,13 +11,14 @@ import {
   setupHoverer,
   setupItemsFinder,
   setupMinimap,
-  setupClipperCursor,
   setupSmartViews,
   setupViews,
   setupLengthMeasureCursor,
   setupAreaMeasureCursor,
   setupSurfaceMeasureCursor
 } from "./src";
+import { setupClipperCursor } from "../ClipperCursor";
+import { GizmoAxis } from "../GizmoAxis";
 import { PropertyTable } from "../PropertyTable";
 import { SpotCoordinate } from "../SpotCoordinate";
 import { CursorSurface } from "../CursorSurface";
@@ -40,6 +41,11 @@ export const setupComponents = async () => {
   setupHoverer(components, world)
   setupItemsFinder(components)
   setupMinimap(components, world)
+
+  // Shared overlay-gizmo service. Must have its world before any consumer creates a gizmo.
+  const gizmoAxis = new GizmoAxis(components)
+  gizmoAxis.world = world
+
   setupClipperCursor(components, world, viewport)
   setupSmartViews(components)
   setupViews(components, world)

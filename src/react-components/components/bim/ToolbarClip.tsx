@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { Icon } from "@/react-components/components/ui";
-import { ClipperCursor, ClipperPlaneState } from "@/bim-components/setup/src/clipper-cursor";
+import { ClipperCursor, ClipperPlaneState } from "@/bim-components/ClipperCursor";
 import * as OBF from "@thatopen/components-front";
 
 export function ToolbarClip() {
