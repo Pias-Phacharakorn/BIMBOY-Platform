@@ -1,6 +1,6 @@
 # CLAUDE.md — PIAS-BimWebApp (BIMBOY)
 
-> **Read this before writing any code.** Defines project identity, stack, architecture rules, and mandatory workflow. This file is the **single authoritative guide** for every AI working in this repo. `AGENTS.md` and the `.agents/` folder are pointers to here.
+> **Read this before writing any code.** Defines project identity, stack, architecture rules, and mandatory workflow. This file is the **single authoritative guide** for every AI working in this repo. `AGENTS.md` points here; `.agents/` mirrors the skills only. All prose docs live in **`docs/`**.
 
 ## 👤 Developer Profile
 
@@ -25,19 +25,27 @@
 
 ## 📚 Domain Guides
 
-This file is the **map**; these guides are the **territory** — deep, project-specific detail loaded on demand. When a task goes deep into an area below, read its guide. The canonical guides live under **`.claude/docs/`** (the `.agents/docs/` copies are pointers only). Guides document *how this project wires things* — they never re-document a framework (that's the skills + `.agents/ThatOpen_docs/`).
+This file is the **map**; these guides are the **territory** — deep, project-specific detail loaded on demand. When a task goes deep into an area below, read its guide. The domain guides live under **`docs/feature/`** — one file per architectural area, no copies anywhere else. Guides document *how this project wires things* — they never re-document a framework (that's the skills + `docs/ThatOpen_docs/`).
 
 | Working on … | Load guide |
 |--------------|-----------|
-| React, routing, Zustand stores, views/features/components, Tailwind | `.claude/docs/frontend.md` |
-| ThatOpen/OBC viewer wiring, world setup, IFC/FRAG loading, BUI containment | `.claude/docs/bim-viewer.md` |
-| Supabase auth, DB, storage, feature services, `AuthContext` | `.claude/docs/backend.md` |
-| Clash import (BCF), clash register/table/filters, clash dashboard | `.claude/docs/clash-detection.md` |
-| Drawing Directory, shop-drawing register, PDF revisions | `.claude/docs/drawing.md` |
-| GIS layers, Cesium 3D Tiles, coordinates/CRS | `.claude/docs/gis-cesium.md` |
-| AR / WebXR viewing, `/ar/$projectId`, ModelsView AR tab | `.claude/docs/ar-webxr.md` |
+| React, routing, Zustand stores, views/features/components, Tailwind | `docs/feature/frontend.md` |
+| ThatOpen/OBC viewer wiring, world setup, IFC/FRAG loading, BUI containment | `docs/feature/bim-viewer.md` |
+| Supabase auth, DB, storage, feature services, `AuthContext` | `docs/feature/backend.md` |
+| Clash import (BCF), clash register/table/filters, clash dashboard | `docs/feature/clash-detection.md` |
+| Drawing Directory, shop-drawing register, PDF revisions | `docs/feature/drawing.md` |
+| GIS layers, Cesium 3D Tiles, coordinates/CRS | `docs/feature/gis-cesium.md` |
+| AR / WebXR viewing, `/ar/$projectId`, ModelsView AR tab | `docs/feature/ar-webxr.md` |
 
-**Keep guides current:** `.claude/docs/` is the single source of truth. When a change alters something critical or important in one of these areas, update the matching `.claude/docs/` guide as part of the same change. The `.agents/docs/` copies are pointers only — never edit them.
+**The `docs/` tree:**
+
+| Path | Holds |
+|------|-------|
+| `docs/feature/` | The 7 domain guides above — permanent record of how this project wires each area |
+| `docs/adr/` | Architecture decision records — *why* a decision was made, with the alternatives rejected. See `docs/adr/README.md` |
+| `docs/ThatOpen_docs/` | Vendored ThatOpen documentation snapshot (v3.4.x). Read-only reference — start at its `INDEX.md`, never hand-edit |
+
+**Keep guides current:** `docs/feature/` is the single source of truth. When a change alters something critical or important in one of these areas, update the matching `docs/feature/` guide as part of the same change. In-flight decisions stage in `CONTEXT.md`, then get promoted into a domain guide (and an ADR when the *why* matters) — see `docs/adr/README.md`.
 
 ---
 
@@ -128,11 +136,11 @@ New file?
 
 ### Routes Pattern
 
-Routes are composition only — no logic, state, or fetching. → ✅/❌ example in `.claude/docs/frontend.md`.
+Routes are composition only — no logic, state, or fetching. → ✅/❌ example in `docs/feature/frontend.md`.
 
 ### Views Pattern
 
-Layout state always from the store (never `useState`); views compose via a `LAYOUTS` grid const. → example in `.claude/docs/frontend.md`.
+Layout state always from the store (never `useState`); views compose via a `LAYOUTS` grid const. → example in `docs/feature/frontend.md`.
 
 ### Naming
 
@@ -172,23 +180,23 @@ Layout state always from the store (never `useState`); views compose via a `LAYO
 ## 🔬 BIM / ThatOpen
 
 **Before coding any OBC feature:**
-1. Read ThatOpen docs — start at [`.agents/ThatOpen_docs/INDEX.md`](.agents/ThatOpen_docs/INDEX.md) (the navigation entry point: concepts, tutorials, full API symbol index)
+1. Read ThatOpen docs — start at [`docs/ThatOpen_docs/INDEX.md`](docs/ThatOpen_docs/INDEX.md) (the navigation entry point: concepts, tutorials, full API symbol index)
 2. Check v3.4.x API (breaking changes from v2)
 
-**New OBC component:** follow the `_thatopen-bim-component` skill. → project wiring + step checklist in `.claude/docs/bim-viewer.md`.
+**New OBC component:** follow the `_thatopen-bim-component` skill. → project wiring + step checklist in `docs/feature/bim-viewer.md`.
 
 **Version constraint:** All ThatOpen libs pinned to **v3.4.x** — never mix versions or bootstrap OBC inside React
 
 ## 📦 Imports
 
-Always use `@/*` alias. Never relative `../../../` paths. → example in `.claude/docs/frontend.md`.
+Always use `@/*` alias. Never relative `../../../` paths. → example in `docs/feature/frontend.md`.
 
 ## 📋 Workflow
 
 You (Claude) are the **primary developer**. The developer is the final approver who reviews the diff and commits personally.
 
 **1. Read first**
-- OBC feature? → read [`.agents/ThatOpen_docs/INDEX.md`](.agents/ThatOpen_docs/INDEX.md) first, then the relevant tutorial/API doc it points to
+- OBC feature? → read [`docs/ThatOpen_docs/INDEX.md`](docs/ThatOpen_docs/INDEX.md) first, then the relevant tutorial/API doc it points to
 - Custom OBC component? → `_thatopen-bim-component` skill
 - BUI patterns? → `.claude/skills/`
 
