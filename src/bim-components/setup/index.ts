@@ -11,13 +11,14 @@ import {
   setupHoverer,
   setupItemsFinder,
   setupMinimap,
+  setupClipAwareRaycaster,
   setupSmartViews,
   setupViews,
-  setupLengthMeasureCursor,
-  setupAreaMeasureCursor,
-  setupSurfaceMeasureCursor
+  SurfaceMeasureCursor
 } from "./src";
 import { setupClipperCursor } from "../ClipperCursor";
+import { AreaMeasureCursor, LengthMeasureCursor } from "../MeasureCursor";
+import { MeasurePicking } from "../MeasurePicking";
 import { GizmoAxis } from "../GizmoAxis";
 import { PropertyTable } from "../PropertyTable";
 import { SpotCoordinate } from "../SpotCoordinate";
@@ -31,6 +32,10 @@ export const setupComponents = async () => {
 
   const components = new OBC.Components();
   const { world, viewport } = createWorld(components)
+
+  // Before anything that picks: OBC's raycaster is not clipping-aware for model geometry,
+  // so a section would otherwise let selection/hover/measure hit the geometry it cut away.
+  setupClipAwareRaycaster(components, world)
 
   new CursorSurface(components);
 
@@ -49,11 +54,19 @@ export const setupComponents = async () => {
   setupClipperCursor(components, world, viewport)
   setupSmartViews(components)
   setupViews(components, world)
-  setupLengthMeasureCursor(components, world)
-  setupAreaMeasureCursor(components, world)
-  setupSurfaceMeasureCursor(components, world)
 
-  
+  // Shared CPU picking geometry for vertex snapping. Registered before the measure cursors so
+  // its lifetime is legible here; they resolve it lazily, on activate.
+  new MeasurePicking(components)
+
+  const lengthMeasureCursor = new LengthMeasureCursor(components)
+  lengthMeasureCursor.world = world
+  const areaMeasureCursor = new AreaMeasureCursor(components)
+  areaMeasureCursor.world = world
+  const surfaceMeasureCursor = new SurfaceMeasureCursor(components)
+  surfaceMeasureCursor.world = world
+
+
   new PropertyTable(components);
   const spotCoordinate = new SpotCoordinate(components);
   spotCoordinate.world = world;

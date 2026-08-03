@@ -4,8 +4,7 @@ import { Icon } from "@/react-components/components/ui";
 import { LengthMeasureButton, LengthMeasureList } from "./LengthMeasure";
 import { AreaMeasureButton, AreaMeasureList } from "./AreaMeasure";
 import { SurfaceMeasureButton, SurfaceMeasureList } from "./SurfaceMeasure";
-import { LengthMeasureCursor } from "@/bim-components/setup/src/length-measure-cursor";
-import { AreaMeasureCursor } from "@/bim-components/setup/src/area-measure-cursor";
+import { AreaMeasureCursor, LengthMeasureCursor } from "@/bim-components/MeasureCursor";
 import { SurfaceMeasureCursor } from "@/bim-components/setup/src/surface-measure-cursor";
 
 export function ToolbarMeasure() {
@@ -44,7 +43,7 @@ export function ToolbarMeasure() {
   useEffect(() => {
     if (!components || !world) return;
 
-    const cursor = components.get(LengthMeasureCursor as any);
+    const cursor = components.get(LengthMeasureCursor);
     const active = activeTool === "measure" && activeType === "length";
 
     cursor.enabled = active;
@@ -58,7 +57,7 @@ export function ToolbarMeasure() {
   useEffect(() => {
     if (!components || !world) return;
 
-    const cursor = components.get(AreaMeasureCursor as any);
+    const cursor = components.get(AreaMeasureCursor);
     const active = activeTool === "measure" && activeType === "area";
 
     cursor.enabled = active;
@@ -72,7 +71,7 @@ export function ToolbarMeasure() {
   useEffect(() => {
     if (!components || !world) return;
 
-    const cursor = components.get(SurfaceMeasureCursor as any);
+    const cursor = components.get(SurfaceMeasureCursor);
     const active = activeTool === "measure" && activeType === "surface";
 
     cursor.enabled = active;
