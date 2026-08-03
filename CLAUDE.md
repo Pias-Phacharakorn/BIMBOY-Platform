@@ -31,6 +31,7 @@ This file is the **map**; these guides are the **territory** — deep, project-s
 |--------------|-----------|
 | React, routing, Zustand stores, views/features/components, Tailwind | `docs/feature/frontend.md` |
 | ThatOpen/OBC viewer wiring, world setup, IFC/FRAG loading, BUI containment | `docs/feature/bim-viewer.md` |
+| Viewport toolbar rails, `Toolbar*.tsx` buttons, dropdown/menu conventions | `docs/feature/bim-viewport-toolbars.md` |
 | Supabase auth, DB, storage, feature services, `AuthContext` | `docs/feature/backend.md` |
 | Clash import (BCF), clash register/table/filters, clash dashboard | `docs/feature/clash-detection.md` |
 | Drawing Directory, shop-drawing register, PDF revisions | `docs/feature/drawing.md` |
@@ -41,7 +42,7 @@ This file is the **map**; these guides are the **territory** — deep, project-s
 
 | Path | Holds |
 |------|-------|
-| `docs/feature/` | The 7 domain guides above — permanent record of how this project wires each area |
+| `docs/feature/` | The 8 domain guides above — permanent record of how this project wires each area |
 | `docs/adr/` | Architecture decision records — *why* a decision was made, with the alternatives rejected. See `docs/adr/README.md` |
 | `docs/ThatOpen_docs/` | Vendored ThatOpen documentation snapshot (v3.4.x). Read-only reference — start at its `INDEX.md`, never hand-edit |
 
