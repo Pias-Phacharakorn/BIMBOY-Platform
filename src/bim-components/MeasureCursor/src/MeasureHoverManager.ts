@@ -8,8 +8,9 @@ import { CursorSurface } from "../../CursorSurface";
  * Drives the shared {@link CursorSurface} guide from pointer movement: one raycast per
  * `mousemove`, never more than one in flight.
  *
- * Attached the moment a tool activates, so the guide appears immediately from the fast
- * fragment pick — it does not wait on the picking-mesh build that vertex snapping needs.
+ * Deliberately **unsnapped** — it passes no `snappingClasses`, so the guide tracks the surface
+ * under the cursor while the measurer's own picker resolves the snap separately. Two raycasts
+ * per move, both worker-side.
  */
 export class MeasureHoverManager {
   private readonly _components: OBC.Components;
@@ -66,8 +67,8 @@ export class MeasureHoverManager {
   };
 
   /**
-   * Fragment hits carry a world-space `normal` already. Plain-THREE hits — which is what the
-   * picking meshes are — carry an object-space face normal instead, so it has to be taken into
+   * Fragment hits carry a world-space `normal` already. Plain-THREE hits — only reachable when
+   * a caller passes `items` — carry an object-space face normal, so it has to be taken into
    * world space before the guide can be oriented by it.
    */
   private _worldNormalOf(hit: THREE.Intersection): THREE.Vector3 | null {

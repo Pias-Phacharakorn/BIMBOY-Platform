@@ -18,7 +18,6 @@ import {
 } from "./src";
 import { setupClipperCursor } from "../ClipperCursor";
 import { AreaMeasureCursor, LengthMeasureCursor } from "../MeasureCursor";
-import { MeasurePicking } from "../MeasurePicking";
 import { GizmoAxis } from "../GizmoAxis";
 import { PropertyTable } from "../PropertyTable";
 import { SpotCoordinate } from "../SpotCoordinate";
@@ -54,10 +53,6 @@ export const setupComponents = async () => {
   setupClipperCursor(components, world, viewport)
   setupSmartViews(components)
   setupViews(components, world)
-
-  // Shared CPU picking geometry for vertex snapping. Registered before the measure cursors so
-  // its lifetime is legible here; they resolve it lazily, on activate.
-  new MeasurePicking(components)
 
   const lengthMeasureCursor = new LengthMeasureCursor(components)
   lengthMeasureCursor.world = world

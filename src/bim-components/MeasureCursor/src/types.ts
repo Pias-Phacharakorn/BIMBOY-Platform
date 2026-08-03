@@ -1,5 +1,4 @@
 import * as OBC from "@thatopen/components";
-import * as OBF from "@thatopen/components-front";
 import * as THREE from "three";
 
 /**
@@ -12,10 +11,23 @@ import * as THREE from "three";
 export interface MeasurerLike {
   world: OBC.World | null;
   enabled: boolean;
-  /** Debounce before the vertex picker resolves. Forced to 0 while a cursor is active. */
+  /**
+   * Debounce before `onPointerStop` fires, which is what refreshes the snap preview. Forced
+   * to **0** while a cursor is active, and that is load-bearing rather than a tuning choice:
+   * `LengthMeasurement.endCreation()` commits whatever `updatePreviewLine()` last wrote into
+   * its temp line, and `updatePreviewLine` is the `onPointerStop` handler. At the vendor
+   * default of 300 ms, clicking the second point before the debounce elapses commits the line
+   * to where the cursor was a beat ago. `AreaMeasurement` re-picks inside `create()`, so it
+   * would be safe either way.
+   *
+   * ⚠️ 0 **narrows** that window, it does not close it: `create()` → `endCreation()` commits
+   * synchronously while the refresh is a `setTimeout(0)` plus a worker round trip, so a click
+   * landing inside that gap still commits the previous pick. Closing it properly needs a
+   * settled pick at click time, and the vendor offers no way to get one — `updatePreviewLine`
+   * is private and `OBC.Event.trigger` does not await its handlers.
+   */
   delay: number;
   color: THREE.Color;
-  pickerMode: OBF.GraphicVertexPickerMode;
   create(): void;
   delete(): void;
   endCreation(): void;
