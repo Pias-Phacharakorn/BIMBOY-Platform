@@ -91,6 +91,75 @@ after `create-world.ts` has already created the default, because every consumer 
 Lives in `setup/src/clip-aware-raycaster.ts` and is wired from `setup/index.ts` — this is
 world/engine infrastructure, not something the section tool owns.
 
+## In flight — Measure cursors become their own components
+
+`length-measure-cursor.ts` and `area-measure-cursor.ts` are **byte-identical for ~180 of
+their 205 lines**. Only three things actually differ: the measurer (`OBF.LengthMeasurement`
+vs `AreaMeasurement`), Area setting `measurer.color = #24a6f1`, and Area binding Enter →
+`endCreation()`. Hover raycast, the 4px click-vs-drag discriminator, the picking-mesh build
+with its activation-id cancel token, and teardown are duplicated verbatim. They move out of
+`setup/src/` into `bim-components/MeasureCursor/`, following `ClipperCursor`'s shape
+(`index.ts` = the class, `src/` = managers it owns and frees).
+
+1. **Length and Area share a composed engine, not a base class.** A plain (non-Component)
+   `MeasureCursorEngine` owns the managers and the activate/deactivate policy; each cursor is
+   a ~25-line `OBC.Component` that registers its own uuid and delegates `.enabled` to an
+   engine built from a descriptor (`getMeasurer`, optional `color`, optional extra keys).
+   Rejected an `abstract MeasureCursorBase extends OBC.Component`: **`static readonly uuid` is
+   not enforced on subclasses**, so a future `AngleMeasureCursor` that forgets to redeclare it
+   inherits its parent's and `components.add()` silently overwrites a sibling in the registry —
+   surfacing as "turning on Angle killed Length", nowhere near the missing line. Composition
+   cannot express that mistake, and `ClipperCursor` set the flat-class-plus-managers precedent.
+2. **`SurfaceMeasureCursor` stays where it is.** It shares nothing with the other two but the
+   click discriminator — its own coplanar-face BFS, its own measurement registry, no picking
+   meshes. Folding it into the same engine would be relocation without simplification.
+3. **The picking-mesh cache becomes a registered component, `MeasurePicking`, in its own
+   folder.** `measure-picking-meshes.ts` keeps a **module-global** `cache` + `inFlight`, and
+   *each* cursor's `dispose()` called `clearMeasurePickingCache()` — so disposing Length freed
+   the geometry and BVHs that Area's still-attached meshes point at. Masked today only because
+   both are disposed together at world teardown. The cache must stay **shared**: it is keyed by
+   model id, a build takes seconds on a large model, and the in-flight dedup exists precisely so
+   switching Length↔Area mid-build doesn't extract twice — per-cursor instances would double
+   that cost. As a component the cache is instance state freed exactly once, and cursors can no
+   longer free each other's geometry. Rejected keeping module-level functions (hazard survives
+   the refactor) and "global cache, but only one caller clears it" (an implicit rule enforced
+   only by a comment).
+4. **It is a *sibling* of `MeasureCursor`, not a manager inside it** — `bim-components/MeasurePicking/`,
+   the way `GizmoAxis` sits beside `ClipperCursor`. In this repo a component's `src/` means
+   "managers the parent class owns and frees"; `MeasurePicking` is owned by neither cursor and
+   in principle serves any vertex-snapping consumer. Neither new folder joins the root
+   `bim-components/index.ts` barrel — `ClipperCursor`/`GizmoAxis` are imported by path too.
+5. **All three measure cursors migrate to the 1-arg constructor + `world` setter**
+   (`new X(components); x.world = world`), closing most of the cursor-family typing debt:
+   `ToolbarMeasure` drops three `as any` casts. ⚠️ `SurfaceMeasure.tsx` needs no cast **today**,
+   but only because the whole file carries `@ts-nocheck` — the only file in
+   `react-components/components/` that does. The migration makes its `get()` honest rather than
+   merely unchecked; dropping that file-level suppression is a separate job (it is covering far
+   more than the cursor cast). `ClipperCursor` is left as the single documented holdout —
+   its 3-arg constructor also needs `viewport`, so its managers would have to be built lazily.
+   Rejected leaving the debt alone: the constructors are already being rewritten, so this is
+   the cheapest the fix will ever be.
+6. **The three `setupXMeasureCursor` factories are deleted, not kept as wrappers.** Their
+   returned teardown closure was **already dead code** — `setup/index.ts` discards all three
+   return values, and `Components.dispose()` (called from `ViewportWrapper.tsx`) disposes
+   anything `isDisposeable()` in the registry anyway. Construction moves inline, as
+   `CursorSurface`/`GizmoAxis`/`SpotCoordinate` already do there.
+7. **Behaviour is preserved except one named fix: `keydown` bails on text-input targets.**
+   The listener is on `window` with no focus guard, so Backspace typed into the models-list
+   search or property-table filter deletes a measurement while a measure tool is active.
+   `delay` is also now restored on deactivate, symmetrically with `pickerMode` (an invisible
+   asymmetry, not a behaviour change). Deliberately **not** fixed: picking meshes attach once
+   on activate, so a model loaded while the tool is on gets no vertex snapping until the tool is
+   toggled — documented as a limitation on `MeasurePicking`, where the `fragments.list.onItemSet`
+   re-attach belongs later. Length still sets no `measurer.color` (Area does); making the two
+   tools look like siblings is a visual decision, not a refactor concern.
+8. **New files carry no `@ts-nocheck`**, matching `ClipperCursor`/`GizmoAxis` — the only two
+   folders in `bim-components/` already free of it. Narrow commented casts instead, where the
+   v3.4.x types are genuinely wrong: `normal` missing from `castRay`'s return, `getItemsGeometry`,
+   and `computeBoundsTree` (installed on `BufferGeometry.prototype` by ThatOpen, absent from the
+   three types). ⚠️ IDE-only discipline: `tsconfig.json` excludes `src/bim-components/**`, so
+   nothing enforces this in CI.
+
 _No other decisions in flight._
 
 Recently promoted (for reference — do not re-stage here):

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { Icon } from "@/react-components/components/ui";
-import { LengthMeasureCursor } from "@/bim-components/setup/src/length-measure-cursor";
 import * as OBF from "@thatopen/components-front";
 
 interface LengthMeasureButtonProps {

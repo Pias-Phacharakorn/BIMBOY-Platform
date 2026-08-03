@@ -230,7 +230,9 @@ export class SurfaceMeasureCursor extends OBC.Component implements OBC.Disposabl
   readonly onMeasurementDeleted = new OBC.Event<string>();
 
   private _components: OBC.Components;
-  private _world: OBC.World;
+  private _world: OBC.World | null = null;
+  /** Whether listeners are currently bound — `enabled` can be true before a world arrives. */
+  private _active = false;
 
   /** All confirmed measurements */
   readonly measurements: SurfaceMeasurement[] = [];
@@ -246,11 +248,26 @@ export class SurfaceMeasureCursor extends OBC.Component implements OBC.Disposabl
   private _pointerUpListener: ((e: PointerEvent) => void) | null = null;
   private _keyListener: ((e: KeyboardEvent) => void) | null = null;
 
-  constructor(components: OBC.Components, world: OBC.World) {
+  constructor(components: OBC.Components) {
     super(components);
     this._components = components;
-    this._world = world;
     components.add(SurfaceMeasureCursor.uuid, this);
+  }
+
+  get world() {
+    return this._world;
+  }
+
+  /**
+   * Set after construction, as `GizmoAxis`/`Hoverer` do, so `components.get()` needs no cast.
+   * Re-binds an active cursor; enabling before a world arrives simply does nothing until it does.
+   */
+  set world(value: OBC.World | null) {
+    if (this._world === value) return;
+    const wasActive = this._active;
+    if (wasActive) this._deactivate();
+    this._world = value;
+    if (wasActive) this._activate();
   }
 
   get enabled() {
@@ -271,6 +288,9 @@ export class SurfaceMeasureCursor extends OBC.Component implements OBC.Disposabl
   // ─── Activate ──────────────────────────────────────────────────────────────
 
   private _activate() {
+    if (this._active || !this._world) return;
+    this._active = true;
+
     const canvas = this._world.renderer?.three?.domElement;
     const cursorSurface = this._components.get(CursorSurface);
     cursorSurface.setWorld(this._world);
@@ -362,6 +382,9 @@ export class SurfaceMeasureCursor extends OBC.Component implements OBC.Disposabl
   // ─── Deactivate ────────────────────────────────────────────────────────────
 
   private _deactivate() {
+    if (!this._active || !this._world) return;
+    this._active = false;
+
     const canvas = this._world.renderer?.three?.domElement;
     const cursorSurface = this._components.get(CursorSurface);
     cursorSurface.hide();
@@ -445,7 +468,7 @@ export class SurfaceMeasureCursor extends OBC.Component implements OBC.Disposabl
   }
 
   private _clearHoverMesh() {
-    if (this._hoverMesh) {
+    if (this._hoverMesh && this._world) {
       this._world.scene.three.remove(this._hoverMesh);
       this._hoverMesh.geometry.dispose();
       (this._hoverMesh.material as THREE.Material).dispose();
@@ -575,6 +598,8 @@ export class SurfaceMeasureCursor extends OBC.Component implements OBC.Disposabl
   }
 
   private _disposeMeasurement(m: SurfaceMeasurement) {
+    // Reachable from React (delete/clearAll) even with no world set.
+    if (!this._world) return;
     const scene = this._world.scene.three;
     for (const obj of m.objects) {
       scene.remove(obj);
@@ -603,13 +628,3 @@ export class SurfaceMeasureCursor extends OBC.Component implements OBC.Disposabl
     this.onMeasurementDeleted.reset();
   }
 }
-
-export const setupSurfaceMeasureCursor = (
-  components: OBC.Components,
-  world: OBC.World
-) => {
-  const cursor = new SurfaceMeasureCursor(components, world);
-  return () => {
-    cursor.dispose();
-  };
-};
