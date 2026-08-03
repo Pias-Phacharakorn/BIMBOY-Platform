@@ -11,6 +11,10 @@ _No decisions in flight._
 
 Recently promoted (for reference — do not re-stage here):
 
+- **Viewport toolbar — Visibility dropdown group** (shipped `d733b22`) → how it
+  works, plus the two-rail geometry, the hand-rolled dropdown idiom, the right
+  rail's FX suppression, and the rejected `^` caret affordance:
+  `docs/feature/bim-viewer.md` § Viewport toolbars.
 - **AR live viewer — glass UI restyle + opacity slider** (shipped `9b255d6`) →
   how it works: `docs/feature/ar-webxr.md`; why, with rejected alternatives:
   `docs/adr/0001-ar-overlay-model-opacity.md`.

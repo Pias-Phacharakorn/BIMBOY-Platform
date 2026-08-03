@@ -1,7 +1,7 @@
 import { useBimStore } from "@/react-components/store/bimStore";
 import { ToolbarLoadModel } from "./ToolbarLoadModel";
 import { ToolbarFocus } from "./ToolbarFocus";
-import { ToolbarShowAll } from "./ToolbarShowAll";
+import { ToolbarVisibility } from "./ToolbarVisibility";
 import { ToolbarGhost } from "./ToolbarGhost";
 import { ToolbarAlign } from "./ToolbarAlign";
 import { ToolbarSettings } from "./ToolbarSettings";
@@ -16,7 +16,7 @@ export function ViewportToolbar() {
       <ToolbarLoadModel />
       <div className="w-[1px] h-4 bg-border" />
       <ToolbarFocus />
-      <ToolbarShowAll />
+      <ToolbarVisibility />
       <ToolbarGhost />
       <ToolbarAlign />
       <div className="w-[1px] h-4 bg-border" />

@@ -15,7 +15,7 @@ The 3D world is a singleton bootstrapped once in `bim-components/setup/` — nev
 - `src/bim-components/setup/src/highlighter.ts`, `hoverer.ts`, `items-finder.ts` — selection/hover/query
 - `src/bim-components/setup/index.ts` — registers all setup components (the singleton entry)
 - `src/react-components/components/bim/ViewportWrapper.tsx` — the main viewport; normally the ONLY place `<bim-*>` may live
-- `src/react-components/components/bim/ViewportToolbar.tsx`, `ToolbarLoadModel.tsx` — viewport UI (React)
+- `src/react-components/components/bim/ViewportToolbar.tsx` (bottom rail) and `ViewportRightToolbar.tsx` (right rail) — floating viewport UI (React); one `Toolbar*.tsx` sibling per button
 - `src/react-components/features/cloud-models/` — `cloudModelsService.ts`, `useCloudModels.ts`, `useAutoLoadCloudModels.ts`
 - `src/react-components/components/bim/CloudModelModal.tsx`, `CloudModelLoadingModal.tsx` — cloud load UI
 - `src/react-components/store/bimStore.ts` — React's handle to the world/engine
@@ -40,6 +40,25 @@ The 3D world is a singleton bootstrapped once in `bim-components/setup/` — nev
 - `<bim-panel>`/`<bim-grid>`/`<bim-*>` never outside `ViewportWrapper.tsx` — **except** the Drawing Editor tab, whose SheetBoard/paper-space web components live in `features/drawing-editor/`.
 - Theme via CSS vars (`--bim-*`) in `style.css @theme {}` — no inline overrides.
 - Before any OBC feature: check v3.4.x API (breaking changes from v2) via the docs navigator.
+
+## Viewport toolbars (floating React overlays on the canvas)
+
+Two independent rails float over `ViewportWrapper`. Both are plain React — no `<bim-*>`, per the containment rule above.
+
+- **`ViewportToolbar.tsx`** — bottom-centre (`absolute bottom-3 left-1/2`): Load Model │ Focus, Visibility, Ghost, Align │ Settings. Its menus open **upward** (`absolute bottom-full mb-2`).
+- **`ViewportRightToolbar.tsx`** — top-right column: Measure, Clip, Coordinate. Its menus open **leftward** (`absolute right-full mr-2.5`).
+
+That direction split is load-bearing, not cosmetic: anything that points at where a menu will appear — a caret, an arrow, an animation origin — cannot be shared across both rails without a second variant.
+
+- **The dropdown idiom is hand-rolled and repeated, deliberately.** Every menu button owns the same four pieces: a local `useState` open flag, a `dropdownRef`, a `mousedown` document listener that closes on outside click, and an absolutely-positioned card. There is no shared `<ToolbarDropdown>` — the menus diverge too much for the abstraction to pay (an action list in `ToolbarVisibility`, a labelled list in `ToolbarAlign`/`ToolbarLoadModel`, a settings **form** in `ToolbarSettings`, a tool list with result panes in `ToolbarMeasure`). `ToolbarMeasure` also deliberately *ignores* outside-clicks that land on the 3D canvas while a measurement is in progress. Worth revisiting only if a new menu can adopt an existing shape wholesale.
+- **Visibility group** (`ToolbarVisibility.tsx`) — the rail's one grouped entry: an icon-only menu over `OBC.Hider` holding **Show All / Isolate / Hide**. It replaced the former standalone `ToolbarShowAll.tsx`.
+  - **The store gates the UI; the engine serves the action.** `bimStore.selectedElementIds` (synced from `OBF.Highlighter` by `ViewportWrapper`) drives the disabled state, but the handlers act on the live `highlighter.selection.select` — the store's `selectionMap` is a clone one event behind. `ToolbarFocus` splits the same way.
+  - **Hide clears the selection afterwards; Isolate does not.** After Hide the selection points at geometry the user can no longer see; after Isolate the items are still on screen and stay chainable into Focus.
+  - **No "something is hidden" indicator.** `OBC.Hider` exposes no such getter, and a locally-maintained flag desyncs the moment anything else hides geometry or a model unloads while hidden.
+  - **Rows are icon-only; the label lives in a hover pill**, which also carries the reason a row is disabled ("Isolate — select items first") rather than stacking a second native `title`. ⚠️ `group` sits on a **wrapper `div`, not the button**: a native `<button disabled>` doesn't reliably match `:hover` across engines, so putting `group` on the button would hide the pill on exactly the rows that need explaining.
+  - The clicked row spins and the whole menu locks until the `Hider` promise resolves, then the menu closes.
+- **The right rail suppresses viewport FX while a tool is active.** On the first transition of `activeTool` to anything other than `select`, `ViewportRightToolbar` snapshots `OBF.Hoverer.enabled`, `OBF.Outliner.enabled` and `postproduction.enabled` into a ref, disables all three, and **restores that snapshot** — not defaults — on return to idle, and again on unmount if a tool is still active. Rationale: CursorSurface is the on-model guide while a tool runs, so the element hover-highlight and the outliner pass are redundant, and they cost a raycast plus a fullscreen post pass every frame. Anything new that toggles those three must respect the snapshot or it will be silently reverted.
+- **Rejected — a `^` caret marking which buttons open a menu.** Built, revised once, then reverted; don't re-propose without new information. As an `absolute top-0` 10px overlay it was invisible in the running app: a 20px glyph in a 32px button occupies y=6..26, so the caret drew its strokes onto the glyph's top edge and merged with it. Reserving real space (13px caret + 20px glyph does not fit a 32px button) meant `flex-col` buttons with a caret row, an `invisible` spacer on the non-menu buttons to hold one shared baseline, and ~9px more rail height — a layout change to *every* button on the rail, two of which open no menu, to deliver a hint. Judged not worth the vertical space or the coupling.
 
 ## Drawing Editor (OBC.TechnicalDrawings — 2D annotations)
 
