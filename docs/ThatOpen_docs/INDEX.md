@@ -1,10 +1,10 @@
 # ThatOpen Docs — INDEX
 
-**Read this file first before browsing `.agents/ThatOpen_docs/`.** It is the single navigation entry point for the local ThatOpen documentation snapshot: concept guides, tutorials, and the full TypeDoc API reference. Use it to jump straight to the right file instead of scanning the folder.
+**Read this file first before browsing `docs/ThatOpen_docs/`.** It is the single navigation entry point for the local ThatOpen documentation snapshot: concept guides, tutorials, and the full TypeDoc API reference. Use it to jump straight to the right file instead of scanning the folder.
 
 > **⚠️ CRITICAL VERSION CONSTRAINT:** All ThatOpen libraries are pinned to **v3.4.x**. Always verify peer deps (Three.js ^0.182, web-ifc) before using or upgrading any API. This snapshot matches the pinned version — do not trust memory over it.
 
-All paths below are relative to this folder (`.agents/ThatOpen_docs/`).
+All paths below are relative to this folder (`docs/ThatOpen_docs/`).
 
 ## How to use this index
 
@@ -12,14 +12,14 @@ All paths below are relative to this folder (`.agents/ThatOpen_docs/`).
 2. **Need exact signatures** (props, methods, events, enums, types)? Go to the **API Reference** — find the symbol name in the symbol index, then open `api/@thatopen/<package>/<kind>/<Symbol>.md`.
 3. **Understanding the architecture** (component lifecycle, disposal, creation)? See **Concepts**.
 4. Custom `OBC.Component` authoring is covered by the **`_thatopen-bim-component`** skill, not here.
-5. Project-specific wiring (how *this* app uses OBC) lives in `.claude/docs/bim-viewer.md`, not here.
+5. Project-specific wiring (how *this* app uses OBC) lives in `docs/feature/bim-viewer.md`, not here.
 
 ---
 
 ## 🗺️ Directory map
 
 ```
-.agents/ThatOpen_docs/
+docs/ThatOpen_docs/
 ├── INDEX.md          # this file — start here
 ├── intro.md          # overview of the libraries + capabilities
 ├── migration.md      # version upgrade guide
