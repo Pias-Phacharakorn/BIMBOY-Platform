@@ -11,6 +11,7 @@ import {
   setupHoverer,
   setupItemsFinder,
   setupMinimap,
+  setupClipAwareRaycaster,
   setupSmartViews,
   setupViews,
   setupLengthMeasureCursor,
@@ -31,6 +32,10 @@ export const setupComponents = async () => {
 
   const components = new OBC.Components();
   const { world, viewport } = createWorld(components)
+
+  // Before anything that picks: OBC's raycaster is not clipping-aware for model geometry,
+  // so a section would otherwise let selection/hover/measure hit the geometry it cut away.
+  setupClipAwareRaycaster(components, world)
 
   new CursorSurface(components);
 
