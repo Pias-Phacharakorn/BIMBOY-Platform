@@ -1,6 +1,17 @@
 import * as OBC from "@thatopen/components";
 import * as THREE from "three";
-import type { RaycastResult } from "@thatopen/fragments";
+import type { RaycastData, RaycastResult, SnappingClass } from "@thatopen/fragments";
+
+/** Nearest hit by `distance`, skipping nulls. */
+const nearestOf = <T extends { distance: number }>(
+  hits?: readonly (T | null | undefined)[] | null,
+): T | null => {
+  let nearest: T | null = null;
+  for (const hit of hits ?? []) {
+    if (hit && (!nearest || hit.distance < nearest.distance)) nearest = hit;
+  }
+  return nearest;
+};
 
 /**
  * A raycaster that ignores geometry the clipping planes have already removed.
@@ -25,52 +36,64 @@ import type { RaycastResult } from "@thatopen/fragments";
  * hover, the three measure cursors, `SpotCoordinate`, and the section tool's own plane
  * placement, which would otherwise place a plane on removed geometry.
  *
- * **Limits, deliberate.** `snappingClasses` and `useFastModelPicking` delegate to the base
- * class: nothing in this app uses either (fast picking defaults to `false`), and covering
- * them would mean forking those branches of vendored 3.4.x logic. ⚠️ Whoever first enables
- * `useFastModelPicking` gets the old, clip-blind behaviour back and will need this override
- * extended.
+ * **Snapping goes through here too.** The measure tools' vertex picker asks for
+ * `snappingClasses`, which routes to `FragmentsModel.raycastWithSnapping` — worker-side point
+ * and edge snapping, equally clip-blind, so an element straddling a plane still offers
+ * vertices on its removed half. The snap path filters those out per point, and falls through
+ * to the plain path when clipping kills every candidate, so a revealed cut face stays
+ * measurable.
+ *
+ * ⚠️ **Why the worker cannot filter for us:** `FragmentsModel.getClippingPlanesEvent` defaults
+ * to `() => []` and nothing in this app sets it, so the planes never reach the worker and it
+ * culls at *no* level — not even by bounding box. Wiring that event to
+ * `renderer.clippingPlanes` would move this filtering off the main thread and shrink this
+ * override to almost nothing, but the worker only refreshes its view on
+ * `fragments.core.update()`, so the section tool would have to pump it on every plane
+ * move/toggle or snap silently against stale planes. It also feeds tile-streaming culling.
+ * A real option, deliberately not taken here.
+ *
+ * ⚠️ **One limit, deliberate:** `useFastModelPicking` still delegates to the base class.
+ * Nothing in this app enables it (it defaults to `false`), and covering it would mean forking
+ * another branch of vendored 3.4.x logic. Whoever first turns it on gets the old, clip-blind
+ * behaviour back — for **selection and snapping alike** — and will need this override extended.
  */
 export class ClipAwareRaycaster extends OBC.SimpleRaycaster {
   /** {@inheritDoc OBC.SimpleRaycaster.castRay} */
   async castRay(data?: {
     items?: THREE.Mesh[];
     position?: THREE.Vector2;
-    snappingClasses?: any[];
+    snappingClasses?: SnappingClass[];
   }) {
-    const planes = this.world.renderer?.three.clippingPlanes;
+    const renderer = this.world.renderer?.three;
+    const planes = renderer?.clippingPlanes;
 
     // Fast path: with nothing clipped there is nothing to filter, so keep the vendor's
     // optimised call. This matters — Hoverer raycasts on every pointermove.
-    if (
-      !planes?.length ||
-      data?.snappingClasses?.length ||
-      this.useFastModelPicking
-    ) {
+    if (!renderer || !planes?.length || this.useFastModelPicking) {
       return super.castRay(data);
     }
 
-    const camera = this.world.camera.three;
-    const dom = this.world.renderer?.three.domElement;
-    if (!dom) return super.castRay(data);
+    const nearestFragment = await this._nearestVisibleFragment(
+      {
+        camera: this.world.camera.three as THREE.PerspectiveCamera | THREE.OrthographicCamera,
+        dom: renderer.domElement,
+        mouse: this.mouse.rawPosition,
+      },
+      planes,
+      data?.snappingClasses,
+    );
 
-    const position = data?.position ?? this.mouse.position;
-    const nearestFragment = await this._nearestVisibleFragment(camera, dom, planes);
+    // Merge with the plain-THREE items path, as the base class does. `castRayToObjects` is the
+    // vendor's own public form of it and already applies `filterClippingPlanes`, so there is
+    // nothing to reimplement here. `world.meshes` is empty in this app, so the common case is
+    // the early return.
+    const items = data?.items;
+    if (!items?.length && this.world.meshes.size === 0) return nearestFragment;
 
-    // Merge with the plain-THREE items path, as the base class does. Its own `intersect()`
-    // is private in the published types, so the same filter is applied here instead —
-    // `intersectObjects` returns hits sorted by distance, so the first survivor is nearest.
-    const items = data?.items ?? Array.from(this.world.meshes);
-    if (items.length === 0) return nearestFragment;
+    const itemsHit = this.castRayToObjects(items, data?.position);
 
-    this.three.setFromCamera(position, camera);
-    const itemsHit =
-      this.three.intersectObjects(items).find((hit) => this._isVisible(hit.point, planes)) ??
-      null;
-
-    if (!nearestFragment) return itemsHit;
-    if (!itemsHit) return nearestFragment;
-    return itemsHit.distance < nearestFragment.distance ? itemsHit : nearestFragment;
+    // Fragment first, so a tie keeps the fragment — as the base class does.
+    return nearestOf([nearestFragment, itemsHit]);
   }
 
   /**
@@ -84,40 +107,53 @@ export class ClipAwareRaycaster extends OBC.SimpleRaycaster {
 
   /**
    * Nearest fragment hit that survives every clipping plane. `raycastAll` lives on
-   * `FragmentsModel`, not on the manager, so this fans out per model and merges.
+   * `FragmentsModel`, not on the manager, so this fans out per model and merges by distance —
+   * concurrently, unlike `FragmentsManager.raycast`, which awaits each model in turn.
+   *
+   * ⚠️ **The snap→plain fallback is per model, not global**, mirroring
+   * `FragmentsManager.raycast`. Deciding it globally — "did *any* model snap?" — starves the
+   * models that lost every candidate to a clipping plane: with two coordinated models and a
+   * section active, a far snap on one would suppress the near cut face on the other, which is
+   * exactly the geometry the user is pointing at.
+   *
+   * Why the vendor's own fan-out can't just be called: it collapses each model to one hit
+   * (`raycastWithSnapping[0]`, else `model.raycast`) before returning, and filtering needs the
+   * whole candidate list.
    */
   private async _nearestVisibleFragment(
-    camera: THREE.Camera,
-    dom: HTMLCanvasElement,
+    args: RaycastData,
     planes: readonly THREE.Plane[],
+    snappingClasses?: SnappingClass[],
   ): Promise<RaycastResult | null> {
     const fragments = this.components.get(OBC.FragmentsManager);
-    if (!fragments.initialized) return null;
+    if (!fragments.initialized || fragments.list.size === 0) return null;
 
-    const models = Array.from(fragments.list.values());
-    if (models.length === 0) return null;
+    const visible = (hit: RaycastResult) => this._isVisible(hit.point, planes);
+    const perModel: Promise<RaycastResult | null>[] = [];
 
-    const perModel = await Promise.all(
-      models.map((model) =>
-        model
-          .raycastAll({
-            camera: camera as THREE.PerspectiveCamera | THREE.OrthographicCamera,
-            dom,
-            mouse: this.mouse.rawPosition,
-          })
-          .catch(() => null),
-      ),
-    );
+    for (const model of fragments.list.values()) {
+      perModel.push(
+        (async () => {
+          // ⚠️ Order matters within a model: `raycastWithSnapping` returns candidates in the
+          // worker's snap-priority order — which vertex or edge you were actually aiming at —
+          // and `FragmentsManager.raycast` takes `[0]`. So take the first *survivor*, never
+          // the closest: re-sorting by distance would let a far corner vertex beat the near
+          // edge under the cursor.
+          if (snappingClasses?.length) {
+            const candidates = await model
+              .raycastWithSnapping({ ...args, snappingClasses })
+              .catch(() => null);
+            const snapped = candidates?.find(visible);
+            if (snapped) return snapped;
+          }
 
-    let nearest: RaycastResult | null = null;
-    for (const hits of perModel) {
-      if (!hits) continue;
-      for (const hit of hits) {
-        if (!this._isVisible(hit.point, planes)) continue;
-        if (!nearest || hit.distance < nearest.distance) nearest = hit;
-      }
+          const hits = await model.raycastAll(args).catch(() => null);
+          return nearestOf(hits?.filter(visible));
+        })(),
+      );
     }
-    return nearest;
+
+    return nearestOf(await Promise.all(perModel));
   }
 }
 

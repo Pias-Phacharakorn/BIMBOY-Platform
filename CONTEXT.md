@@ -160,7 +160,58 @@ with its activation-id cancel token, and teardown are duplicated verbatim. They 
    three types). ⚠️ IDE-only discipline: `tsconfig.json` excludes `src/bim-components/**`, so
    nothing enforces this in CI.
 
+## In flight — Measure lag: snapping moves to the FRAGS worker
+
+Switching on Length or Area dropped the framerate on hover alone, nothing measured. Cause:
+`MeasurePicking` extracted **one `THREE.Mesh` per geometry instance of every model** into
+`world.meshes` (10k–100k on a real IFC), and every `mousemove` ran `Array.from` + a full
+`intersectObjects` over all of them **twice** — once from `MeasureHoverManager.castRay()`, once
+from the picker's `castRayToObjects()` in `SYNCHRONOUS` mode. BVHs made each mesh cheap; nothing
+made paying per-mesh cost 50k times cheap, and it was all main-thread.
+
+The tell: `ClipperPlacementManager`'s hover loop is the *same code* and the section tool is
+smooth on the same models. Its `world.meshes` is empty.
+
+1. **The premise was wrong, so the fix is a deletion, not an optimisation.** `bim-viewer.md`
+   claimed fragment models expose no CPU geometry for snapping. FRAGS 3.4.x snaps **in the
+   worker** — `raycastWithSnapping` → `snapRaycast` → `pointRaycast`/`lineRaycast`, returning
+   `snappingClass`/`snappedEdgeP1P2`/`facePoints` — and the picker's *default* mode already
+   routes there. `SYNCHRONOUS` exists for worlds without fragments. Rejected the cursor-local
+   `world.meshes` variant (only the hovered element's meshes, keyed off the `localId` hover
+   already returns): it fixes the per-move cost and leaves the extraction, the retained
+   geometry, the BVH build, the matrix-key invalidation and the `onItemSet` gap all standing.
+2. **`MeasurePicking` is deleted outright, not kept dormant.** A dormant *registered* component
+   stays in the registry, gets disposed at teardown, and reads as live infrastructure — it even
+   carried a ⚠️ note inviting a `fragments.list.onItemSet` re-attach, i.e. work on a dead path.
+   ADR-0003 carries the finding and names `git show 2347cdf:…` for recovery.
+3. **⚠️ Supersedes item 5 of the "clicking into a cut" entry above** ("Snapping and fast picking
+   delegate to `super` … nothing in `src/` passes `snappingClasses`"). Something does now, so
+   `ClipAwareRaycaster` owns that path: `raycastWithSnapping` per model, filtered per point
+   because the worker only clip-culls at bounding-box level. Two halves matter — **keep the
+   worker's candidate order and take the first survivor within a model** (that order is snap
+   priority; distance-sorting lets a far corner beat the near edge you aimed at, merge across
+   models by distance only), and **fall through to `raycastAll` when clipping kills every
+   candidate**, or a revealed cut face becomes unmeasurable. `useFastModelPicking` stays the
+   one documented bail-out.
+4. **`delay = 0` stays, and is now documented as load-bearing.** `LengthMeasurement.endCreation()`
+   commits whatever `updatePreviewLine()` — the `onPointerStop` handler — last wrote, so at the
+   vendor default of 300 ms the second point commits stale. `AreaMeasurement` re-picks inside
+   `create()` and would be safe either way. Rejected restoring the vendor delay: fixing Length
+   then means calling `updatePreviewLine()` ourselves on click.
+5. **Both `pickerMode` assignments go.** Each `Measurement` owns its own `GraphicVertexPicker`
+   and its mode already defaults to the one we want, so setting it was noise. `MeasurerLike`
+   loses the field.
+6. ⚠️ **Watch on first use:** `updatePointer()` early-returns only in `SYNCHRONOUS` mode, so it
+   has been suppressing the picker's 6px DOM preview div. In default mode that div reappears and
+   churns the DOM per move while the snap marker hides/shows around each async pick — possible
+   flicker over `CursorSurface`. Left alone deliberately; suppressing it means reaching into the
+   measurer's private `_vertexPicker` or CSS-targeting an unclassed inline-styled div.
+
 _No other decisions in flight._
+
+⚠️ **Both entries above this one are already merged** (`407e47e`/PR #10 and `2347cdf`/PR #9) and
+the guides have absorbed them — the staging buffer is stale. Promoting and clearing those two is
+its own job, deliberately not folded into this change.
 
 Recently promoted (for reference — do not re-stage here):
 

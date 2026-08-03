@@ -1,9 +1,7 @@
 import * as OBC from "@thatopen/components";
-import * as OBF from "@thatopen/components-front";
 import * as THREE from "three";
 // Relative, not the @/* alias: tsconfig excludes src/bim-components/**, so
 // vite-tsconfig-paths does not rewrite aliases inside this folder. Repo-wide convention here.
-import { MeasurePicking } from "../../MeasurePicking";
 import { MeasureHoverManager } from "./MeasureHoverManager";
 import { MeasurePointerManager } from "./MeasurePointerManager";
 import { MeasureCursorDescriptor, MeasurerLike } from "./types";
@@ -30,13 +28,6 @@ export class MeasureCursorEngine {
   /** Whether listeners are currently bound — `enabled` can be true before a world arrives. */
   private _active = false;
 
-  /** Detaches the background-built picking meshes from `world.meshes` on deactivate. */
-  private _pickingDetach: (() => void) | null = null;
-  /**
-   * Bumped on every activate/deactivate; also serves as the cancel token for the in-flight
-   * background picking-mesh build.
-   */
-  private _activationId = 0;
   /** `measurer.delay` as it was before activation forced it to 0. */
   private _restoreDelay: number | null = null;
 
@@ -85,7 +76,6 @@ export class MeasureCursorEngine {
   dispose() {
     this._deactivate();
     this._enabled = false;
-    // MeasurePicking is shared and outlives us — only our attachment goes, never its cache.
   }
 
   private get _measurer(): MeasurerLike {
@@ -99,52 +89,27 @@ export class MeasureCursorEngine {
     const world = this._world;
     const measurer = this._measurer;
 
-    // 1. Configure the measurer for synchronous vertex snapping.
+    // `pickerMode` is deliberately untouched: each measurer owns its own picker, and its
+    // default mode is the one that routes snapping to the fragments worker. Why `delay` must
+    // be 0 is in the `types.ts` JSDoc — it is correctness, not tuning.
     measurer.world = world;
     if (this._descriptor.color !== undefined) {
       measurer.color = new THREE.Color(this._descriptor.color);
     }
     measurer.enabled = true;
-    measurer.pickerMode = OBF.GraphicVertexPickerMode.SYNCHRONOUS;
     this._restoreDelay = measurer.delay;
     measurer.delay = 0;
 
-    // 2. Listeners bind immediately, so the cursor guide is live from the fast fragment pick
-    //    without waiting on the picking-mesh build below.
     this._hover.attach(world);
     this._pointer.attach(world);
-
-    // 3. Build the vertex-snapping picking meshes in the background (cached + BVH-accelerated).
-    //    An early deactivate cancels via the activation id.
-    const activationId = ++this._activationId;
-    this._components
-      .get(MeasurePicking)
-      .attach(world, () => activationId !== this._activationId)
-      .then((handle) => {
-        if (activationId !== this._activationId) {
-          handle.detach();
-          return;
-        }
-        this._pickingDetach = handle.detach;
-      })
-      .catch((err) => console.error("measure picking mesh build failed:", err));
   }
 
   private _deactivate() {
-    // Cancel any in-flight background build and detach the picking meshes, whether or not
-    // activation ever completed.
-    this._activationId++;
-    if (this._pickingDetach) {
-      this._pickingDetach();
-      this._pickingDetach = null;
-    }
-
     if (!this._active) return;
     this._active = false;
 
     const measurer = this._measurer;
     measurer.enabled = false;
-    measurer.pickerMode = OBF.GraphicVertexPickerMode.DEFAULT;
     if (this._restoreDelay !== null) {
       measurer.delay = this._restoreDelay;
       this._restoreDelay = null;
