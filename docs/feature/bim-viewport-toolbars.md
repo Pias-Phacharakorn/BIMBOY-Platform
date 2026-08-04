@@ -8,7 +8,7 @@
 Two independent rails float over `ViewportWrapper`. Both are plain React — no `<bim-*>`, per the shadow-DOM containment rule in `CLAUDE.md`. Neither rail owns engine state: every button reaches the engine through `components.get(...)` from `bimStore`, and holds only the UI state needed to render itself.
 
 - **`ViewportToolbar.tsx`** — bottom-centre (`absolute bottom-3 left-1/2 -translate-x-1/2`): Load Model │ Focus, Visibility, Ghost, Align │ Settings. Two `w-[1px]` divider spans group them. Its menus open **upward** (`absolute bottom-full mb-2`).
-- **`ViewportRightToolbar.tsx`** — top-right column (`absolute right-3 top-3`): Measure, Clip, Coordinate. Its menus open **leftward** (`absolute right-full mr-2.5`).
+- **`ViewportRightToolbar.tsx`** — top-right column (`absolute right-3 top-3`): Measure, Clip, Sectionbox, Coordinate. Its menus open **leftward** (`absolute right-full mr-2.5`).
 
 **That direction split is load-bearing, not cosmetic:** anything that points at where a menu will appear — a caret, an arrow, an animation origin — cannot be shared across both rails without a second variant. The slide-in animations already diverge for this reason (`slide-in-from-bottom-1` vs `slide-in-from-right-1`).
 
@@ -21,7 +21,7 @@ Two independent rails float over `ViewportWrapper`. Both are plain React — no 
 | `ToolbarVisibility` | icon-only action list with hover pills |
 | `ToolbarAlign` / `ToolbarLoadModel` | labelled action list, some rows nested |
 | `ToolbarSettings` | a **form** (checkboxes, number input, select, colour input) |
-| `ToolbarMeasure` / `ToolbarClip` / `ToolbarCoordinate` | action list **plus** a live result/registry pane |
+| `ToolbarMeasure` / `ToolbarClip` / `ToolbarSectionBox` / `ToolbarCoordinate` | action list **plus** a live result/registry pane |
 
 Worth revisiting only if a new menu can adopt an existing shape wholesale.
 
@@ -85,7 +85,7 @@ The one dropdown that is a form. Grid visible · Mini Map · Auto Rotate · Grid
 
 ## Right rail — per button
 
-All three are `activeTool`-driven, which is what makes them mutually exclusive.
+**Three of the four are `activeTool`-driven, which is what makes *those three* mutually exclusive.** Sectionbox is not — see its entry below.
 
 ### Measure (`ToolbarMeasure.tsx`)
 
@@ -98,6 +98,16 @@ Add plane · Clear all, plus a plane checklist (select, show/hide, delete per ro
 - **Placement is one-shot.** `handleEnterPlacement` sets `activeTool = "clip"` and enters placement; when `ClipperCursor` reports it has stopped placing (plane placed, or Escape), the sync effect resets `activeTool` to `"select"`. The button label switches to "Placing (ESC to cancel)" meanwhile.
 - **`activeTool` is also the interlock:** if any other tool becomes active while placement is armed, an effect calls `clipper.exitPlacementMode()`.
 - ⚠️ **`components.get(ClipperCursor as any)` is deliberate** — `ClipperCursor`'s 3-arg constructor doesn't match what `Components.get()` expects. It is the last component in the repo still needing this cast; see `bim-viewer.md` § Section tool.
+
+### Sectionbox (`ToolbarSectionBox.tsx`)
+
+`Section box` on/off · `Fit to selection` · `Reset to model`, plus a live extents pane reading X/Y/Z min→max and size to 2 decimals. → engine: [`bim-viewer.md`](bim-viewer.md) § Section box.
+
+- ⚠️ **The one right-rail button that does *not* use `activeTool`.** It sits on this rail because it is a sectioning tool, but a crop is view state, not a pointer mode — so it is exempt from the FX suppression below and is **not** mutually exclusive with Measure/Clip/Coordinate. A cut plane and a box can both be live, and you can measure inside a box. Wiring it to `activeTool` would have cost the selection outliner and the whole postproduction pass for as long as the box cropped.
+- **Holds no authoritative state**: mirrors `SectionBox.state` through `onStateChanged`, as `ToolbarClip` mirrors `ClipperCursor`.
+- **The store gates, the engine serves** — the same split as `ToolbarVisibility`: `bimStore.selectedElementIds` drives whether `Fit to selection` is enabled, but the handler acts on the live `highlighter.selection.select`, because `selectionMap` is a clone one event behind.
+- **`Fit to selection` and `Reset to model` both switch the box on** if it was off. Clicking either means you want to see the result.
+- Sits between Clip and Coordinate on the rail.
 
 ### Coordinate (`ToolbarCoordinate.tsx`)
 
@@ -119,15 +129,18 @@ Facts that only show up when two buttons interact. None of these are designs; th
 
 - ⚠️ **Settings vs the right rail, over `Hoverer.enabled`.** Settings' *Hover Highlight* checkbox writes `hoverer.enabled` directly and does not respect the FX snapshot. Repro: activate any right-rail tool → open Settings → untick Hover Highlight → return to `select`. The rail restores its snapshot (`true`) and hover highlight comes back on; Settings re-syncs from the engine on next open and shows itself ticked again. **A bug, not a convention** — the fix is for Settings to write through the same baseline the rail holds, or for the rail to re-snapshot on external change.
 - ⚠️ **Two buttons force `Highlighter.enabled = true` rather than restoring a snapshot.** `ToolbarClip` (on exiting placement) and `ToolbarCoordinate` (on leaving the tool and on unmount) both assert `true` unconditionally. That is currently correct only because nothing else disables the Highlighter for long. It is the same hazard the rail solved with a snapshot ref, solved less carefully — worth converging if a third consumer appears.
-- **Three unrelated activation patterns sit on one rail:**
+- **Four unrelated activation patterns sit across the two rails:**
 
   | Pattern | Buttons | Gives mutual exclusion? |
   |---------|---------|------------------------|
   | `bimStore.activeTool` | Measure, Clip, Coordinate | **yes** — and drives FX suppression |
   | dedicated store fields | Align (`aligningDirection` / `alignAngle`) | no |
   | component-local `useState` | Ghost | no — invisible outside the component |
+  | engine-held state, mirrored by event | Sectionbox (`SectionBox.state` → `onStateChanged`) | no — deliberately |
 
-  So arming Align while Length is active leaves both live, and Ghost is invisible to everything. Consolidating on `activeTool` would fix that, but Ghost and Align aren't modal in the same sense (they don't own the pointer), which is why it hasn't been forced.
+  So arming Align while Length is active leaves both live, and Ghost is invisible to everything. Consolidating on `activeTool` would fix those two, but Ghost and Align aren't modal in the same sense (they don't own the pointer), which is why it hasn't been forced.
+
+  ⚠️ **Sectionbox's pattern is the one to copy, and its exclusion from `activeTool` is a decision, not an oversight.** The engine owns the truth and the button mirrors it — the same shape as `ToolbarClip`/`ClipperCursor`, but without `activeTool`, because a crop must survive while you select and measure. Anything future that is *state* rather than a *pointer mode* belongs here rather than in `activeTool`. → [ADR-0005](../adr/0005-section-box-outside-clipper.md).
 
 ## Gotchas / watch-outs
 

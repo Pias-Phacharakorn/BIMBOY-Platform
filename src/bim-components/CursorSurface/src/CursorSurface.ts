@@ -67,6 +67,19 @@ export class CursorSurface extends OBC.Component implements OBC.Disposable {
   }
 
   /**
+   * Whether a tool is currently showing this guide.
+   *
+   * Doubles as the app-wide "a tool owns the cursor right now" signal, because every cursor-owning
+   * tool drives this one shared guide: `ClipperPlacementManager`, `MeasureHoverManager` (Length +
+   * Area), `SurfaceMeasureCursor`, `SpotCoordinate`, and `ViewportWrapper`'s align mode. Consumers
+   * should read this rather than enumerating those components' `enabled` flags — that list rots the
+   * moment another tool lands. Used by `CursorZoom` to suppress its pivot dot.
+   */
+  public get visible() {
+    return this.group.visible;
+  }
+
+  /**
    * Associate the cursor with a specific world's scene.
    */
   public setWorld(world: OBC.World | null) {

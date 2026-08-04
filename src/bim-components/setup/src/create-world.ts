@@ -3,6 +3,7 @@ import * as OBC from "@thatopen/components"
 import * as THREE from "three"
 import * as BUI from "@thatopen/ui"
 import * as OBF from "@thatopen/components-front"
+import { applyCameraDepthRange } from "./camera-depth-range"
 
 export const createWorld = (components: OBC.Components) => {
   const worlds = components.get(OBC.Worlds);
@@ -31,6 +32,12 @@ export const createWorld = (components: OBC.Components) => {
   world.renderer = new OBF.PostproductionRenderer(components, viewport);
 
   world.camera = new OBC.OrthoPerspectiveCamera(components);
+
+  // OBC builds its perspective camera with a 1 m near plane, so anything closer is clipped away.
+  // Re-applied on every camera change because each OBC.View brings its own camera —
+  // see camera-depth-range.ts.
+  applyCameraDepthRange(world.camera);
+  world.onCameraChanged.add(applyCameraDepthRange);
 
   const resizeWorld = () => {
     try {

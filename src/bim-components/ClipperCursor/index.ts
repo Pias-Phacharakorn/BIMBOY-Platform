@@ -2,8 +2,7 @@ import * as OBC from "@thatopen/components";
 import * as THREE from "three";
 // Relative, not the @/* alias: tsconfig excludes src/bim-components/**, so
 // vite-tsconfig-paths does not rewrite aliases inside this folder. Repo-wide convention here.
-import { AxisGizmoHandle, GizmoAxis, axisOf } from "../GizmoAxis";
-import { ClipperDragManager } from "./src/ClipperDragManager";
+import { AxisDragManager, AxisGizmoHandle, GizmoAxis, axisOf } from "../GizmoAxis";
 import { ClipperOutlineManager } from "./src/ClipperOutlineManager";
 import { ClipperPlacementManager } from "./src/ClipperPlacementManager";
 import { ClipperPlaneState } from "./src/types";
@@ -40,7 +39,8 @@ const suppressDefaultArrow = (plane: any) => {
  * three managers, each of which owns and frees its own 3D objects:
  *
  * - {@link ClipperOutlineManager} — outlines, their colours and their extent
- * - {@link ClipperDragManager} — pointer handling, hover and the drag itself
+ * - {@link AxisDragManager} — pointer handling, hover and the drag itself (shared with
+ *   `SectionBox`, which is why this class supplies the plane lookups as callbacks)
  * - {@link ClipperPlacementManager} — place-a-plane-by-clicking mode
  *
  * The gizmos themselves belong to {@link GizmoAxis}, a shared engine service: this class
@@ -57,7 +57,7 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
   public selectedPlaneId: string | null = null;
 
   public readonly outlines: ClipperOutlineManager;
-  public readonly drag: ClipperDragManager;
+  public readonly drag: AxisDragManager;
   public readonly placement: ClipperPlacementManager;
 
   private readonly _world: OBC.World;
@@ -86,15 +86,25 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     });
     this.placement.onChanged.add(() => this.onStateChanged.trigger());
 
-    this.drag = new ClipperDragManager({
-      components,
+    // The manager knows nothing about clipping: these four callbacks are the whole of what a
+    // "plane" means to it, which is what lets SectionBox drive the same pointer handling.
+    this.drag = new AxisDragManager({
       world,
       viewport,
       pickTargets: () =>
         [...this._gizmos]
           .filter(([, handle]) => handle.visible)
-          .map(([planeId, handle]) => ({ mesh: handle.picker, planeId })),
+          .map(([planeId, handle]) => ({ mesh: handle.picker, id: planeId })),
       isSuspended: () => this.placement.placing,
+      getAxis: (planeId) => this._clipper.list.get(planeId)?.normal.clone() ?? null,
+      getOrigin: (planeId) => this._clipper.list.get(planeId)?.helper.position.clone() ?? null,
+      onDrag: (planeId, position) => {
+        const plane = this._clipper.list.get(planeId);
+        if (!plane) return;
+        plane.helper.position.copy(position);
+        plane.helper.updateMatrix();
+        plane.update();
+      },
       onSelect: (planeId) => {
         if (this.selectedPlaneId !== planeId) this.selectPlane(planeId);
       },
@@ -122,20 +132,20 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     const plane = this._clipper.list.get(id);
     if (plane) plane.enabled = enabled;
 
-    if (!enabled && this.drag.hoveredPlaneId === id) this.drag.clearHover();
+    if (!enabled && this.drag.hoveredId === id) this.drag.clearHover();
 
     this._syncVisibility();
     this.onStateChanged.trigger();
   }
 
   public deletePlane(id: string) {
-    if (this.drag.draggingPlaneId === id) this.drag.end();
+    if (this.drag.draggingId === id) this.drag.end();
 
     // Disposing the plane fires onDisposed, which is where the managers drop their entries.
     this._clipper.delete(this._world, id);
     this.planes = this.planes.filter((p) => p.id !== id);
 
-    if (this.drag.hoveredPlaneId === id) this.drag.clearHover();
+    if (this.drag.hoveredId === id) this.drag.clearHover();
 
     if (this.selectedPlaneId === id) {
       this.selectedPlaneId = this.planes.length > 0 ? this.planes[0].id : null;
@@ -219,8 +229,8 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
   private _repaintPlaneStates() {
     for (const planeState of this.planes) {
       const isActive =
-        this.drag.hoveredPlaneId === planeState.id ||
-        this.drag.draggingPlaneId === planeState.id;
+        this.drag.hoveredId === planeState.id ||
+        this.drag.draggingId === planeState.id;
 
       this.outlines.setState(
         planeState.id,

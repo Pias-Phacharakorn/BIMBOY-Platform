@@ -1,40 +1,62 @@
 import * as OBC from "@thatopen/components";
 import * as THREE from "three";
-import { DragSession } from "./types";
 
-export interface ClipperDragOptions {
-  components: OBC.Components;
+export interface AxisDragOptions {
   world: OBC.World;
   viewport: HTMLElement;
   /**
-   * Grab handles currently on screen, with the plane each belongs to. Supplied by the
-   * component from its own gizmo handles, so this manager never needs to know that
-   * `GizmoAxis` exists.
+   * Grab handles currently on screen, with the id each belongs to. Supplied by the consumer
+   * from its own gizmo handles, so this manager never learns what an id means — a plane to
+   * `ClipperCursor`, a box face to `SectionBox`.
    */
-  pickTargets: () => { mesh: THREE.Mesh; planeId: string }[];
-  /** True while placement mode owns the pointer — dragging stays out of the way. */
+  pickTargets: () => { mesh: THREE.Mesh; id: string }[];
+  /** True while something else owns the pointer — dragging stays out of the way. */
   isSuspended: () => boolean;
-  /** Grabbing a plane selects it. */
-  onSelect: (planeId: string) => void;
+  /** World-space direction this id may slide along. `null` aborts the grab. */
+  getAxis: (id: string) => THREE.Vector3 | null;
+  /** Where this id sits right now, in world space. `null` aborts the grab. */
+  getOrigin: (id: string) => THREE.Vector3 | null;
+  /**
+   * The dragged position, already projected onto the axis. The consumer applies (and may
+   * clamp) it — this manager holds no notion of a limit.
+   */
+  onDrag: (id: string, position: THREE.Vector3) => void;
+  /** Grabbing a handle selects whatever it belongs to. */
+  onSelect: (id: string) => void;
+}
+
+/** Everything an in-progress drag needs to turn pointer movement into axis movement. */
+interface DragSession {
+  id: string;
+  /** World-space direction the grabbed thing may slide along. */
+  axis: THREE.Vector3;
+  /** Camera-facing plane containing the axis; the pointer ray is intersected with it. */
+  dragPlane: THREE.Plane;
+  startOrigin: THREE.Vector3;
+  startPoint: THREE.Vector3;
+  pointerId: number;
 }
 
 /**
- * Hover and drag on the gizmo grab handle, which is the only pickable thing this component
- * owns — the outline has no surface to hit, which is precisely why a cut plane can no longer
- * swallow a click meant for an element.
+ * Hover and drag along one world axis, grabbing a {@link GizmoAxis} picker — the only pickable
+ * thing its consumers own. Neither a cut plane's outline nor a section box's edges have a
+ * surface to hit, which is precisely why they cannot swallow a click meant for an element.
  *
  * `pointerdown` is captured on `window` rather than on the canvas: camera-controls and the
  * highlighter listen on the canvas itself, and a capture listener on the same element would
  * still run after them (target-phase listeners fire in registration order), so the event has
  * to be stopped one level up. Since only the handle is pickable, that stop only ever fires
  * over the handle.
+ *
+ * It knows nothing about clipping. `getAxis`/`getOrigin`/`onDrag` are the whole contract, so
+ * the same pointer handling drives a `SimplePlane`'s helper and a section-box face alike.
  */
-export class ClipperDragManager {
-  /** Fires when hover or drag changes, so the owner can repaint outlines. */
+export class AxisDragManager {
+  /** Fires when hover or drag changes, so the owner can repaint. */
   readonly onStateChanged = new OBC.Event<void>();
 
   private readonly _raycaster = new THREE.Raycaster();
-  private _hoveredPlaneId: string | null = null;
+  private _hoveredId: string | null = null;
   private _drag: DragSession | null = null;
 
   private _hoverListener: ((e: PointerEvent) => void) | null = null;
@@ -42,16 +64,16 @@ export class ClipperDragManager {
   private _moveListener: ((e: PointerEvent) => void) | null = null;
   private _upListener: ((e: PointerEvent) => void) | null = null;
 
-  constructor(private readonly _options: ClipperDragOptions) {
+  constructor(private readonly _options: AxisDragOptions) {
     this._setupListeners();
   }
 
-  get hoveredPlaneId() {
-    return this._hoveredPlaneId;
+  get hoveredId() {
+    return this._hoveredId;
   }
 
-  get draggingPlaneId() {
-    return this._drag?.planeId ?? null;
+  get draggingId() {
+    return this._drag?.id ?? null;
   }
 
   /** Drops the hover highlight without waiting for the pointer to move off the handle. */
@@ -69,21 +91,21 @@ export class ClipperDragManager {
 
     this._hoverListener = (e) => {
       if (this._options.isSuspended() || this._drag) return;
-      this._setHovered(this._pickHandle(e)?.planeId ?? null);
+      this._setHovered(this._pickHandle(e)?.id ?? null);
     };
     canvas.addEventListener("pointermove", this._hoverListener);
 
     this._downListener = (e) => {
       if (e.target !== canvas) return;
       if (e.button !== 0 || this._options.isSuspended() || this._drag) return;
-      if (!this._hoveredPlaneId) return;
+      if (!this._hoveredId) return;
 
       const hit = this._pickHandle(e);
-      if (!hit || hit.planeId !== this._hoveredPlaneId) return;
+      if (!hit || hit.id !== this._hoveredId) return;
 
       e.preventDefault();
       e.stopPropagation();
-      this._begin(hit.planeId, hit.point, e);
+      this._begin(hit.id, hit.point, e);
     };
     window.addEventListener("pointerdown", this._downListener, true);
 
@@ -120,7 +142,7 @@ export class ClipperDragManager {
    * `depthTest: false`, so the handle is grabbable wherever it is drawn, even when the model
    * stands between it and the camera.
    */
-  private _pickHandle(e: PointerEvent): { planeId: string; point: THREE.Vector3 } | null {
+  private _pickHandle(e: PointerEvent): { id: string; point: THREE.Vector3 } | null {
     const camera = this._options.world.camera?.three;
     const canvas = this._canvas;
     if (!camera || !canvas) return null;
@@ -132,32 +154,33 @@ export class ClipperDragManager {
     if (!ndc) return null;
 
     this._raycaster.setFromCamera(ndc, camera);
-    const owners = new Map(targets.map(({ mesh, planeId }) => [mesh as THREE.Object3D, planeId]));
+    const owners = new Map(targets.map(({ mesh, id }) => [mesh as THREE.Object3D, id]));
 
     for (const hit of this._raycaster.intersectObjects(targets.map((t) => t.mesh), false)) {
-      const planeId = owners.get(hit.object);
-      if (planeId) return { planeId, point: hit.point.clone() };
+      const id = owners.get(hit.object);
+      if (id) return { id, point: hit.point.clone() };
     }
     return null;
   }
 
-  private _setHovered(planeId: string | null) {
-    if (this._hoveredPlaneId === planeId) return;
-    this._hoveredPlaneId = planeId;
+  private _setHovered(id: string | null) {
+    if (this._hoveredId === id) return;
+    this._hoveredId = id;
 
     if (!this._options.isSuspended()) {
-      this._options.viewport.style.cursor = planeId ? "grab" : "";
+      this._options.viewport.style.cursor = id ? "grab" : "";
     }
     this.onStateChanged.trigger();
   }
 
-  private _begin(planeId: string, grabPoint: THREE.Vector3, e: PointerEvent) {
-    const plane = this._options.components.get(OBC.Clipper).list.get(planeId);
+  private _begin(id: string, grabPoint: THREE.Vector3, e: PointerEvent) {
     const camera = this._options.world.camera?.three;
-    if (!plane || !camera) return;
+    const rawAxis = this._options.getAxis(id);
+    const origin = this._options.getOrigin(id);
+    if (!camera || !rawAxis || !origin) return;
 
-    // Slide along the plane's own normal, on the camera-facing plane that contains it.
-    const axis = plane.normal.clone().normalize();
+    // Slide along the given axis, on the camera-facing plane that contains it.
+    const axis = rawAxis.clone().normalize();
     const viewDirection = camera.getWorldDirection(new THREE.Vector3());
     let dragNormal = axis.clone().cross(viewDirection).cross(axis);
     if (dragNormal.lengthSq() < 1e-8) {
@@ -167,15 +190,15 @@ export class ClipperDragManager {
     dragNormal.normalize();
 
     this._drag = {
-      planeId,
+      id,
       axis,
       dragPlane: new THREE.Plane().setFromNormalAndCoplanarPoint(dragNormal, grabPoint),
-      startHelperPosition: plane.helper.position.clone(),
+      startOrigin: origin.clone(),
       startPoint: grabPoint.clone(),
       pointerId: e.pointerId,
     };
 
-    this._options.onSelect(planeId);
+    this._options.onSelect(id);
 
     // Same guard SimplePlane.changeDrag uses for its own arrow drag.
     this._options.world.camera.enabled = false;
@@ -191,9 +214,6 @@ export class ClipperDragManager {
     const canvas = this._canvas;
     if (!drag || !camera || !canvas) return;
 
-    const plane = this._options.components.get(OBC.Clipper).list.get(drag.planeId);
-    if (!plane) return;
-
     const ndc = this._pointerToNdc(e, canvas);
     if (!ndc) return;
 
@@ -201,11 +221,10 @@ export class ClipperDragManager {
     const intersection = this._raycaster.ray.intersectPlane(drag.dragPlane, new THREE.Vector3());
     if (!intersection) return;
 
-    // Only the component along the normal moves the cut.
+    // Only the component along the axis moves anything.
     const offset = intersection.sub(drag.startPoint).dot(drag.axis);
-    plane.helper.position.copy(drag.startHelperPosition).addScaledVector(drag.axis, offset);
-    plane.helper.updateMatrix();
-    plane.update();
+    const position = drag.startOrigin.clone().addScaledVector(drag.axis, offset);
+    this._options.onDrag(drag.id, position);
   }
 
   /** Ends any drag in progress and hands the camera back. Safe to call when idle. */
@@ -227,7 +246,7 @@ export class ClipperDragManager {
     }
 
     if (!this._options.isSuspended()) {
-      this._options.viewport.style.cursor = this._hoveredPlaneId ? "grab" : "";
+      this._options.viewport.style.cursor = this._hoveredId ? "grab" : "";
     }
     if (drag) this.onStateChanged.trigger();
   }
