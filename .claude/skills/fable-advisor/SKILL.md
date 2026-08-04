@@ -107,7 +107,7 @@ foreground — the next step needs its result before anything else can happen.
 ## Step 5 — Hand off to plan-visualizer
 
 Whatever plan resulted — Fable's, or your own from a Step-1 skip — feed it to
-the `plan-visualizer` skill so it comes back in the standard ASCII-diagram
+the `plan-visualizer` skill so it comes back in the standard Mermaid-diagram
 format with pros/cons and a files-changed list, then goes through the normal
 developer approval gate. Don't skip this even when Fable already produced a
 clear plan — the visualized format and the approval gate are the same either

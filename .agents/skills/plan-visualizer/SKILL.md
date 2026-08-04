@@ -1,6 +1,6 @@
 ---
 name: plan-visualizer
-description: Mandatory planning skill that writes a self-contained plan-visualizer.html (Mermaid current/proposed diagrams, pros/cons, files changed) to the project root before any implementation. Must be used in every implementation plan without exception.
+description: Mandatory planning skill that writes a self-contained plan-visualizer.md (Mermaid current/proposed diagrams, pros/cons, files changed) to the project root before any implementation. Must be used in every implementation plan without exception.
 license: MIT
 category: planning
 ---
