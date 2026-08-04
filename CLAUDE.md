@@ -204,7 +204,7 @@ You (Claude) are the **primary developer**. The developer is the final approver 
 **2. Plan before code**
 - Use `grill-with-docs` skill for requirements + layer placement
 - New architecture, cross-cutting refactor, tricky bug, or multiple viable approaches? → suggest the developer run `/fable-advisor` (developer-triggered only, never auto-invoked) to get a second opinion from Fable before finalizing the plan
-- Use `plan-visualizer` skill for: current flow (ASCII) + proposed flow (mark `[NEW]`/`[MOD]`/`[DEL]`) + pros/cons + files
+- Use `plan-visualizer` skill for: current flow (Mermaid) + proposed flow (mark `[NEW]`/`[MOD]`/`[DEL]`) + pros/cons + files — written to `plan-visualizer.md` at the project root
 - **Get explicit approval before coding**
 
 **3. Execute**
