@@ -28,7 +28,11 @@ class AxisGizmo implements AxisGizmoHandle {
     options: AxisGizmoOptions,
     private readonly _release: (gizmo: AxisGizmo) => void,
   ) {
-    const { group, picker, grabMaterials } = buildAxisGizmo(options.grabAxis);
+    const { group, picker, grabMaterials } = buildAxisGizmo(
+      options.grabAxis,
+      options.form ?? "axes",
+      options.direction ?? 1,
+    );
     this.group = group;
     this.picker = picker;
     this._grabMaterials = grabMaterials;
@@ -89,12 +93,24 @@ class AxisGizmo implements AxisGizmoHandle {
  * // raycast handle.picker to detect a grab; handle.dispose() when done
  * ```
  *
- * **Current limits, deliberately not parameterised while there is a single consumer.** A
- * gizmo tracks its target's *position* and ignores its rotation, holds a fixed fraction of
- * the viewport height, and has exactly one grabbable axis. World-alignment in particular is
- * BIMBOY's section-plane rationale — arrow and outline colours agreeing — not a universal
- * one, so an `orientation: "world" | "follow"` option is the first thing a second consumer
- * will want. It is about four lines.
+ * It also hosts **raw overlay objects** through {@link GizmoAxis.overlay}, for anything that
+ * needs this pass without being a gizmo — the section box's edge outline, which must stay
+ * world-scale and so cannot go through `create()`:
+ *
+ * ```ts
+ * gizmoAxis.overlay.add(boxOutline);    // world-scale, skipped by the per-frame rescale
+ * gizmoAxis.overlay.remove(boxOutline); // the caller still owns and disposes it
+ * ```
+ *
+ * ⚠️ **Naming debt, recorded rather than paid:** a component called `GizmoAxis` now serves
+ * non-gizmo overlays too. Renaming it to something like `SceneOverlay` would be honest but
+ * reaches into `ClipperCursor`, `bim-viewer.md`, ADR-0002 and ADR-0005 for no behaviour change.
+ *
+ * **Current limits, deliberately not parameterised while nothing needs them.** A gizmo tracks
+ * its target's *position* and ignores its rotation, and holds a fixed fraction of the viewport
+ * height. World-alignment in particular is BIMBOY's section rationale — arrow and outline
+ * colours agreeing — not a universal one, so an `orientation: "world" | "follow"` option is
+ * the next thing a consumer will want. It is about four lines.
  */
 export class GizmoAxis extends OBC.Component implements OBC.Disposable {
   static readonly uuid = "5b8d4e17-3a6c-42f9-b1d5-9c7e2f04a836" as const;
@@ -103,6 +119,27 @@ export class GizmoAxis extends OBC.Component implements OBC.Disposable {
 
   private readonly _scene = new THREE.Scene();
   private readonly _gizmos = new Set<AxisGizmo>();
+  /** Tracked only so teardown can detach them; their geometry belongs to whoever added them. */
+  private readonly _overlayObjects = new Set<THREE.Object3D>();
+
+  /**
+   * Raw objects drawn in the overlay pass, untouched by the per-frame follow-and-rescale loop
+   * that `create()`'s handles go through. That is the point: a world-scale outline must not be
+   * resized to hold a constant fraction of the viewport, or it would shrink and grow with zoom.
+   *
+   * The caller keeps ownership — `remove()` detaches, it does not dispose.
+   */
+  readonly overlay = {
+    add: (object: THREE.Object3D) => {
+      if (this._overlayObjects.has(object)) return;
+      this._overlayObjects.add(object);
+      this._scene.add(object);
+    },
+    remove: (object: THREE.Object3D) => {
+      if (!this._overlayObjects.delete(object)) return;
+      this._scene.remove(object);
+    },
+  };
 
   private _world: OBC.World | null = null;
   /** Held separately from the world: `world.renderer` may be gone by teardown time. */
@@ -204,6 +241,14 @@ export class GizmoAxis extends OBC.Component implements OBC.Disposable {
       gizmo.dispose();
     }
     this._gizmos.clear();
+
+    // Detach only. These belong to the components that added them, which free them in their
+    // own dispose() — freeing them here would double-dispose whichever runs second.
+    for (const object of this._overlayObjects) {
+      this._scene.remove(object);
+    }
+    this._overlayObjects.clear();
+
     this._world = null;
 
     this.onDisposed.trigger(GizmoAxis.uuid);

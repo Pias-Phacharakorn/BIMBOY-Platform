@@ -431,6 +431,155 @@ stops at item 10 deliberately: nothing rejected for the indicator carries lastin
 alone is enough (per `docs/adr/README.md`, "skip the ADR when the guide alone is enough"). **Clear
 this entry once the branch is merged.**
 
+## In flight — Section box: a resizable crop volume on the right rail
+
+A **Sectionbox** button on `ViewportRightToolbar`: six inward clipping planes crop the model to a
+box, `BoundingBoxer` supplies the starting extents, and each face is dragged by one arrow. The
+tutorial the request cites (`ThatOpen_docs/Tutorials/Components/Core/BoundingBoxer.mdx`) covers
+**only** the `Box3` half — camera fitting and `Box3Helper`. Every clipping, handle and outline
+decision below is ours.
+
+**Terminology** (used in the code and the guide): a **face** is one of the box's six bounded sides;
+its **plane** is the `THREE.Plane` that crops it, normal pointing **inward** so the kept half-space
+is the box interior; the **min gap** is the thickness a face may not cross; **extents** are the
+`Box3` min/max the menu reads out.
+
+Four vendor facts, read out of `node_modules/@thatopen/components/dist/index.mjs` rather than the docs:
+
+```js
+// SimplePlane ctor (:17408) — a plane clips the instant it is constructed
+world.renderer.setPlane(true, this.three);
+// Clipper.enabled setter (:17806) — stores a flag, triggers an event, clips nothing
+set enabled(state) { this._enabled = state; this.onStateChanged.trigger(["enabled"]); }
+// Views (:18999) — vendor precedent for clipping with a bare THREE.Plane
+renderer.setPlane(value, this.plane);
+```
+
+⚠️ **`Clipper.enabled` does not clip.** No code path in `Clipper` reads `_enabled` to add or remove a
+plane from the renderer — `SimplePlane.enabled` (`:17463`) is the real switch. So
+`ClipperCursor._syncVisibility()`'s `this._clipper.enabled = this.planes.some(...)` (`index.ts:215`)
+is inert bookkeeping, and `ClipperCursor.dispose()`'s `enabled = false` likewise. Useful here: the
+Clip menu cannot silently un-clip a section box. **Not fixed in this change** — the line is harmless
+and correcting it means deciding what `Clipper.enabled` is *for*.
+
+1. **Six bare `THREE.Plane`s pushed through `world.renderer.setPlane`, not six `OBC.Clipper` planes.**
+   `OBC.Views` already does exactly this, so it is a vendor-sanctioned path rather than a shortcut.
+   Rejected `Clipper.createFromNormalAndCoplanarPoint()` ×6: each `SimplePlane` builds a plane mesh, a
+   helper *and* a `TransformControls`, whose arrow has to be re-suppressed after **every**
+   `plane.visible` write (the documented triple-duty setter) — six of those per box. Worse, the faces
+   would land in `Clipper.list`, which `Clipper.size`/`material`/`visible` and
+   `getAllPlaneMeshes()`/`pickPlane()` all iterate regardless of owner, so `clipper.visible = false`
+   from anywhere would reach into a box it knows nothing about. Staying out of `Clipper.list` also
+   leaves `ClipperCursor`'s `MAX_PLANES = 6` budget untouched — otherwise one box consumes it entirely.
+   Rejected growing box support inside `ClipperCursor`: `ToolbarClip` subscribes to its
+   `onStateChanged`, so box state would push re-renders into the Clip menu.
+2. **`ClipAwareRaycaster` needs nothing.** It filters against `renderer.three.clippingPlanes`, which
+   `setPlane` maintains (`:205` mirrors every non-local plane into `three.clippingPlanes`). So
+   selecting, hovering and measuring inside a box are correct the moment the planes exist — the
+   reason that raycaster was written against the renderer's array and not `Clipper.list` (see the
+   "clicking into a cut" entry, item 4) pays off here for free.
+3. **The box never touches `activeTool`.** A crop is view state, not a pointer mode: you keep it on
+   while selecting, measuring and reading properties. `ViewportRightToolbar` suppresses `Hoverer`,
+   `Outliner` **and `postproduction`** for as long as `activeTool !== "select"`, so wiring the box to
+   `activeTool` would kill selection outlines and the whole post pass for the entire time the box is
+   cropping, and switching on Measure would silently drop the crop. Consequence, deliberate: the box
+   is **not** mutually exclusive with Measure/Clip/Coordinate — a clip plane and a box can both be
+   live. ⚠️ The reserved `BimTool` member `'section'` (`bimStore.ts:13`) therefore **stays dead**;
+   removing it is a separate tidy. Rejected a `bimStore.sectionBoxActive` mirror: nothing in the app
+   reads it today, and `SectionBox` holding its own truth with `ToolbarSectionBox` mirroring it via
+   `onStateChanged` is the `ClipperCursor`/`ToolbarClip` idiom exactly.
+4. **The toggle always boxes the full model; narrowing is an explicit second click.** `Fit to
+   selection` and `Reset to model` are their own menu rows. Rejected selection-aware initial extents
+   (would mirror `ToolbarFocus`'s "empty selection means fit everything", and makes "isolate what I
+   picked" one click — but the same button then does two different things depending on invisible
+   state) and starting at 50% of the model (crop is visibly working immediately, but it is an
+   arbitrary constant that hides geometry nobody asked to hide). ⚠️ `Fit to selection` must read the
+   **live `highlighter.selection.select`**, not `bimStore.selectionMap` — that clone is one event
+   behind, the same trap `ToolbarFocus` and `ToolbarVisibility` already document.
+5. **`BoundingBoxer` is read on user action only, never at load time.** `addFromModels()` unions each
+   `model.box` and a model is in `fragments.list` while still loading, so a load-time read can
+   legitimately return an empty box — the trap `ClipperOutlineManager` bails on. Every boxer read here
+   is behind a click, so it is always post-processing. **Consequence, deliberate: a model loaded while
+   the box is on does not grow the box.** A crop the user set must not jump; `Reset to model` re-reads
+   extents on demand. Rejected a `fragments.list.onItemSet` subscription that widens the box.
+6. **One outward arrow per face, which means `GizmoAxis` gains a variant.** `buildAxisGizmo()` builds
+   all three axes, double-headed, plus a centre diamond, and its picker is a cylinder **centred on the
+   origin** spanning `GIZMO_LENGTH × 1.5 × 2`. Six of those on a box is six diamonds and eighteen
+   arrows, and on a thin box the +X and −X pickers overlap through the middle. So the gizmo gains a
+   single-axis, single-direction form with the picker offset **outward**, and its docstring's standing
+   invitation ("the first thing a second consumer will want… about four lines") is taken up. Additive:
+   `ClipperCursor`'s call site is unchanged. Rejected `SectionBox` building its own pad handles at face
+   centres — full control of shape, but it duplicates the overlay scene, the clipping-suspend pass, the
+   `depthTest: false` rules and `_scaleAt`, which is the duplication `GizmoAxis` was extracted to
+   prevent. Rejected one gizmo translating the whole box with extents typed in the menu: no 3D face
+   dragging at all.
+7. **The 12-edge outline is drawn in the overlay pass, `depthTest: false`, alongside the arrows.** It
+   is coplanar with the very cross-sections it borders, so depth-testing it in `world.scene` z-fights
+   or drops out at exactly the cut — the case `fragments-manager` already fights with per-material
+   `polygonOffset`. ⚠️ **Clipping was *not* the reason.** three.js discards a fragment at signed
+   distance `< 0`, so geometry exactly on a plane survives — which is why `ClipperCursor`'s own
+   coplanar plane outline renders at all today, and a box edge (distance 0 for two planes, positive for
+   the other four) is the same case. **Accepted consequence, the one the pivot dot already takes:** all
+   twelve edges show through the model, so far edges are never occluded by near geometry. Correct for a
+   volume boundary, and how Revit and Navisworks draw theirs. Rejected the both-passes variant (solid
+   depth-tested edges plus a ghosted overlay copy) — best legibility, but two geometries, two material
+   sets and a rule for which one is authoritative.
+8. **`GizmoAxis` gains `overlay.add()`/`overlay.remove()` for raw `Object3D`s, and keeps its name.**
+   The box outline is **world**-scale, so it cannot be a gizmo *handle* — handles are rescaled every
+   frame by `_scaleAt` to hold `GIZMO_VIEW_FRACTION` of the viewport height, which would shrink and
+   grow the box with zoom. Objects added through `overlay` are hosted in the shared scene and skipped by
+   that loop. ~6 lines, no second render pass. **Accepted naming debt, recorded rather than paid:** a
+   component called `GizmoAxis` now also hosts non-gizmo overlays. Rejected renaming it to
+   `SceneOverlay` (honest, but the rename touches `ClipperCursor`, `bim-viewer.md` § GizmoAxis, ADR-0002
+   and this file — churn for no behaviour) and rejected `SectionBox` owning its own overlay pass (a
+   second `webgl.render()` and a second copy of the clipping-suspend/`autoClear` dance every frame,
+   against the docstring's whole rationale).
+9. **`ClipperDragManager` is generalised into `GizmoAxis/src/AxisDragManager.ts`.** It already does
+   everything a box face needs — `window`-capture `pointerdown` to beat camera-controls and the
+   highlighter, hover→`grab` cursor, a camera-facing drag plane containing the axis, offset projected
+   onto the axis, camera disabled for the duration — and touches `OBC.Clipper` at only two points
+   (`_begin` reads `plane.normal` + `plane.helper.position`; `_update` writes `plane.helper.position`
+   then `plane.update()`). Those two become `getAxis`/`getOrigin`/`onDrag` callbacks, and the file moves
+   beside the thing it drags, because every consumer's grab target is a `GizmoAxis` picker. ⚠️ **This
+   edits the shipped section tool**, so `ClipperCursor`'s drag behaviour needs re-checking in this diff.
+   Rejected a second `SectionBoxDragManager` (~180 of ~230 lines identical, including the
+   window-capture subtlety that needed a paragraph to explain — precisely the measure-cursor
+   duplication the entry above records) and rejected leaving the file in `ClipperCursor/src/` for
+   `SectionBox` to import (smallest diff, but breaks this repo's rule that a component's `src/` holds
+   only managers *that component* owns and frees).
+10. **Inward drags clamp to a min gap; outward drags are unbounded.** `minGap = max(camera.three.near
+    × 2.5, diagonal × 0.001)` — derived from the camera the way `CursorZoom` derives its standoff, so
+    the two cannot drift, and never a bare constant. Dragging a face outward past the model is how you
+    effectively uncrop that side. Rejected additionally clamping outward to the model bbox (arrows never
+    fly off into empty space, but it kills drag-out-to-uncrop and needs a re-clamp on
+    `fragments.list.onItemSet`) and rejected no clamp at all (a face crossing its opposite leaves two
+    non-overlapping half-spaces — the whole model vanishes with no way back but Reset).
+11. **Menu adopts `ToolbarClip`'s shape wholesale**: action list (`Section box` on/off · `Fit to
+    selection` · `Reset to model`), divider, then a live extents pane reading X/Y/Z min→max and size.
+    Nothing new is invented, per the rail's own rule that a new menu is worth abstracting only if it
+    adopts an existing shape. `Fit to selection` is disabled with its reason in a hover pill when
+    nothing is selected, the way `ToolbarVisibility` explains its disabled rows — ⚠️ with `group` on a
+    wrapper `div`, not the button, since a native `<button disabled>` does not reliably match `:hover`.
+    Rejected editable number inputs (a repeatable "level 3 only" crop is genuinely useful, but it is a
+    form: six controlled inputs, commit-on-blur/Enter, typed values clamped against the min gap, and
+    `ToolbarSettings`' re-sync-on-open discipline) and rejected a bare menu-less toggle like
+    `ToolbarFocus` (least code, but a mis-dragged box could only be fixed by toggling off and on).
+12. **`SectionBox` takes a 1-arg constructor plus `world`/`viewport` setters, building its drag manager
+    lazily once both are set.** So `components.get(SectionBox)` needs **no cast**, and `ClipperCursor`
+    stays the single documented holdout rather than gaining a sibling — the debt CONTEXT.md's
+    measure-cursor entry (item 5) worked to close. Constructed inline in `setup/index.ts`, as
+    `CursorSurface`/`GizmoAxis`/`SpotCoordinate` already are.
+
+⚠️ **Known interaction, not designed around:** `OBC.Views` pushes its own plane pair through the same
+`renderer.setPlane` array, so opening a 2D view while a box is live crops by **both**. Left alone —
+that is arguably correct, and forcing an interlock means teaching each feature about the other.
+
+**Already promoted in the same change** — how it works: `docs/feature/bim-viewer.md` § Section box,
+plus the two gizmo forms, the `overlay` API and `AxisDragManager` under § GizmoAxis, and the rail
+entry in `docs/feature/bim-viewport-toolbars.md` (whose activation-pattern table now lists four); why,
+with every rejected alternative above: `docs/adr/0005-section-box-outside-clipper.md`. **Items 1–12
+are all implemented.** **Clear this entry once the branch is merged.**
+
 _No other decisions in flight._
 
 ⚠️ **The three entries above this one are already merged** (`75da737`/PR #10 for the clip-aware

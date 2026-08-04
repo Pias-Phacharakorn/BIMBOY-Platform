@@ -19,6 +19,7 @@ import {
 import { setupClipperCursor } from "../ClipperCursor";
 import { AreaMeasureCursor, LengthMeasureCursor } from "../MeasureCursor";
 import { GizmoAxis } from "../GizmoAxis";
+import { SectionBox } from "../SectionBox";
 import { PropertyTable } from "../PropertyTable";
 import { SpotCoordinate } from "../SpotCoordinate";
 import { CursorSurface } from "../CursorSurface";
@@ -56,6 +57,13 @@ export const setupComponents = async () => {
   cursorZoom.world = world
 
   setupClipperCursor(components, world, viewport)
+
+  // A crop volume, not a pointer tool: it never sets bimStore.activeTool, so it composes with
+  // the section planes and the measure tools rather than excluding them.
+  const sectionBox = new SectionBox(components)
+  sectionBox.world = world
+  sectionBox.viewport = viewport
+
   setupSmartViews(components)
   setupViews(components, world)
 

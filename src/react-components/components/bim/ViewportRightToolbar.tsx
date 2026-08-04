@@ -3,6 +3,7 @@ import * as OBF from "@thatopen/components-front";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { ToolbarMeasure } from "./ToolbarMeasure";
 import { ToolbarClip } from "./ToolbarClip";
+import { ToolbarSectionBox } from "./ToolbarSectionBox";
 import { ToolbarCoordinate } from "./ToolbarCoordinate";
 
 export function ViewportRightToolbar() {
@@ -70,6 +71,9 @@ export function ViewportRightToolbar() {
       <div className="flex flex-col gap-1.5 p-1 border border-border bg-surface/94 rounded-[14px] backdrop-blur-md">
         <ToolbarMeasure />
         <ToolbarClip />
+        {/* Next to Clip because both are sectioning — but note it drives no activeTool, so it
+            is exempt from the FX suppression above and coexists with the other three. */}
+        <ToolbarSectionBox />
         <ToolbarCoordinate />
       </div>
     </div>

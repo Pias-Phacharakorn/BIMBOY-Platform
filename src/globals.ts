@@ -25,6 +25,7 @@ export const appIcons = {
   LAYOUT: "tabler:layout-filled",
   RULER: "solar:ruler-bold",
   CLIPPING: "fluent:cut-16-filled",
+  SECTIONBOX: "mdi:cube-outline",
   SETTINGS: "mdi:cog-outline",
   TASK: "mdi:file-check-outline",
   EXPAND: "eva:expand-fill",
