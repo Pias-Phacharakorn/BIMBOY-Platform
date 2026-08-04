@@ -11,7 +11,6 @@ export * from "./minimap"
 export * from "./smart-views"
 export * from "./views"
 export * from "./hoverer"
-export * from "./surface-measure-cursor"
 
 
 
