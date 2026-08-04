@@ -22,6 +22,7 @@ import { GizmoAxis } from "../GizmoAxis";
 import { PropertyTable } from "../PropertyTable";
 import { SpotCoordinate } from "../SpotCoordinate";
 import { CursorSurface } from "../CursorSurface";
+import { CursorZoom } from "../CursorZoom";
 import { GisLayers } from "../GisLayers";
 import { DrawingEditorSetup } from "../DrawingEditorSetup";
 
@@ -49,6 +50,10 @@ export const setupComponents = async () => {
   // Shared overlay-gizmo service. Must have its world before any consumer creates a gizmo.
   const gizmoAxis = new GizmoAxis(components)
   gizmoAxis.world = world
+
+  // Navigation feel, not a tool: no toolbar entry, always on, idles outside Orbit mode.
+  const cursorZoom = new CursorZoom(components)
+  cursorZoom.world = world
 
   setupClipperCursor(components, world, viewport)
   setupSmartViews(components)

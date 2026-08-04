@@ -207,11 +207,237 @@ smooth on the same models. Its `world.meshes` is empty.
    flicker over `CursorSurface`. Left alone deliberately; suppressing it means reaching into the
    measurer's private `_vertexPicker` or CSS-targeting an unclassed inline-styled div.
 
+## In flight — Navisworks-like navigation: the surface under the cursor bounds the zoom
+
+Zooming pushes the camera **through** whatever it is aimed at and keeps going. Not a missing
+feature — a vendor default. `SimpleCamera.newCameraControls()` already ships
+`dollyToCursor = true` (so zoom *does* aim at the cursor) but also `infinityDolly = true`, and
+`_dollyInternal` reads:
+
+```js
+const distance        = this._sphericalEnd.radius * Math.pow(0.95, -delta * this.dollySpeed);
+const clampedDistance = clamp(distance, this.minDistance, this.maxDistance);
+if (this.infinityDolly && this.dollyToCursor) this._dollyToNoClamp(distance, true);        // clamp BYPASSED
+else                                          this._dollyToNoClamp(clampedDistance, true); // clamp honoured
+```
+
+So with both flags on, `minDistance` is **dead config** — the vendor deliberately keeps the
+distance and pushes the *target* forward instead, which is the infinite fly-through. Navisworks
+instead decelerates into the hovered face and parks just off it.
+
+**Terminology** (used in the code and the guide): the **hover pivot** is the controls target moved
+onto the raycast hit; the **zoom standoff** is the gap that must survive between camera and hovered
+surface; the **clamp window** is the wheel burst during which `minDistance` is raised; the
+**baseline** is the per-`CameraControls`-instance snapshot of the vendor's own config.
+
+1. **Zoom step scaling needs no code — it falls out of the pivot.** The dolly is *multiplicative*
+   (`radius * 0.95^-delta`), so the absolute stride is already proportional to `radius`: big
+   strides far out, fine nudges up close. That only *feels* right if `radius` measures the
+   distance to what the user is looking at, which is exactly what moving the pivot onto the hovered
+   surface achieves. Rejected driving `dollySpeed` dynamically per wheel event — it would fight a
+   scaling the vendor already applies, and double-scale the step.
+2. **Pivot and clamp use two different mechanisms, because `setOrbitPoint()` is animation-unsafe.**
+   The vendor's own contract: *"SHOULD NOT RUN DURING ANIMATIONS."* With `smoothTime = 0.2`, a wheel
+   burst **is** an animation. So the **pivot** moves via `setOrbitPoint(hit)` on `pointerdown`, where
+   controls are at rest and the caveat is satisfied, while the **clamp** never touches the target at
+   all — it only raises `minDistance`, which `update()` re-clamps every frame and is therefore safe
+   mid-dolly. Rejected re-pivoting at each wheel-burst start (most literally Navisworks, and exactly
+   the case the vendor warns about — expect a visible pop).
+3. **`setOrbitPoint` on *any* pointerdown, selection clicks included.** It moves the target
+   **without moving the camera**, so a plain left-click has zero visual effect; it only means a later
+   orbit spins around what was clicked and a later wheel dollies toward it. Rejected deferring to
+   camera-controls' `controlstart` + `currentAction === ACTION.ROTATE` (purer "pivot only affects
+   orbiting", but fires once `controls.active` is already true — back into the animation caveat) and
+   middle-drag-only (leaves left-drag orbiters with nothing).
+4. **The clamp is trigonometric, not "stop at the pivot".** Because the pivot may be stale from an
+   earlier click while `dollyToCursor` walks the camera along the *cursor* ray, with hit distance
+   `dHit` and `θ` = angle between cursor ray and the camera→target axis:
+   `minDistance = max(standoff, radius − (dHit − standoff) · cos θ)`. The `cos θ` term is what keeps
+   the stop honest at the edge of a 60° frustum; without it the error runs ~13%. **Zoom-out is never
+   clamped** — the baseline is restored on `rest` and on a miss.
+5. **Raycast lazily: wheel-burst start + pointerdown only.** Zero raycasts while merely hovering,
+   consistent with ADR-0003's bias against per-`pointermove` picking cost. Freshness *within* a burst
+   does not matter, because `minDistance` has already been computed for that burst. `OBF.Hoverer`
+   was evaluated as a free hit source and **cannot** serve: it exposes no point/distance (only
+   `onHoverStarted`/`onHoverEnded`, private `_localId`) and fires on a `delay` *after* the mouse
+   stops. Rejected rAF-throttled continuous raycasting (exact on the first tick; pays on every
+   frame the mouse moves even if the user never scrolls) and a hot/cold hybrid (best feel, more
+   state to test).
+6. **⚠️ The 1 m near plane is what actually decides "how close".** Vendor
+   `newCameraPerspective()` is `PerspectiveCamera(60, aspect, 1, 1000)` — geometry within 1 m of the
+   camera is clipped, so parking 25 cm off a wall would render the wall *invisible* and you would see
+   straight through the surface you stopped at. `near` drops to **0.1** and the standoff is **0.25 m**.
+   Accepted cost: depth ratio goes 1:1,000 → 1:10,000, so distant coplanar faces are likelier to
+   z-fight and depth-based postproduction (outlines/AO) gets marginally noisier. Rejected `near = 0.01`
+   + 5 cm standoff (1:100,000 — real z-fighting risk across this model's coplanar faces) and leaving
+   `near` alone with a 1.2 m standoff (zero risk, but stops too far out to inspect a joint).
+   `newCameraOrtho()` is already `0.1` and needs nothing.
+7. **The near patch belongs to engine bootstrap, applied per camera instance.** It cannot be a single
+   static line: **every `OBC.View` constructs its own `OrthoPerspectiveCamera`**, so each 2D view
+   carries a fresh near=1 perspective camera, and `Views2DList.applyPerspectivePlanCamera` flips plan
+   views into exactly that camera. So `create-world.ts` calls `applyCameraDepthRange(camera)` and
+   re-calls it from `world.onCameraChanged`. Depth range is global render config (postproduction and
+   the minimap read it), so burying it in a navigation component would hide it; the component instead
+   *derives* `standoff = max(0.25, camera.three.near * 2.5)` so the two cannot drift.
+8. **A component owns the controls config, because three things overwrite it today.**
+   `OrbitMode.activateOrbitControls()` resets `minDistance = 1` / `maxDistance = 300` /
+   `truckSpeed = 2` on **every** `mode.set()`; `Views2DList` open/close swaps `world.camera` for a
+   whole new `CameraControls` instance; `GisLayer3d` already patches `maxDistance = 100000` behind
+   everyone's back. So the component snapshots the baseline per controls instance, re-applies on
+   `world.onCameraChanged` and on nav-mode/projection change, and restores on disable/dispose.
+   Rejected patching once in `create-world.ts` (the first plan-view open silently kills the feature)
+   and subclassing `OrbitMode`/`OrthoPerspectiveCamera` (robust against vendor resets, but forks
+   vendor navigation code — the thing the clip-aware raycaster and ADR-0003 worked to avoid).
+9. **Orbit mode only; clamp is perspective-only.** `_zoomInternal` (what the wheel maps to in
+   orthographic) never consults `minDistance` at all, so ortho gets pivot + step scaling and no clamp
+   — a limitation of the vendor, not a decision. **FirstPerson** is exempt by design (a walkthrough
+   must pass through walls) and **Plan** mode is exempt (2D views, no orbit). Outside Orbit the
+   component restores the baseline and idles.
+10. **Always-on, no toggle.** Wired in `setup/index.ts` like the hoverer/highlighter — it is a
+    navigation-feel fix, and the fly-through reads as a bug rather than a mode anyone would ask back.
+    ⚠️ **Known limitation:** you can no longer wheel *into* a sealed volume (inside a closed duct, a
+    room seen from outside); the escape hatches are FirstPerson mode or a section plane. Rejected a
+    `ToolbarSettings` checkbox + `uiStore` field, and a persisted per-user preference (no other
+    viewer preference is persisted today).
+
+### Pivot indicator — the green dot
+
+Nothing tells the user *what* the camera is bounded by. Same branch, same feature: a small green dot
+at the anchor, shown while zooming and while rotating (reference screenshot: a ~7px olive dot sitting
+on a soffit face).
+
+11. **Context-sensitive anchor, because zoom and rotate do not share one.** The two coincide only
+    after a click — scroll without clicking and the pivot is stale from an earlier click while zoom
+    converges on the hovered face. So the dot marks **the hovered hit while zooming** (already
+    raycast for the clamp, so it costs nothing extra) and **the pivot, `controls.getTarget()`, while
+    rotating**. Each gesture's dot answers the question that gesture actually raises. Rejected
+    always showing the true pivot (one meaning, zero raycasts — but while zooming with a stale pivot
+    the dot floats in mid-air instead of on the element being approached, the opposite of
+    reassuring) and always showing the hovered point (during a rotate the mouse is dragging, so the
+    dot would slide across the model instead of marking the fixed point being orbited).
+12. **A `CSS2DObject`, not WebGL — the renderer already drives one.** `OBF.PostproductionRenderer`
+    extends the front package's `RendererWith2D`, which owns `three2D: CSS2DRenderer`; that is why
+    `surface-measure-cursor`'s pill labels render at all. So a DOM dot needs **no render pass, no
+    material, and no per-frame scaling** — a DOM element is screen-constant by nature and always
+    drawn above the canvas. ⚠️ **Consequence, deliberate:** CSS2D has no depth test, so the dot
+    shows *through* geometry — correct for a pivot indicator (Navisworks does the same), wrong if it
+    were ever meant to read as on-surface paint. `pointer-events: none` is mandatory, and teardown
+    must remove the element from the DOM (precedent: `surface-measure-cursor._disposeMeasurement`).
+    Rejected generalising `GizmoAxis` (its overlay scene, clipping-suspended pass and `_scaleAt`
+    screen-constant sizing are exactly right, and its own doc invites a second consumer — but it
+    would need a non-axis shape path plus a dummy `follow` Object3D, all to re-earn what a `<div>`
+    gets free) and an own `THREE` mesh in the main scene (`CursorSurface`-style, but that one is
+    **world**-sized at a fixed 0.6 m radius, so it balloons up close and vanishes at distance; this
+    would have to duplicate `_scaleAt` *and* would be subject to the renderer's clipping planes).
+13. **⚠️ The wheel emits no `controlstart`/`controlend`, so the two gestures end differently.**
+    Vendor footnote: *"`mouseButtons.wheel` … uses scroll-event internally, and scroll-event happens
+    intermittently. That means 'start' and 'end' cannot be detected."* So **rotate** uses
+    `controlstart` + `controls.currentAction === ACTION.ROTATE` and ends cleanly on `controlend`,
+    while **zoom** shows on the wheel event `CursorZoom` already handles and ends on an idle timer.
+    Detecting the action needs `CameraControls`' `ACTION` enum as a **runtime** import — `index.ts`
+    currently imports the type only.
+14. **Fade, don't blink: 80 ms in, 500 ms hold after the gesture, then out.** A fast scroll under an
+    instant-hide rule reads as a rendering glitch rather than feedback, and the transition is free in
+    CSS on a DOM node. Rejected instant hide (simplest state machine, blinks) and sticky-until-anchor-
+    changes (closest to Navisworks with its orbit tool held, but leaves a permanent dot on the model
+    during ordinary review, sitting under the measure tools' own cursors).
+15. **Suppressed while `CursorSurface` is visible — one check, and it cannot rot.** Every
+    cursor-owning tool already drives that shared guide: `ClipperPlacementManager`,
+    `MeasureHoverManager` (Length + Area), `surface-measure-cursor`, `SpotCoordinate`, and
+    `ViewportWrapper`'s align mode. So any future tool inherits the suppression for free. Rejected
+    enumerating those components' `.enabled` flags (a list that rots the moment a seventh tool
+    lands) and always showing the dot (two indicators fighting for the same pixels inside the measure
+    cursor's disk). Needs a small `get visible()` on `CursorSurface` rather than consumers reaching
+    into `.group.visible`.
+16. **7px round dot, `var(--color-status-ok)`, 1px `rgba(0,0,0,.55)` ring + faint shadow.** The ring
+    is load-bearing, not decoration: flat green loses its edge on a pale ceiling, and BIM models
+    supply every background tone. The token is reachable because Tailwind v4's `@theme {}` in
+    `style.css` emits `--color-status-ok` on `:root`, so no colour is hardcoded — unlike
+    `pdfCompareUtils.ts`, which had to inline `[70,180,110]` with a `~ --color-status-ok` comment
+    because canvas pixel work needs raw RGB. Rejected the flat ringless dot from the screenshot
+    (washes out on similar-toned surfaces) and a dot-plus-outer-ring reticle (reads as a tool cursor
+    and competes with `CursorSurface`'s disk).
+17. **It is a manager inside `CursorZoom`, not a sibling component:**
+    `CursorZoom/src/PivotMarker.ts`, constructed, driven and freed by `CursorZoom/index.ts` — the
+    `ClipperCursor`/`MeasureCursor` idiom, and the repo's own rule that a component's `src/` means
+    "managers the parent owns and frees". `CursorZoom` is the only thing that knows the anchor for
+    both gestures, so ownership is genuinely exclusive. Rejected a registered
+    `bim-components/PivotMarker/` sibling: `ToolbarFocus` and clash navigation could plausibly flash
+    the pivot on jump, but nothing needs it today, and promoting it later is a file move. Rejected
+    inlining it in `index.ts` — that file is already ~300 lines of camera math, and this is
+    presentation.
+
+### ⚠️ Correction — the click-pivot is reverted, and one premise was wrong
+
+Reported symptom: **panning with right-click bounces the camera back.** Not model size — deterministic,
+and caused by items 2/3 above. Two vendor facts were established by reading the library rather than
+its docs, and the first invalidates a premise repeated throughout items 1–10:
+
+18. **`update()` does NOT re-clamp the radius.** The *only* `minDistance`/`maxDistance` clamps in
+    `camera-controls@3.1.2` are `dollyTo` (`camera-controls.module.js:1451`) and `_dollyInternal`
+    (`:2501`). `setLookAt` writes `_sphericalEnd` directly (`:1740`) and is never clamped — which is
+    why ViewCube and clash navigation never misbehaved. So the "safe to write mid-dolly because
+    `update()` re-clamps every frame" reasoning is **wrong**; writing `minDistance` is safe for the
+    simpler reason that it touches neither target nor position, and only affects the *next* dolly
+    computation. The `Math.min(baseline, distance)` restore guard is therefore unnecessary rather
+    than load-bearing (harmless, kept only as belt-and-braces).
+19. **`setOrbitPoint()` is the sole cause of both bugs, so the click-pivot is deleted.** It calls
+    `dollyTo(distance)` internally (`:1900`), which clamps against our raised `minDistance` **while
+    computing the focal offset from the unclamped distance** — so clicking something 0.3 m away with
+    a 3.2 m clamp standing yanked the camera backwards. Right-click made it obvious only because a
+    pan follows. Second, quieter bug: `setOrbitPoint` works by **`setFocalOffset`**, and `setLookAt`
+    never clears it (only `fitToSphere` does, `:1717`), so `view-cube.ts`, `ClashList.tsx` and
+    `MiniMapCameraManager` would all have inherited a lateral shift — zero for a dead-centre click,
+    up to half a view-width near the frame edge. **Reverted rather than fixed:** the alternative was
+    releasing the clamp before pivoting *plus* zeroing the focal offset at four unrelated call
+    sites, i.e. owning a vendor side effect across the whole camera surface. What survives is the
+    clamp and the dot; what is lost is orbit-around-what-you-clicked — which `viewer.crais.io`, the
+    reference the developer likes, does not do either. This deletes `_onPointerDown`,
+    `_pivotOnHoveredSurface`, the pointerdown listener and `DOLLY_SETTLE_MS`.
+20. **The clamp must be released when a burst ends, or it silently breaks Focus.** `fitToSphere`
+    calls `dollyTo(distanceToFit)` (`:1708`), so a `minDistance` left standing at 3.2 m clamps
+    `camera.fitToItems()` — press Focus on a small element after zooming in and it frames far too
+    wide. Same for `Views2DList.applyPerspectivePlanCamera`. Release is on camera-controls' **`rest`**
+    event (fires once damped motion drops below `restThreshold` 0.01, i.e. when the camera has
+    stopped where the clamp put it) and goes to **`standoff`**, not the snapshot baseline — looser
+    than both that and `OrbitMode`'s `1`, so it can never block a fit again. Rejected an idle timer
+    after the last wheel event (can fire mid-glide, letting the camera slip past the standoff) and
+    clearing the clamp at every other gesture's start (means guarding every present *and future* call
+    site — exactly how this bug got in).
+21. **The dot keeps marking the true pivot during a rotate, mid-air included.** With no click-pivot
+    the target is usually wherever `fitToItems`/ViewCube left it — often the model centre, floating in
+    space. Shown anyway, because that *is* what the camera spins around, and CSS2D's lack of depth
+    testing keeps it visible through geometry, as Revit's and Navisworks' own pivot markers are.
+    Rejected showing the dot only while zooming (drops half the request) and raycasting the hovered
+    surface at rotate start (always lands on geometry, but the camera does not orbit that point — the
+    dot would be lying).
+22. **`smoothTime` 0.2 → 0.25, and that is the *only* tuning difference from crais.** Their published
+    stack analysis lists `truckSpeed 2`, `dollySpeed 1`, `azimuth/polarRotateSpeed 1`,
+    `draggingSmoothTime 0.125`, `restThreshold 0.01` — **every one of those is the camera-controls
+    default**, which this app already has. `smoothTime` is the exception: the library defaults to
+    0.25 and OBC's `newCameraControls` overrides it to 0.2. Note also that crais keeps `near = 1` and
+    has neither a surface clamp nor a click-pivot, so "the camera feel they like" is close to stock
+    OBC — worth remembering if the clamp is ever reported as strange too.
+23. **Navigation-mode switching stays out of scope.** crais exposes Orbit/Fly/Drone; this app has
+    OBC's Orbit/FirstPerson/Plan and no UI to switch (only projection, in `ToolbarSettings`). Its own
+    branch: the switcher decides per-mode clamp behaviour and FirstPerson speed at building scale,
+    and OBC has no drone mode at all (`addCustomNavigationMode` + key handling).
+
+**Already promoted in the same change** — how it works: `docs/feature/bim-viewer.md` § Camera
+navigation (cursor-bounded zoom + hover pivot), plus the near-plane entry under Gotchas; why, with
+every rejected alternative above: `docs/adr/0004-cursor-bounded-navigation.md`. Items **1–17 are all
+implemented** — the guide also covers the dot under § Camera navigation → The pivot dot. The ADR
+stops at item 10 deliberately: nothing rejected for the indicator carries lasting cost, so the guide
+alone is enough (per `docs/adr/README.md`, "skip the ADR when the guide alone is enough"). **Clear
+this entry once the branch is merged.**
+
 _No other decisions in flight._
 
-⚠️ **Both entries above this one are already merged** (`407e47e`/PR #10 and `2347cdf`/PR #9) and
-the guides have absorbed them — the staging buffer is stale. Promoting and clearing those two is
-its own job, deliberately not folded into this change.
+⚠️ **The three entries above this one are already merged** (`75da737`/PR #10 for the clip-aware
+raycaster, `2347cdf`/PR #9 for the measure cursors, `eb54f12` for the worker-side snapping) and the
+guides have absorbed them — that part of the staging buffer is stale. Promoting and clearing those
+three is its own job, deliberately not folded into this change. Only the navigation entry
+immediately above is genuinely in flight.
 
 Recently promoted (for reference — do not re-stage here):
 
