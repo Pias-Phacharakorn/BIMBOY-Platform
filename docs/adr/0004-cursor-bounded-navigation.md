@@ -1,6 +1,6 @@
 # ADR-0004: The surface under the cursor bounds the camera; `infinityDolly` is turned off
 
-**Status:** Accepted
+**Status:** Accepted (Superseded in part by ADR-0006)
 **Date:** 2026-08-04
 **Area:** `docs/feature/bim-viewer.md` § Camera navigation (cursor-bounded zoom + hover pivot)
 

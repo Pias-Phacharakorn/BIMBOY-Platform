@@ -32,6 +32,15 @@ const DOLLY_SETTLE_MS = 300;
 const MAX_DISTANCE_MARGIN = 0.99;
 
 /**
+ * Relative depth change below which a re-anchor is skipped as a no-op.
+ *
+ * ⚠️ **Load-bearing, not an optimisation.** `setTarget` sets `_needsUpdate`, so `update()` emits
+ * another `rest`, which calls straight back into {@link CursorZoom._onRest}. Without a no-op bail
+ * that is an endless `rest` → `setTarget` → `rest` loop, raycasting every frame.
+ */
+const REANCHOR_EPSILON = 0.01;
+
+/**
  * Every action that spins the camera around its target, mouse and touch alike. `currentAction`
  * returns the raw `_state` bitfield, and the vendor tests it bitwise (`(_state & X) === X`) because
  * the touch gestures are compound — `TOUCH_DOLLY_ROTATE` is a rotate too.
@@ -59,17 +68,40 @@ const ROTATE_ACTIONS =
  * and pushes the *target* forward instead. Turning `infinityDolly` off is what brings the clamp
  * to life; everything else here is deciding what to clamp it *to*.
  *
- * **Two mechanisms, because `setOrbitPoint()` is animation-unsafe.** Its own contract says
- * *"SHOULD NOT RUN DURING ANIMATIONS"*, and with `smoothTime = 0.2` a wheel burst **is** an
- * animation. So:
+ * **Two mechanisms, on two different events, because they cannot share one.**
  *
- * - the **pivot** moves via `setOrbitPoint(hit)` on `pointerdown`, where controls are at rest;
- * - the **clamp** never touches the target at all — it only raises `minDistance`, which
- *   `update()` re-clamps every frame and is therefore safe to write mid-dolly.
+ * - The **clamp** raises `minDistance` from the wheel, trigonometrically, because the pivot it sees
+ *   is usually stale. It never touches the target, so it is safe mid-dolly.
+ * - The **pivot** is re-anchored onto the hovered surface's depth along the view axis
+ *   (`controls.setTarget`) on `pointerdown` and on camera-controls' **`rest`** — the only moments
+ *   nothing is animating. `_onRest` carries the full reason; the short version is that `setTarget`
+ *   teleports `radius` behind `update()`'s `_lastDistance` bookkeeping, and doing that with a notch
+ *   still pending sends `dollyToCursor`'s `lerpRatio` to ~9 and lurches the camera.
+ *
+ * ⚠️ **Do not merge them, and do not re-anchor from the wheel.** Three variants were built and each
+ * produced its own artefact: a wheel re-anchor lurches the camera; replacing the trigonometry with a
+ * constant `minDistance` reinstates the fly-through; and re-anchoring on the frozen branch — whether
+ * via the view axis or `setOrbitPoint` — sends the zoom somewhere the user was not pointing. What
+ * remains has one known rough edge instead, documented on `_onRest`: an already-frozen zoom waits for
+ * unrelated motion before it recovers. → ADR-0006.
  *
  * **Zoom step scaling needs no code.** `_dollyInternal` is multiplicative
- * (`radius × 0.95^-delta`), so the stride is already proportional to the distance to the target.
- * Putting the pivot on the hovered surface is the only thing needed to make that feel right.
+ * (`radius × 0.95^-delta`), so the stride is already proportional to the distance to the target;
+ * the `rest` re-anchor is what keeps that distance meaningful between gestures.
+ *
+ * ⚠️ **The freeze this design replaced — recorded so it is never reintroduced.** The clamp used to
+ * be `max(standoff, distance − travel)`. When the hovered surface was farther from the camera than
+ * the target was, `travel > distance`, the bracket went negative, and the `max` floored it at
+ * `standoff` — so instead of stopping, the dolly walked `radius` all the way down to 0.25 m. Once
+ * `minDistance >= radius`, three motion paths switch off at once: `clampedDistance === lastDistance`
+ * (no radius change), `_changedDolly += 0` (and `update()` gates the entire cursor-directed target
+ * shift on `_changedDolly !== 0`), and the vendor's `isMin` escape — the one thing that pushes the
+ * *target* forward once the radius bottoms out — is gated on `infinityDolly`, which we turn off.
+ * Zoom died permanently, in every direction, until a click or Focus reset the radius. The root cause
+ * is that **`minDistance` cannot express a stop lying beyond the target**, so the floor silently
+ * collapsed the radius instead. The `rest` re-anchor is what breaks the deadlock: the radius is
+ * restored to the hovered depth the moment the camera settles — after a rotate as much as a zoom —
+ * so the next burst always has room to move. The floor itself stays, and is harmless now. → ADR-0006.
  *
  * ⚠️ **Known limitation, by design:** you can no longer wheel *into* a sealed volume — inside a
  * closed duct, or a room seen from outside. The escape hatches are FirstPerson mode (exempt, a
@@ -199,6 +231,9 @@ export class CursorZoom extends OBC.Component implements OBC.Disposable {
     // `control` alone can miss the opening frame of a drag.
     controls.addEventListener("controlstart", this._onRotate);
     controls.addEventListener("control", this._onRotate);
+
+    // The only safe moment to re-anchor the pivot — see `_onRest`.
+    controls.addEventListener("rest", this._onRest);
   };
 
   private _releaseControls() {
@@ -211,6 +246,7 @@ export class CursorZoom extends OBC.Component implements OBC.Disposable {
     try {
       controls.removeEventListener("controlstart", this._onRotate);
       controls.removeEventListener("control", this._onRotate);
+      controls.removeEventListener("rest", this._onRest);
       controls.infinityDolly = baseline.infinityDolly;
       // ⚠️ Never restore a `minDistance` larger than where the camera already is: `update()`
       // clamps distance into `[minDistance, maxDistance]` every frame, so a bigger value would
@@ -271,9 +307,15 @@ export class CursorZoom extends OBC.Component implements OBC.Disposable {
   // ─── Gestures ──────────────────────────────────────────────────────────────
 
   /**
-   * Moves the pivot onto whatever was just clicked. `setOrbitPoint` keeps the camera **where it
-   * is** and only recomputes the target, so a plain selection click has no visual effect — it
-   * just means the next orbit spins around what you picked, and the next wheel dollies toward it.
+   * Re-anchors the pivot onto whatever was just clicked, so a later orbit spins around it and a
+   * later wheel dollies toward it. Has no visual effect: {@link CursorZoom._reanchorPivot} keeps
+   * the target on the current view axis, so the camera neither moves nor turns.
+   *
+   * ⚠️ It used to call `setOrbitPoint`, which caused the right-click-pan bounce: that method ends
+   * with `dollyTo(distance, false)`, clamped against `minDistance` while the focal offset is
+   * computed from the *unclamped* distance. It also sets a focal offset that only `fitToSphere`
+   * ever clears — never `setLookAt` — so `view-cube.ts`, `ClashList.tsx` and
+   * `MiniMapCameraManager` inherited a lateral shift. → ADR-0006.
    */
   private _onPointerDown = () => {
     const controls = this._controls;
@@ -292,12 +334,7 @@ export class CursorZoom extends OBC.Component implements OBC.Disposable {
     const point = await this._castRay();
     // Guard the await: a camera swap may have replaced these controls meanwhile.
     if (!point || this._controls !== controls) return;
-
-    try {
-      controls.setOrbitPoint(point.x, point.y, point.z);
-    } catch {
-      // Controls disposed while the raycast was in flight.
-    }
+    this._reanchorPivot(controls, point, this._standoff());
   }
 
   /**
@@ -357,12 +394,112 @@ export class CursorZoom extends OBC.Component implements OBC.Disposable {
   };
 
   /**
-   * Raises `minDistance` so the dolly runs out exactly one standoff short of the hovered surface.
+   * Releases the clamp and re-anchors the pivot once the camera has settled — the **only** safe
+   * moment to touch the pivot at all.
    *
-   * The trigonometry is what makes it correct with a *stale* pivot: `dollyToCursor` walks the
-   * camera along the **cursor ray**, while `minDistance` bounds `|camera − target|`. Projecting
-   * the travel onto the camera→target axis converts one into the other. Without the `cos θ` term
-   * the stop is ~13% off at the edge of the 60° frustum.
+   * ⚠️ **Why not during a wheel burst.** `update()`'s `dollyToCursor` block derives
+   * `dollyControlAmount = _spherical.radius − _lastDistance` and turns it into
+   * `lerpRatio = (prevRadius − _sphericalEnd.radius) / _sphericalEnd.radius`. `setTarget` teleports
+   * the radius behind `_lastDistance`'s back, so with a notch still pending a 20 → 2 re-anchor makes
+   * `dollyControlAmount` −18 and `lerpRatio` ≈ **9** instead of ≈ 0.05 — the target is lerped nine
+   * times past the cursor and the camera lurches. That is the jerk. `rest` fires only after every
+   * damped delta has fallen under `restThreshold`, so nothing is pending and the block is skipped
+   * entirely (it is gated on `_changedDolly !== 0`).
+   *
+   * It fires after a **rotate** as well as a zoom, which is what recovers a parked camera: park at a
+   * face, spin to another element, and the pivot is re-anchored onto *that* element before the next
+   * wheel event, so `radius` is healthy and the clamp has room to work.
+   *
+   * Raycasting here is cheap — once per settled gesture, not per frame — and needed rather than
+   * reusing the burst's hit, which a rotate has already made stale.
+   *
+   * ⚠️ **Known rough edge, deliberately left:** the vendor emits no `rest` for a notch that moved
+   * nothing, so a zoom that is *already* frozen does not recover here — it waits for some other
+   * motion to produce a `rest`, which is why a parked camera can need several scrolls before it
+   * moves. Two fixes were tried and both were worse: re-anchoring from the wheel jerks the camera,
+   * and doing it via the view axis sends the zoom at screen centre instead of the hovered element.
+   * → ADR-0006.
+   */
+  private _onRest = () => {
+    const controls = this._controls;
+    const navigation = this._navigation();
+    if (!controls?.enabled || !navigation?.orbit || !navigation.perspective) return;
+
+    // Release the clamp the burst left raised, or it silently breaks every `fitToSphere` caller:
+    // that method ends in `dollyTo(distanceToFit)`, which clamps — so a `minDistance` still sitting
+    // at 18 m frames `ToolbarFocus`, `PropertyTable`'s zoom-to-selection and `Views2DList`'s plan
+    // view far too wide. Released to the standoff rather than the vendor baseline, which is looser
+    // than both that and `OrbitMode`'s `1`, so it can never block a fit again. Safe to do here and
+    // nowhere else: the camera has stopped where the clamp put it, and the re-anchor below restores
+    // a healthy radius in the same breath, so releasing cannot resurrect the freeze.
+    controls.minDistance = Math.min(
+      this._standoff(),
+      controls.maxDistance * MAX_DISTANCE_MARGIN,
+    );
+
+    void this._pivotOnHoveredSurface(controls);
+  };
+
+  /**
+   * Re-anchors the orbit target onto the hovered hit's **depth along the current view axis**:
+   * `target = position + axis · (toHit · axis)`.
+   *
+   * The new target stays on the axis the camera is already looking down, so the view direction
+   * does not change and **nothing moves on screen**. What changes is `radius`: it becomes the
+   * depth of whatever is under the cursor. That is the premise the whole design rests on — the
+   * dolly stride is `radius × 0.95^-delta`, so it only feels right when `radius` measures the
+   * distance to what you are looking at (ADR-0004 item 1), and it is what keeps `minDistance`
+   * from ever meeting `radius` (ADR-0006).
+   *
+   * `setTarget` is `getPosition()` + `setLookAt()`, and `setLookAt` writes `_sphericalEnd`
+   * directly, is never clamped, and sets no focal offset — which is exactly why this is safe
+   * where `setOrbitPoint` was not.
+   *
+   * ⚠️ Callers must only invoke this at a true wheel-burst start or on pointerdown. It rewrites
+   * `_spherical` *and* `_sphericalEnd`, so calling it mid-dolly cancels that notch.
+   */
+  private _reanchorPivot(controls: CameraControls, hit: THREE.Vector3, standoff: number) {
+    try {
+      const position = controls.getPosition(new THREE.Vector3());
+      const target = controls.getTarget(new THREE.Vector3());
+
+      // The axis `minDistance` actually measures along.
+      const axis = target.sub(position);
+      if (axis.lengthSq() < 1e-8) {
+        // Target has collapsed onto the camera — the very state this fix repairs. Fall back to
+        // the camera's own forward vector.
+        const three = this._world?.camera.three as THREE.PerspectiveCamera | undefined;
+        if (!three) return;
+        three.getWorldDirection(axis);
+      }
+      axis.normalize();
+
+      const depth = hit.clone().sub(position).dot(axis);
+      // Re-anchoring at or inside the standoff would put the target on the camera and drive
+      // radius → 0 — the same collapse by another route.
+      if (!Number.isFinite(depth) || depth <= standoff) return;
+
+      // ⚠️ Load-bearing, not an optimisation: `setTarget` sets `_needsUpdate`, which makes `update()`
+      // emit another `rest`, which calls straight back in here. Without a no-op bail that is an
+      // endless rest→setTarget→rest loop raycasting every frame. 1% of depth is far below anything
+      // visible and far above float noise.
+      if (Math.abs(depth - controls.distance) <= depth * REANCHOR_EPSILON) return;
+
+      const next = position.clone().addScaledVector(axis, depth);
+      controls.setTarget(next.x, next.y, next.z, false);
+    } catch {
+      // Controls disposed while the raycast was in flight.
+    }
+  }
+
+  /**
+   * Raises `minDistance` so the dolly runs out one standoff short of the hovered surface.
+   *
+   * ⚠️ **This path must never re-anchor the pivot** — see `_onRest`. So the pivot it works with is
+   * usually stale, which is exactly what the trigonometry is for: `dollyToCursor` walks the camera
+   * along the **cursor ray**, while `minDistance` bounds `|camera − target|`, so the travel is
+   * projected onto the camera→target axis. Without the `cos θ` term the stop is ~13% off at the
+   * edge of the 60° frustum.
    */
   private async _clampToHoveredSurface(controls: CameraControls) {
     const point = await this._castRay();
@@ -370,16 +507,14 @@ export class CursorZoom extends OBC.Component implements OBC.Disposable {
     if (this._controls !== controls) return;
 
     try {
-      // Cursor over empty space: fall back to the loosest bound we ever apply, so zooming
-      // toward the existing pivot still works. Zoom-*out* is never bounded by `minDistance`.
       if (!point) {
         this._marker.hide();
+        // Cursor over empty space: the loosest bound we ever apply, so zooming toward the existing
+        // pivot still works. Zoom-*out* is never bounded by `minDistance`.
         controls.minDistance = Math.min(standoff, controls.maxDistance * MAX_DISTANCE_MARGIN);
         return;
       }
 
-      // The dot marks the face this zoom will stop against — the hit is already in hand for the
-      // clamp, so showing it costs nothing.
       if (this._markerSuppressed()) this._marker.hide();
       else this._marker.showAt(point);
 
@@ -389,7 +524,7 @@ export class CursorZoom extends OBC.Component implements OBC.Disposable {
       const toHit = point.clone().sub(position);
       const hitDistance = toHit.length();
       // Already parked at the surface. Leaving the clamp alone matters: a negative travel would
-      // compute a bound *larger* than the current distance and push the camera back off the face.
+      // compute a bound *larger* than the current distance and push the camera off the face.
       if (hitDistance <= standoff) return;
 
       const axis = target.clone().sub(position);
