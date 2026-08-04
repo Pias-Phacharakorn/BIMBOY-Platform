@@ -1,15 +1,19 @@
-// @ts-nocheck
 import { useState, useEffect, useCallback } from "react";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { Icon } from "@/react-components/components/ui";
 import * as OBF from "@thatopen/components-front";
-import { SurfaceMeasureCursor, SurfaceMeasurement } from "@/bim-components/setup/src/surface-measure-cursor";
+import {
+  SurfaceMeasureCursor,
+  SurfaceMeasurement,
+} from "@/bim-components/SurfaceMeasureCursor";
 
 // ─── Button ──────────────────────────────────────────────────────────────────
 
+type MeasureType = "length" | "angle" | "area" | "surface" | null;
+
 interface SurfaceMeasureButtonProps {
-  activeType: "length" | "angle" | "area" | "surface" | null;
-  setActiveType: (type: "length" | "angle" | "area" | "surface" | null) => void;
+  activeType: MeasureType;
+  setActiveType: (type: MeasureType) => void;
 }
 
 export function SurfaceMeasureButton({ activeType, setActiveType }: SurfaceMeasureButtonProps) {
@@ -129,7 +133,7 @@ export function SurfaceMeasureList() {
         <div className="flex flex-col gap-1 overflow-y-auto scroll-smooth px-2 pb-3 max-h-[240px]">
           {measurements.map((m, index) => {
             const isVisible = visibilityMap.get(m.id) ?? m.visible;
-            const areaText = `~ ${m.area.toFixed(1)} m²`;
+            const areaText = `~ ${m.area.toFixed(2)} m²`;
 
             return (
               <div

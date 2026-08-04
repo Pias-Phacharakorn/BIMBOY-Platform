@@ -5,7 +5,7 @@ import { LengthMeasureButton, LengthMeasureList } from "./LengthMeasure";
 import { AreaMeasureButton, AreaMeasureList } from "./AreaMeasure";
 import { SurfaceMeasureButton, SurfaceMeasureList } from "./SurfaceMeasure";
 import { AreaMeasureCursor, LengthMeasureCursor } from "@/bim-components/MeasureCursor";
-import { SurfaceMeasureCursor } from "@/bim-components/setup/src/surface-measure-cursor";
+import { SurfaceMeasureCursor } from "@/bim-components/SurfaceMeasureCursor";
 
 export function ToolbarMeasure() {
   const { components, world, activeTool } = useBimStore();
@@ -122,14 +122,8 @@ export function ToolbarMeasure() {
               {/* Area Button */}
               <AreaMeasureButton activeType={activeType} setActiveType={setActiveType} />
 
-              {/* Surface — disabled */}
-              <div className="w-full flex items-center justify-between px-3 py-2 text-xs text-muted opacity-50 cursor-not-allowed font-semibold">
-                <div className="flex items-center gap-3">
-                  <Icon name="FOCUS" size={16} />
-                  <span>Surface</span>
-                </div>
-                <span className="text-[9px] uppercase tracking-wider bg-surface-alt border border-border px-1 py-0.5 rounded font-mono">Soon</span>
-              </div>
+              {/* Surface Button */}
+              <SurfaceMeasureButton activeType={activeType} setActiveType={setActiveType} />
             </div>
           </div>
 

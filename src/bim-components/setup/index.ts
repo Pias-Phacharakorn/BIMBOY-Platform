@@ -13,11 +13,11 @@ import {
   setupMinimap,
   setupClipAwareRaycaster,
   setupSmartViews,
-  setupViews,
-  SurfaceMeasureCursor
+  setupViews
 } from "./src";
 import { setupClipperCursor } from "../ClipperCursor";
 import { AreaMeasureCursor, LengthMeasureCursor } from "../MeasureCursor";
+import { SurfaceMeasureCursor } from "../SurfaceMeasureCursor";
 import { GizmoAxis } from "../GizmoAxis";
 import { SectionBox } from "../SectionBox";
 import { PropertyTable } from "../PropertyTable";
