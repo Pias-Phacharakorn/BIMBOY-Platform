@@ -3,6 +3,7 @@ import * as THREE from "three";
 // Relative, not the @/* alias: tsconfig excludes src/bim-components/**, so
 // vite-tsconfig-paths does not rewrite aliases inside this folder. Repo-wide convention here.
 import { AxisDragManager, AxisGizmoHandle, GizmoAxis, framePalette } from "../GizmoAxis";
+import { ClipperFillManager } from "./src/ClipperFillManager";
 import { ClipperOutlineManager } from "./src/ClipperOutlineManager";
 import { ClipperPlacementManager } from "./src/ClipperPlacementManager";
 import { ClipperPlaneState } from "./src/types";
@@ -31,15 +32,21 @@ const suppressDefaultArrow = (plane: any) => {
 /**
  * Interactive section planes on top of `OBC.Clipper`.
  *
- * Each cut plane draws as a bare rectangle outline, and is moved by the one blue arrow on a
- * gizmo sitting in that plane's own frame — never by the plane itself, so a section can't
- * swallow a click meant for an element. The arrow runs along the plane's true normal, so it
- * points where the cut actually goes even on a skewed plane.
+ * Each cut plane draws as a **border band** with an empty interior, fitted to the model's footprint
+ * on that plane, and is moved by the one blue arrow on a gizmo sitting in the plane's own frame.
+ * The arrow runs along the plane's true normal, so it points where the cut actually goes even on a
+ * skewed plane.
+ *
+ * **Clicking another plane's band switches to it** — that band is the plane's own geometry, not an
+ * added icon, and it is select-only via `AxisDragManager`'s `canDrag`, so switching can never nudge
+ * a cut. This is safe only because a band is thin: `ClipperOutlineManager` explains why, and
+ * `AxisDragManager._pickHandle` states the invariant it depends on.
  *
  * This class holds only the state React subscribes to and the policy that coordinates the
  * three managers, each of which owns and frees its own 3D objects:
  *
- * - {@link ClipperOutlineManager} — outlines, their colours and their extent
+ * - {@link ClipperOutlineManager} — the band, the outline, their colours and their extent
+ * - {@link ClipperFillManager} — the solid fill at each cut face, via `OBF.ClipStyler`
  * - {@link AxisDragManager} — pointer handling, hover and the drag itself (shared with
  *   `SectionBox`, which is why this class supplies the plane lookups as callbacks)
  * - {@link ClipperPlacementManager} — place-a-plane-by-clicking mode
@@ -58,13 +65,14 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
   public selectedPlaneId: string | null = null;
 
   public readonly outlines: ClipperOutlineManager;
+  public readonly fills: ClipperFillManager;
   public readonly drag: AxisDragManager;
   public readonly placement: ClipperPlacementManager;
 
   private readonly _world: OBC.World;
   private readonly _components: OBC.Components;
   private readonly _gizmoAxis: GizmoAxis;
-  /** One gizmo handle per plane. Nothing else can reach them. */
+  /** The arrow gizmo per plane, shown for the selected one. Nothing else can reach them. */
   private readonly _gizmos = new Map<string, AxisGizmoHandle>();
   /**
    * One per plane, at the middle of that plane's outline rather than at the point the user
@@ -88,6 +96,7 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     components.add(ClipperCursor.uuid, this);
 
     this.outlines = new ClipperOutlineManager(components);
+    this.fills = new ClipperFillManager(components, world);
     this._gizmoAxis = components.get(GizmoAxis);
 
     this.placement = new ClipperPlacementManager({
@@ -105,11 +114,35 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     this.drag = new AxisDragManager({
       world,
       viewport,
-      pickTargets: () =>
-        [...this._gizmos]
-          .filter(([, handle]) => handle.visible)
-          .map(([planeId, handle]) => ({ mesh: handle.picker, id: planeId })),
-      pickSelectTargets: () => this.outlines.getPickableMeshes(),
+      /**
+       * Exactly **one** target per enabled plane, and which one depends on selection: the
+       * selected plane offers its arrow, every other offers its border band.
+       *
+       * That split is forced by `canDrag`, which is keyed on plane id — offer both and it could
+       * not tell an arrow grab from a band click on the same plane. It also keeps every target
+       * thin: a band is a ring around the footprint perimeter, never a surface over the model,
+       * which is the invariant `AxisDragManager` depends on and cannot check for itself.
+       */
+      pickTargets: () => {
+        const targets: { mesh: THREE.Mesh; id: string }[] = [];
+        for (const planeState of this.planes) {
+          if (!planeState.enabled) continue;
+
+          if (planeState.id === this.selectedPlaneId) {
+            const gizmo = this._gizmos.get(planeState.id);
+            if (gizmo?.visible) targets.push({ mesh: gizmo.picker, id: planeState.id });
+            continue;
+          }
+
+          // Null on a footprint too thin to hold a ring — nothing drawn, so nothing to click.
+          const band = this.outlines.bandMesh(planeState.id);
+          if (band) targets.push({ mesh: band, id: planeState.id });
+        }
+        return targets;
+      },
+      // Only the selected plane's arrow drags. A band takes the click, selects, and stops — so a
+      // click meant to switch planes can never nudge the cut.
+      canDrag: (planeId) => planeId === this.selectedPlaneId,
       isSuspended: () => this.placement.placing,
       getAxis: (planeId) => this._clipper.list.get(planeId)?.normal.clone() ?? null,
       // The gizmo sits at the outline's middle, so that — not the helper — is where the drag
@@ -126,19 +159,30 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
         plane.helper.position.copy(position).sub(this._offset);
         plane.helper.updateMatrix();
         plane.update();
+        // The band and outline live in the overlay, outside GizmoAxis's per-frame follow loop, so
+        // nothing moves them but this call. Skip it and the plane cuts somewhere its own border is
+        // no longer drawn.
+        this.outlines.syncTransform(planeId);
         this._syncAnchor(planeId);
       },
       onSelect: (planeId) => {
         if (this.selectedPlaneId !== planeId) this.selectPlane(planeId);
       },
     });
-    // Hover and drag change how outlines look, but not what React renders.
-    this.drag.onStateChanged.add(() => this._repaintPlaneStates());
+    // Hover and drag change how outlines look, but not what React renders. The fills also learn
+    // here that a drag ended, since the manager infers it from `draggingId` reaching null rather
+    // than being told — see `ClipperFillManager.noteDragState`.
+    this.drag.onStateChanged.add(() => {
+      this._repaintPlaneStates();
+      this.fills.noteDragState(this.drag.draggingId);
+    });
 
     // Loading a model refits every outline, which moves their middles — and the arrows sit at
-    // those middles, so they have to move too.
+    // those middles, so they have to move too. The fills need rebuilding for a different reason:
+    // no plane moved, but there is new geometry for the existing cuts to pass through.
     this.outlines.onFitChanged.add(() => {
       for (const planeState of this.planes) this._syncAnchor(planeState.id);
+      this.fills.refreshAll();
     });
   }
 
@@ -237,8 +281,13 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
 
     this._gizmos.set(planeId, this._gizmoAxis.create({ follow: anchor, palette }));
 
+    // After the plane is in `Clipper.list`, which `createFromClipping` requires.
+    this.fills.add(planeId);
+
     plane.onDisposed.add(() => {
       this.outlines.remove(planeId);
+      // Only drops the bookkeeping — the vendor links plane disposal to the edges' own dispose.
+      this.fills.remove(planeId);
       this._gizmos.get(planeId)?.dispose();
       this._gizmos.delete(planeId);
       this._anchors.delete(planeId);
@@ -266,21 +315,31 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
   }
 
   /**
-   * The outline shows for every enabled plane; the gizmo — and with it the only drag handle
-   * — for the selected one alone.
+   * Band and outline show for every enabled plane. The arrow gizmo — the only drag handle — shows
+   * for the selected one alone, and that is also what decides which of the two things a plane
+   * offers to the pointer (see `pickTargets`).
    */
   private _syncVisibility() {
     for (const planeState of this.planes) {
       const plane = this._clipper.list.get(planeState.id);
-      const showHandles = planeState.enabled && planeState.id === this.selectedPlaneId;
+      const isSelected = planeState.id === this.selectedPlaneId;
 
       if (plane) {
-        plane.visible = planeState.enabled;
+        // Permanently false. Our band and outline live in the overlay now, so all `visible` still
+        // reaches is the vendor's own quad, its helper and its TransformControls arrow — none of
+        // which should ever render. It survives enable/disable too: `SimplePlane.enabled = true`
+        // restores `_visibilityBeforeDisabled`, which was captured as false.
+        plane.visible = false;
         suppressDefaultArrow(plane);
       }
 
+      this.outlines.setVisible(planeState.id, planeState.enabled);
+      // Suspension by `SectioningArbiter` comes through here for free: it drives `togglePlane`,
+      // which lands in this loop, so a suspended cut loses its fill along with its band.
+      this.fills.setVisible(planeState.id, planeState.enabled);
+
       const gizmo = this._gizmos.get(planeState.id);
-      if (gizmo) gizmo.visible = showHandles;
+      if (gizmo) gizmo.visible = planeState.enabled && isSelected;
     }
 
     this._repaintPlaneStates();
@@ -299,6 +358,8 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
         isActive ? "active" : planeState.id === this.selectedPlaneId ? "selected" : "idle",
       );
 
+      // Hovering an unselected plane's band brightens it, so you can see which cut you are about
+      // to switch to before committing. Falls out of the existing `active` state; no extra wiring.
       const gizmo = this._gizmos.get(planeState.id);
       if (gizmo) gizmo.highlighted = isActive;
     }
@@ -320,6 +381,7 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     this._gizmos.clear();
     this._anchors.clear();
     this.outlines.dispose();
+    this.fills.dispose();
 
     this.onDisposed.trigger(ClipperCursor.uuid);
     this.onDisposed.reset();

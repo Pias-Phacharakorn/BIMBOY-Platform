@@ -14,9 +14,12 @@ import { PlaneAxis } from "./axis";
  *   from `AXIS_COLORS`. For a *bounded* face, where the other two axes would be noise: six
  *   three-armed gizmos on one box is six diamonds and eighteen arrows, and on a thin box the
  *   opposing pickers overlap through the middle.
- *
  * ⚠️ Was `"axes"` until the section-plane gizmo moved to the plane's own frame. The old name
  * described a world-**axes**-aligned gizmo, which is the one thing this form is no longer.
+ *
+ * ⚠️ A third `"marker"` form (a small octahedron, select-only) was built and removed: a cut plane
+ * switches by clicking its own border band, so the extra icon had nothing left to do. If a
+ * select-only handle is ever wanted again, `canDrag` on `AxisDragManager` is the half that stayed.
  */
 export type AxisGizmoForm = "plane" | "arrow";
 

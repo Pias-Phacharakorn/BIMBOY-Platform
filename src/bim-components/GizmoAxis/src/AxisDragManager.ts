@@ -10,13 +10,17 @@ export interface AxisDragOptions {
    * `ClipperCursor`, a box face to `SectionBox`.
    */
   pickTargets: () => { mesh: THREE.Mesh; id: string }[];
-  /**
-   * Optional select-only targets (e.g. translucent plane surface quads) that switch selection
-   * when clicked, but do not initiate an axis drag session.
-   */
-  pickSelectTargets?: () => { mesh: THREE.Mesh; id: string }[];
   /** True while something else owns the pointer — dragging stays out of the way. */
   isSuspended: () => boolean;
+  /**
+   * Whether grabbing this id may actually move it. Defaults to `true` when omitted, which is
+   * what `SectionBox` wants — every box face is always draggable.
+   *
+   * `false` makes the handle **select-only**: {@link AxisDragOptions.onSelect} fires and no drag
+   * session starts. That is a distinct outcome from returning `null` out of `getAxis`/`getOrigin`,
+   * which aborts the grab *without* selecting, because those are read before `onSelect` runs.
+   */
+  canDrag?: (id: string) => boolean;
   /** World-space direction this id may slide along. `null` aborts the grab. */
   getAxis: (id: string) => THREE.Vector3 | null;
   /** Where this id sits right now, in world space. `null` aborts the grab. */
@@ -108,10 +112,17 @@ export class AxisDragManager {
       const hit = this._pickHandle(e);
       if (!hit || hit.id !== this._hoveredId) return;
 
+      // ⚠️ Suppressed for a select-only hit as well as for a grab, which is deliberate and was
+      // once a bug. Feeding *model-sized* plane quads in here made this line eat pointerdown
+      // across most of the viewport, killing camera orbit and element selection. The handler was
+      // not the problem — the target was. Everything reachable through `pickTargets` is now a
+      // thin, deliberate handle (a gizmo picker, or a plane's border band), so consuming the
+      // click costs only that handle's own area and buys a clean outcome: selecting a plane
+      // changes the selection and nothing else. Widen a pick target and this becomes a bug again.
       e.preventDefault();
       e.stopPropagation();
 
-      if (hit.isSelectOnly) {
+      if (this._options.canDrag && !this._options.canDrag(hit.id)) {
         this._options.onSelect(hit.id);
         return;
       }
@@ -149,43 +160,37 @@ export class AxisDragManager {
   }
 
   /**
-   * Raycasts grabbable handles and optional select-only plane surface targets.
+   * No occlusion test is needed: the gizmo scene renders with clipping suspended and
+   * `depthTest: false`, so the handle is grabbable wherever it is drawn, even when the model
+   * stands between it and the camera.
+   *
+   * ⚠️ **Every pick target must be a thin, deliberate handle — never a surface spanning the
+   * model.** This is the one invariant this class depends on and cannot check. `_setupListeners`
+   * consumes pointerdown over any hovered target, so a model-sized target eats orbit and element
+   * selection across most of the viewport — which is exactly what happened when a section plane's
+   * full translucent quad was briefly pickable. A gizmo picker qualifies; so does a plane's thin
+   * border band. A quad, a fill, or anything covering the footprint does not.
+   *
+   * Select-only is expressed by {@link AxisDragOptions.canDrag}, not by a second target list.
    */
-  private _pickHandle(
-    e: PointerEvent,
-  ): { id: string; point: THREE.Vector3; isSelectOnly?: boolean } | null {
+  private _pickHandle(e: PointerEvent): { id: string; point: THREE.Vector3 } | null {
     const camera = this._options.world.camera?.three;
     const canvas = this._canvas;
     if (!camera || !canvas) return null;
 
-    const dragTargets = this._options.pickTargets();
-    const selectTargets = this._options.pickSelectTargets ? this._options.pickSelectTargets() : [];
-
-    if (dragTargets.length === 0 && selectTargets.length === 0) return null;
+    const targets = this._options.pickTargets();
+    if (targets.length === 0) return null;
 
     const ndc = this._pointerToNdc(e, canvas);
     if (!ndc) return null;
 
     this._raycaster.setFromCamera(ndc, camera);
+    const owners = new Map(targets.map(({ mesh, id }) => [mesh as THREE.Object3D, id]));
 
-    // Drag handles have higher priority
-    if (dragTargets.length > 0) {
-      const dragOwners = new Map(dragTargets.map(({ mesh, id }) => [mesh as THREE.Object3D, id]));
-      for (const hit of this._raycaster.intersectObjects(dragTargets.map((t) => t.mesh), false)) {
-        const id = dragOwners.get(hit.object);
-        if (id) return { id, point: hit.point.clone(), isSelectOnly: false };
-      }
+    for (const hit of this._raycaster.intersectObjects(targets.map((t) => t.mesh), false)) {
+      const id = owners.get(hit.object);
+      if (id) return { id, point: hit.point.clone() };
     }
-
-    // Select-only targets (translucent plane surface quads) checked next
-    if (selectTargets.length > 0) {
-      const selectOwners = new Map(selectTargets.map(({ mesh, id }) => [mesh as THREE.Object3D, id]));
-      for (const hit of this._raycaster.intersectObjects(selectTargets.map((t) => t.mesh), false)) {
-        const id = selectOwners.get(hit.object);
-        if (id) return { id, point: hit.point.clone(), isSelectOnly: true };
-      }
-    }
-
     return null;
   }
 
