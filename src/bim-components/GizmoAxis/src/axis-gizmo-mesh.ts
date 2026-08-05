@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { AXIS_COLORS, PlaneAxis } from "./axis";
+import { AXIS_COLORS, AXIS_DIRECTIONS, PLANE_AXES, PlaneAxis } from "./axis";
 import { AxisGizmoForm } from "./types";
 
 /**
@@ -16,19 +16,32 @@ const GIZMO_PICK_RADIUS = 0.35;
 /** Draw after everything else in the overlay pass. */
 const GIZMO_RENDER_ORDER = 999;
 /**
- * The grabbable arrow is drawn this much larger than the other two — length, cone and grab
+ * The grabbable arrow is drawn this much larger than the others — length, cone and grab
  * cylinder alike — so the one axis that does something looks like it. The picker scales with
  * it deliberately: what you can grab stays identical to what you can see.
  */
 const GRAB_AXIS_EMPHASIS = 1.5;
+/**
+ * How long the `"plane"` form's two **inert** in-plane arms are, as a fraction of the base
+ * length. With {@link GRAB_AXIS_EMPHASIS} this puts the normal arrow at roughly 3× the arms,
+ * which is what makes "this one moves the cut, those two only show you the surface" legible at
+ * a glance. Only the arms shrink — the grab arm, its cone and its picker are untouched, so
+ * nothing about what is grabbable changes.
+ */
+const IN_PLANE_LENGTH_RATIO = 0.45;
 /** `ConeGeometry` puts its apex at +Y, so this is the direction a cone "points". */
 const CONE_APEX = new THREE.Vector3(0, 1, 0);
 
-const AXIS_DIRECTIONS: Record<PlaneAxis, THREE.Vector3> = {
-  x: new THREE.Vector3(1, 0, 0),
-  y: new THREE.Vector3(0, 1, 0),
-  z: new THREE.Vector3(0, 0, 1),
-};
+/**
+ * The local axis a `"plane"` gizmo's grabbable arrow runs along — the plane's normal.
+ *
+ * ⚠️ **A vendor coupling, pinned here so it is stated exactly once.** `OBC.SimplePlane` builds
+ * its helper with `helper.lookAt(this.normal)` (`@thatopen/components/dist/index.mjs:17628`),
+ * and `Object3D.lookAt` aims local **+Z** at its target. A `"plane"` gizmo takes that helper's
+ * rotation, so its local +Z is the cut direction. If OBC ever changes that convention, this
+ * constant is the only place that has to move.
+ */
+const PLANE_NORMAL_AXIS: PlaneAxis = "z";
 
 export interface GizmoMesh {
   group: THREE.Group;
@@ -39,51 +52,83 @@ export interface GizmoMesh {
    * gizmo — recolouring one can never leak into another.
    */
   grabMaterials: (THREE.LineBasicMaterial | THREE.MeshBasicMaterial)[];
+  /**
+   * The colour the grabbable arrow was built in, so dropping a hover highlight can restore it
+   * without re-deriving it.
+   *
+   * ⚠️ Load-bearing: a `"plane"` gizmo's colours come from its caller's frame, not from an axis
+   * letter, so there is nothing to look the colour up *in* afterwards. Re-deriving it from
+   * `AXIS_COLORS[grabAxis]` would repaint a skewed plane's grey arrow red on un-hover.
+   */
+  grabColor: number;
+}
+
+export interface BuildAxisGizmoOptions {
+  /** Defaults to `"plane"`, which is what the section planes use. */
+  form?: AxisGizmoForm;
+  /** Required by `"arrow"`; ignored by `"plane"`, which always grabs {@link PLANE_NORMAL_AXIS}. */
+  grabAxis?: PlaneAxis;
+  /** Which way an `"arrow"` points. Ignored by `"plane"`, which is symmetric. Defaults to `1`. */
+  direction?: 1 | -1;
+  /**
+   * Colour per **local** axis. Defaults to {@link AXIS_COLORS}, which is already correct for
+   * `"arrow"` — its axes are world axes.
+   *
+   * `"plane"` must supply one, because a gizmo drawn in local space cannot know where its
+   * rotation sends those axes: only the caller holds the frame. `axis.ts`'s `framePalette()`
+   * builds it.
+   */
+  palette?: Record<PlaneAxis, number>;
 }
 
 /**
- * Builds one axis gizmo in either of two forms, and an invisible grab cylinder around
- * `grabAxis`.
+ * Builds one axis gizmo in either of two forms, and an invisible grab cylinder around the
+ * grabbable arrow.
  *
- * - `"axes"` — three double-headed arrows and a centre diamond, the picker spanning the full
- *   length in both directions. What a cut *plane* wants: the plane is unbounded, so all three
- *   world axes are worth drawing.
- * - `"arrow"` — only `grabAxis`, only towards `direction`, no diamond, and the picker offset
- *   so it covers **only** that side. What a bounded *face* wants: six of the `"axes"` form on
- *   one box is six diamonds and eighteen arrows, and on a thin box the +X and −X pickers would
- *   overlap through the middle, making the near face's handle grab the far one.
+ * - `"plane"` — a long double-headed arrow along local +Z plus two short inert arms on local X
+ *   and Y, and a centre diamond. The caller keeps this group rotated with the plane, so +Z is
+ *   the cut normal: the arrow points exactly where the plane cuts, and the arms and diamond lie
+ *   **in** the cut surface. `grabAxis` is ignored — see {@link PLANE_NORMAL_AXIS} — and
+ *   `palette` is required, since only the caller knows where its rotation aims each local axis.
+ * - `"arrow"` — only `grabAxis`, only towards `direction`, no diamond, and the picker offset so
+ *   it covers **only** that side. What a bounded *face* wants: six three-armed gizmos on one box
+ *   is six diamonds and eighteen arrows, and on a thin box the +X and −X pickers would overlap
+ *   through the middle, making the near face's handle grab the far one.
  *
  * Pure geometry — it touches no scene and holds no state, so the caller owns whatever it
  * returns and is responsible for disposing it. Every material uses `depthTest: false`
  * because this is rendered in a second pass with clipping suspended, on top of the model.
- *
- * The group carries no rotation: the caller keeps it world-axis-aligned, so green always
- * runs along X, blue up along Y and red along Z. That is what lets a plane's outline colour
- * name the very arrow that moves it.
  */
-export function buildAxisGizmo(
-  grabAxis: PlaneAxis,
-  form: AxisGizmoForm = "axes",
-  direction: 1 | -1 = 1,
-): GizmoMesh {
+export function buildAxisGizmo({
+  form = "plane",
+  grabAxis = PLANE_NORMAL_AXIS,
+  direction = 1,
+  palette = AXIS_COLORS,
+}: BuildAxisGizmoOptions = {}): GizmoMesh {
   const group = new THREE.Group();
   group.name = "BIMBOY_Gizmo";
+
+  const isPlane = form === "plane";
+  // The plane form always grabs the normal; a caller's grabAxis means nothing there.
+  const grabbable = isPlane ? PLANE_NORMAL_AXIS : grabAxis;
 
   const matOpts = { depthTest: false, depthWrite: false };
 
   // Only the axes actually drawn get materials, so the single-arrow form allocates one pair
   // rather than three and has nothing spare to dispose.
-  const drawnAxes: PlaneAxis[] = form === "axes" ? ["x", "y", "z"] : [grabAxis];
+  const drawnAxes: readonly PlaneAxis[] = isPlane ? PLANE_AXES : [grabbable];
   const lineMaterials = new Map<PlaneAxis, THREE.LineBasicMaterial>();
   const coneMaterials = new Map<PlaneAxis, THREE.MeshBasicMaterial>();
   for (const axis of drawnAxes) {
-    lineMaterials.set(axis, new THREE.LineBasicMaterial({ color: AXIS_COLORS[axis], ...matOpts }));
-    coneMaterials.set(axis, new THREE.MeshBasicMaterial({ color: AXIS_COLORS[axis], ...matOpts }));
+    lineMaterials.set(axis, new THREE.LineBasicMaterial({ color: palette[axis], ...matOpts }));
+    coneMaterials.set(axis, new THREE.MeshBasicMaterial({ color: palette[axis], ...matOpts }));
   }
 
   // The diamond marks a centre the arrow form does not have — its origin sits on the face it
-  // moves, not in the middle of anything.
-  if (form === "axes") {
+  // moves, not in the middle of anything. It lies in local XY, which for the plane form is the
+  // cut surface itself, so it reads as a scrap of the plane rather than a floating badge.
+  // Accepted consequence: being a flat quad, it disappears when the plane is sighted edge-on.
+  if (isPlane) {
     const diamond = new THREE.Mesh(
       new THREE.PlaneGeometry(GIZMO_DIAMOND_SIZE, GIZMO_DIAMOND_SIZE),
       new THREE.MeshBasicMaterial({
@@ -101,8 +146,10 @@ export function buildAxisGizmo(
   }
 
   const createAxis = (axis: PlaneAxis) => {
-    // Only the grabbable arrow is emphasised; the other two stay at their base size.
-    const emphasis = axis === grabAxis ? GRAB_AXIS_EMPHASIS : 1;
+    // Only the grabbable arrow is emphasised. In the plane form the other two shrink further
+    // still, since they are inert and exist only to show which surface is being cut.
+    const emphasis =
+      axis === grabbable ? GRAB_AXIS_EMPHASIS : isPlane ? IN_PLANE_LENGTH_RATIO : 1;
     const length = GIZMO_LENGTH * emphasis;
     const coneHeight = GIZMO_CONE_HEIGHT * emphasis;
     const coneGeometry = new THREE.ConeGeometry(GIZMO_CONE_RADIUS * emphasis, coneHeight, 8);
@@ -133,7 +180,7 @@ export function buildAxisGizmo(
       group.add(segments);
     };
 
-    if (form === "axes") {
+    if (isPlane) {
       line(
         dir.clone().multiplyScalar(-length + coneHeight),
         dir.clone().multiplyScalar(length - coneHeight),
@@ -153,25 +200,25 @@ export function buildAxisGizmo(
 
   for (const axis of drawnAxes) createAxis(axis);
 
-  // Grab handle: wraps only the arrow matching the plane's colour, so colour names the
-  // plane, the arrow and the drag direction all at once. For `"axes"` the other two arrows
+  // Grab handle: wraps only the arrow the outline is coloured after, so colour names the
+  // plane, the arrow and the drag direction all at once. For `"plane"` the other two arms
   // stay inert — pulling them would move the outline without changing where the model is cut.
   const pickRadius = GIZMO_PICK_RADIUS * GRAB_AXIS_EMPHASIS;
   const armLength = GIZMO_LENGTH * GRAB_AXIS_EMPHASIS;
-  const pickLength = form === "axes" ? armLength * 2 : armLength;
+  const pickLength = isPlane ? armLength * 2 : armLength;
   const picker = new THREE.Mesh(
     new THREE.CylinderGeometry(pickRadius, pickRadius, pickLength, 8),
     new THREE.MeshBasicMaterial({ visible: false }),
   );
   // CylinderGeometry is Y-aligned, so Y needs no rotation.
-  if (grabAxis === "x") picker.rotation.z = Math.PI / 2;
-  else if (grabAxis === "z") picker.rotation.x = Math.PI / 2;
+  if (grabbable === "x") picker.rotation.z = Math.PI / 2;
+  else if (grabbable === "z") picker.rotation.x = Math.PI / 2;
   // Rotation leaves position alone, so offsetting along the axis is safe for every case. The
   // arrow form pushes the cylinder fully onto its own side: nothing behind the face is
   // grabbable, which is what keeps a thin box's opposing handles apart.
-  if (form === "arrow") {
+  if (!isPlane) {
     picker.position
-      .copy(AXIS_DIRECTIONS[grabAxis])
+      .copy(AXIS_DIRECTIONS[grabbable])
       .multiplyScalar((direction * pickLength) / 2);
   }
   group.add(picker);
@@ -179,6 +226,7 @@ export function buildAxisGizmo(
   return {
     group,
     picker,
-    grabMaterials: [lineMaterials.get(grabAxis)!, coneMaterials.get(grabAxis)!],
+    grabMaterials: [lineMaterials.get(grabbable)!, coneMaterials.get(grabbable)!],
+    grabColor: palette[grabbable],
   };
 }

@@ -46,6 +46,16 @@ file — a bad ADR is one nobody needed to read.
 - Numbers are **never reused or renumbered** — they are permanent references
 - Never rewrite history: to reverse a decision, add a new ADR and mark the old one
   `Superseded by ADR-NNNN`
+- **Clause-level change is a real case — name it rather than rounding it to "superseded".** When a new
+  ADR replaces or refines *one* decision inside an older record and leaves the rest in force, do not
+  mark the whole file superseded: that tells the next reader the design was replaced when most of it
+  still holds. Instead qualify the status (`Accepted — <clause> amended by ADR-NNNN`, or
+  `superseded by` where the clause is genuinely reversed), add a note under it saying what still
+  stands, and put a pointer on the affected passage itself so nobody can read that clause without
+  finding the successor. Adding a forward pointer is annotation, not rewriting — never delete or edit
+  the original reasoning, and say so explicitly when a later ADR *upheld* a bullet after testing it.
+  First case: ADR-0002 § outline colour, amended by
+  [ADR-0009](0009-section-plane-gizmo-local-frame.md).
 - Keep it to one page. Longer than that means it's really a domain guide
 
 ## Template
