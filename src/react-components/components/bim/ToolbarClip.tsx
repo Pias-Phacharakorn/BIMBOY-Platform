@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { Icon } from "@/react-components/components/ui";
 import { ClipperCursor, ClipperPlaneState } from "@/bim-components/ClipperCursor";
+import { SectioningArbiter } from "@/bim-components/SectioningArbiter";
 import * as OBF from "@thatopen/components-front";
 
 export function ToolbarClip() {
@@ -10,6 +11,7 @@ export function ToolbarClip() {
   const [planes, setPlanes] = useState<ClipperPlaneState[]>([]);
   const [selectedPlaneId, setSelectedPlaneId] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
+  const [suspended, setSuspended] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Click outside to close dropdown
@@ -45,6 +47,22 @@ export function ToolbarClip() {
       clipper.onStateChanged.remove(syncState);
     };
   }, [components, isDropdownOpen]);
+
+  // The section box switches the planes off while it crops (SectioningArbiter). Without this the
+  // menu would show every row switched off with no reason given, and a user who had placed three
+  // planes would reasonably conclude they were gone.
+  useEffect(() => {
+    if (!components) return;
+    const arbiter = components.get(SectioningArbiter as any) as SectioningArbiter;
+
+    const syncSuspended = () => setSuspended(arbiter.suspendedTool === "clipper");
+    syncSuspended();
+
+    arbiter.onStateChanged.add(syncSuspended);
+    return () => {
+      arbiter.onStateChanged.remove(syncSuspended);
+    };
+  }, [components]);
 
   // Keep clipper and highlighter states coordinated
   useEffect(() => {
@@ -166,6 +184,15 @@ export function ToolbarClip() {
           <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted uppercase tracking-wider px-1">
             <span>Planes</span>
           </div>
+
+          {suspended && (
+            <div className="flex items-start gap-2 rounded-radius border border-border bg-surface-alt px-2.5 py-1.5 text-[11px] font-semibold text-muted">
+              <Icon name="SECTIONBOX" size={14} className="mt-px shrink-0" />
+              <span>
+                Suspended — the section box is cropping. Turn it off to bring these planes back.
+              </span>
+            </div>
+          )}
 
           {/* Planes Checklist */}
           {planes.length === 0 ? (

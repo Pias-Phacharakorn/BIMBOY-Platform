@@ -1,8 +1,15 @@
 # ADR-0005: The section box clips with bare `THREE.Plane`s, outside `OBC.Clipper`
 
-**Status:** Accepted
+**Status:** Accepted — § Consequences bullet 4 amended by [ADR-0010](0010-sectioning-arbiter-and-fitted-plane-outlines.md)
 **Date:** 2026-08-04
 **Area:** `docs/feature/bim-viewer.md` § Section box
+
+> **What still stands.** Everything except the *scope* of bullet 4. The decision to clip with bare
+> `THREE.Plane`s outside `OBC.Clipper` is unchanged, and the § Alternatives rejected entry for
+> **"Wiring the box to `bimStore.activeTool`"** was re-verified against `ViewportRightToolbar.tsx`
+> during ADR-0010 and **upheld** — that mechanism is still rejected for exactly the reason given
+> here. ADR-0010 reverses only the *consequence* that a box and a cut plane may both be live, and it
+> does so through a third component rather than through `activeTool`.
 
 ## Context
 
@@ -42,6 +49,8 @@ Its 12-edge outline is a single `LineSegments` with **`depthTest: false`**, host
 - **Picking came free.** `ClipAwareRaycaster` filters against `renderer.three.clippingPlanes`, which `setPlane` maintains, so selection, hover and measurement inside the box were correct with no extra work. This is the payoff for having written that raycaster against the renderer's array instead of `Clipper.list`.
 - **All twelve edges show through the model.** With no depth test, far edges are never occluded by near geometry. Correct for a volume boundary and how Revit and Navisworks draw theirs, but it is the same trade the pivot dot takes and will read as wrong to anyone expecting an in-scene wire.
 - **The box is not mutually exclusive with Measure/Clip/Coordinate.** Intended — a crop is not a pointer mode — but it is a **fourth** activation pattern on a rail whose guide already flags the three it carries.
+
+  > ⚠️ **Amended by [ADR-0010](0010-sectioning-arbiter-and-fitted-plane-outlines.md).** The box *is* now mutually exclusive with **Clip**, via a `SectioningArbiter` component rather than `activeTool`. Measure and Coordinate still compose with it, and the reasoning above — that a crop is not a pointer mode — is why `activeTool` was still not the mechanism. The rejected alternative below is therefore upheld, not reversed.
 - **`ClipperCursor`'s drag path changed in the same commit that introduced the box.** Nothing about the section tool was meant to change; if plane dragging regresses, `AxisDragManager` is where to look, and the behaviour to compare against is `git show fc285d2:src/bim-components/ClipperCursor/src/ClipperDragManager.ts`.
 - **`GizmoAxis` now has two jobs**, and its name says one. Recorded here and in its docstring rather than fixed.
 - **`OBC.Views` writes to the same renderer array**, so opening a 2D view while a box is live crops by both. Left alone: forcing an interlock means teaching each feature about the other.
