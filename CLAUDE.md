@@ -1,6 +1,6 @@
 # CLAUDE.md — PIAS-BimWebApp (BIMBOY)
 
-> **Read this before writing any code.** Defines project identity, stack, architecture rules, and mandatory workflow. This file is the **single authoritative guide** for every AI working in this repo. `AGENTS.md` points here; `.agents/` mirrors the skills only. All prose docs live in **`docs/`**.
+> **Read this before writing any code.** Defines project identity, stack, architecture rules, and the mandatory workflow. It is **the authoritative set of instructions** for every AI working here — not a description of how the code behaves; the code itself is the only authority on that (see § The code is the source of truth). `AGENTS.md` points here; `.agents/` mirrors the skills only. All prose docs live in **`docs/`**.
 
 ## 👤 Developer Profile
 
@@ -25,7 +25,7 @@
 
 ## 📚 Domain Guides
 
-This file is the **map**; these guides are the **territory** — deep, project-specific detail loaded on demand. When a task goes deep into an area below, read its guide. The domain guides live under **`docs/feature/`** — one file per architectural area, no copies anywhere else. Guides document *how this project wires things* — they never re-document a framework (that's the skills + `docs/ThatOpen_docs/`).
+This file holds the **rules**; these guides hold the **detail** — deep and project-specific, loaded on demand. When a task goes deep into an area below, read its guide. One file per architectural area under **`docs/feature/`**, no copies anywhere else. Guides document *how this project wires things* — they never re-document a framework (that's the skills + `docs/ThatOpen_docs/`).
 
 | Working on … | Load guide |
 |--------------|-----------|
@@ -42,11 +42,29 @@ This file is the **map**; these guides are the **territory** — deep, project-s
 
 | Path | Holds |
 |------|-------|
-| `docs/feature/` | The 8 domain guides above — permanent record of how this project wires each area |
+| `docs/feature/` | The 8 domain guides above — a **map** of how this project wires each area: what exists, how it fits together, and what will bite you |
 | `docs/adr/` | Architecture decision records — *why* a decision was made, with the alternatives rejected. See `docs/adr/README.md` |
 | `docs/ThatOpen_docs/` | Vendored ThatOpen documentation snapshot (v3.4.x). Read-only reference — start at its `INDEX.md`, never hand-edit |
 
-**Keep guides current:** `docs/feature/` is the single source of truth. When a change alters something critical or important in one of these areas, update the matching `docs/feature/` guide as part of the same change. In-flight decisions stage in `CONTEXT.md`, then get promoted into a domain guide (and an ADR when the *why* matters) — see `docs/adr/README.md`.
+### 🧭 The code is the source of truth
+
+**No document outranks the code.** When a guide and the code disagree, **the guide is wrong** — fix the guide, never bend working code to match stale prose. Docs still matter, because they hold knowledge the code cannot:
+
+| | Role | Authority |
+|---|---|---|
+| **the code** | the system itself | **the only truth about behaviour** |
+| **`docs/feature/`** | what exists, how it fits, what will bite you | navigational — loses to the code, always |
+| **`docs/adr/`** | *why*, and what was tried and rejected | **the only source; not derivable from code** |
+| **`CONTEXT.md`** | in-flight decisions, during planning | temporary by definition |
+
+Nothing in `ClipperCursor` reveals that a grabbable translucent quad was *shipped and reversed within a day* — [ADR-0002](docs/adr/0002-section-plane-outline-only.md) is the only reason it hasn't been built a third time. Vendor traps found by reading `node_modules` are the same.
+
+**Writing them:**
+1. ⚠️ **Cite symbols, not line numbers** — `_syncVisibility`, never `index.ts:220`, which rots on the next edit. Same for cross-file references to *this* file: cite a step by name, not number. **Exception:** pinned vendor bundles may be cited by line (as [ADR-0003](docs/adr/0003-worker-side-snapping-over-cpu-picking-meshes.md) does), since v3.4.x offsets are stable and minified code has no symbols worth naming.
+2. **Don't restate what the code says plainly** — that adds drift surface, not knowledge.
+3. **Do record what it can't say** — why, what was rejected, what bites, where the vendor lies.
+
+**Timing:** update the matching guide (+ an ADR when the *why* lasts) **only after the developer has tested the change and confirmed it works** — see Workflow § *Document*, and `docs/adr/README.md`, whose promotion flow already says "implemented **+ merged**". `CONTEXT.md` is the exception: it is written during planning, and is safe to write early precisely because it is never the permanent record.
 
 ---
 
@@ -182,19 +200,20 @@ Layout state always from the store (never `useState`); views compose via a `LAYO
 
 **Before coding any OBC feature:**
 1. Read ThatOpen docs — start at [`docs/ThatOpen_docs/INDEX.md`](docs/ThatOpen_docs/INDEX.md) (the navigation entry point: concepts, tutorials, full API symbol index)
-2. Check v3.4.x API (breaking changes from v2)
+2. Check the API against the pinned version — v2 examples do not apply (pin + peer-dep warning under § Tech Stack)
 
 **New OBC component:** follow the `_thatopen-bim-component` skill. → project wiring + step checklist in `docs/feature/bim-viewer.md`.
 
-**Version constraint:** All ThatOpen libs pinned to **v3.4.x** — never mix versions or bootstrap OBC inside React
-
-## 📦 Imports
-
-Always use `@/*` alias. Never relative `../../../` paths. → example in `docs/feature/frontend.md`.
+**Never mix ThatOpen versions, and never bootstrap OBC inside React** — the world is a singleton in `bim-components/setup/`.
 
 ## 📋 Workflow
 
-You (Claude) are the **primary developer**. The developer is the final approver who reviews the diff and commits personally.
+| Role | Responsibility |
+|------|-----------------|
+| Claude (you) | Primary developer — reads, plans, implements, hands over for testing, fixes what testing finds, reviews & simplifies, **then** documents, and presents the diff |
+| Developer (you're working with) | **Tester and final approver** — runs the feature in the real app and says whether it works; reviews the diff and commits/merges personally |
+
+Steps run in order. Cite them **by name**, not number, anywhere outside this file.
 
 **1. Read first**
 - OBC feature? → read [`docs/ThatOpen_docs/INDEX.md`](docs/ThatOpen_docs/INDEX.md) first, then the relevant tutorial/API doc it points to
@@ -207,46 +226,43 @@ You (Claude) are the **primary developer**. The developer is the final approver 
 - Use `plan-visualizer` skill for: current flow (Mermaid) + proposed flow (mark `[NEW]`/`[MOD]`/`[DEL]`) + pros/cons + files — written to `plan-visualizer.md` at the project root
 - **Get explicit approval before coding**
 
-**3. Execute**
-- Implement the approved plan directly. See **🤝 Workflow Roles** below.
+**3. Execute — code only**
+- Implement the approved plan directly.
 - Work on a feature branch, never directly on `main`.
+- **Write no domain guide and no ADR yet.** Code, and the checks that can run without a human (`tsc`, build, any project check script). Stop there.
 
-**4. Refine — review & simplify** _(ask after implementation, non-trivial changes only)_
+**4. Hand over for testing** ⟵ _the gate_
+- Say plainly what was built, **what was actually verified, and what was not**. "`tsc` and the build pass" is not "it works".
+- Name the specific things only a running app can confirm — visual result, feel of an interaction, whether the fix actually fixes the reported bug.
+- Then **stop and wait**. The developer tests in the real app. Suggest `/run` if it helps.
+- Fix what testing surfaces, and hand back. Loop 3 ⟷ 4 until the developer says it works.
+
+**5. Refine — review & simplify** _(non-trivial changes only)_
 - Skip both passes for genuinely trivial edits (typo, rename, import fix, single-line tweak, config bump) — no need to ask, just say so in one line so it's visible.
-- Otherwise, after implementation, **ask the developer** whether to run review + simplify before presenting the result.
+- Otherwise **ask the developer two things together**: whether to run review + simplify at all, and **whether it runs before or after their testing** — that ordering is a per-task call, so never assume a default.
+  - *Before testing* → they test code that has already had a correctness pass, at the risk of reviewing code a design change is about to replace.
+  - *After testing* → the behaviour is settled first, so nothing is reviewed twice.
 - If yes:
   1. **Code-review** via a **fresh sub-agent** (`code-review` skill) — independent eyes that did not write the code
   2. **Apply confirmed findings**; report any deliberately not acted on + why
   3. **Simplify** inline (`simplify` skill) on the now-correct code
   4. **Light behavior-preservation check** after simplify — verify nothing changed semantically (not a full second review)
-- If no: present the implementation as-is per step 6.
+- If no: go straight to § *Document*.
 
-**5. Uncertain?**
+**6. Document — only once it is proven**
+- Trigger: the developer has confirmed the feature works. **Never before.**
+- Promote out of `CONTEXT.md`: update the matching `docs/feature/` guide, and add an ADR when the *why* has lasting value (`docs/adr/README.md`). Clear the staged entry.
+- Document **what testing actually established**, not what the plan predicted. Where the two differ, the code wins and the difference is worth a line.
+- If testing changed the design, correct the staged `CONTEXT.md` entry too — a stale rejected-alternatives list is worse than none.
+
+**7. Uncertain?**
 - Ask one concrete question with a recommended option
 - Never assume state placement, data shape, or layer assignment
 
-**6. After implementation**
+**8. Present & stop**
 - Do not prompt, ask, or offer to run `git add` / `git commit` / merge
 - Present the diff/result and stop — the developer reviews and commits personally
-- Segment the final diff so it's clear what came from where: **implemented** / **changed by review** / **changed by simplify**
-
-## 🤝 Workflow Roles
-
-| Role | Responsibility |
-|------|-----------------|
-| Claude (you) | Primary developer — reads, plans (grill + visualize), implements, then reviews & simplifies, and presents the diff |
-| Developer (you're working with) | Final approver — reviews the diff and commits/merges personally |
-
-**Loop (run for every new feature/task):**
-1. **Read** the relevant domain guide(s) + skills before touching code.
-2. **Plan** — grill requirements (`grill-with-docs`), visualize (`plan-visualizer`), and get explicit approval.
-3. **Implement** the approved plan directly, on a feature branch.
-4. **Refine** — for non-trivial changes, review (`code-review` via a fresh sub-agent) then simplify (`simplify`).
-5. **Present & wait** — present the diff, segmented by what was implemented / changed by review / changed by simplify, plus any risks. **No commit or merge without explicit approval — and never offer to `git add`/commit; the developer does that personally.**
-
-**Hard rules:**
-- Work happens on a feature branch, never directly on `main`.
-- The developer always sees the real `git diff` before approving.
+- Segment the final diff so it's clear what came from where: **implemented** / **changed after testing** / **changed by review** / **changed by simplify**
 
 ## 🚫 Hard Constraints
 
@@ -255,7 +271,7 @@ You (Claude) are the **primary developer**. The developer is the final approver 
 | No `<bim-*>` outside `ViewportWrapper.tsx` | Shadow DOM bleeds styles/events |
 | No logic/state/fetch in `routes/` | Routes are composition only |
 | No `!important` or raw `oklch()` in JSX | Token integrity |
-| No relative imports — use `@/*` | Refactor safety |
+| No relative imports — use `@/*` (example in `docs/feature/frontend.md`) | Refactor safety. ⚠️ Inside `bim-components/` the opposite holds — see `docs/feature/bim-viewer.md` |
 | Never edit `routeTree.gen.ts` | Vite plugin overwrites it |
 | No auth state in Zustand | Auth needs React context lifecycle |
 | No files in `react-components/` root | Use subdirs: `components/`, `features/`, `views/`, `store/` |
@@ -263,4 +279,7 @@ You (Claude) are the **primary developer**. The developer is the final approver 
 | No Supabase in `views/` or `components/` | Data access is `features/` responsibility |
 | No `features/index.ts` barrel | Circular deps + HMR slowdown |
 | No subdirs under `views/` | Views must be flat at root |
-| No AI prompts/offers to `git add`/commit/merge | Developer reviews diff and commits personally |
+| Never work directly on `main` — always a feature branch | The developer merges; nothing lands unreviewed |
+| No AI prompts/offers to `git add`/commit/merge | Developer reviews the real `git diff` and commits personally |
+| No `docs/feature/` or ADR edits before the developer confirms it works | Docs written for untested code get rewritten when testing changes the design, and assert as settled what nobody has seen run. `CONTEXT.md` is the exception — it is explicitly in-flight |
+| Never report "it works" off static checks alone | `tsc` and a build prove it compiles, not that it behaves. Say what was checked and what was not |
