@@ -27,6 +27,8 @@ Suspension is reversible: the loser is switched off through the same `togglePlan
 
 **Cut-plane outlines are fitted by projecting the model bbox's 8 corners into the plane helper's local frame** and taking min/max in local X/Y (`ClipperCursor/src/planeFit.ts`). No `axisOf` branch. `plane.size` is pinned to 1 and the dimensions live in the `LineLoop`'s geometry, because `SimplePlane`'s `size` setter is a single uniform scalar. Each plane's gizmo moves to a detached anchor at the rectangle's centre, carrying the helper's rotation.
 
+> ⚠️ **The `plane.size` sentence is obsolete; the projection is not.** [ADR-0011](0011-clickable-border-band-cut-planes.md) moved the outline out of `SimplePlane._planeMesh` entirely, into `GizmoAxis`'s overlay — so the carrier quad, `plane.size`, `autoScale` and the hidden-material trick all stopped being involved. **The corner-projection fit itself is unchanged and still load-bearing**: it supplies the outer edge of the border band that replaced the outline-plus-fill. The anchor sentence also still holds.
+
 ## Alternatives rejected
 
 - **A bespoke `onActivated` event on each component** — the obvious shape, and what the first draft specified. It **cannot work**: it signals activation only, so nothing fires when the winning tool is switched *off*, and the loser stays suspended with no way back. Deriving from the existing `onStateChanged` catches both edges and needs no new API. This is the one to re-read before "simplifying" the arbiter into an event.
@@ -45,6 +47,8 @@ Suspension is reversible: the loser is switched off through the same `togglePlan
 - **The interlock lives in derived state plus a re-entrancy flag**, which is subtler than an explicit event pair and will look like something to simplify. The first rejected alternative above is the guard against that.
 - **`ToolbarClip`'s suspended hint is load-bearing, not decoration.** `planeState.enabled` carries the actual cutting state, so without the hint a user who placed three planes opens the menu, finds three rows off, and concludes they were lost.
 - **`plane.size` is now inert as a sizing channel**, and `Clipper`'s list-wide `size` setter (ADR-0005 fact 3) could still reach in and rescale every rectangle from outside. Nothing does today.
+
+  > ✅ **This exposure was closed by [ADR-0011](0011-clickable-border-band-cut-planes.md)**, which stopped parenting anything to the carrier quad. `Clipper.size` can no longer reach a cut plane's visuals at all.
 - **`ClipperCursor`'s drag path changed again** — `getOrigin` now returns the anchor and `onDrag` subtracts an in-plane offset. Exact rather than approximate, because `AxisDragManager` only ever moves along the axis, but ADR-0005 § Consequences bullet 5 already flagged this path as where regressions land.
 - **Restoring cut planes relies on `togglePlane` re-suppressing the vendor arrow.** `SimplePlane.enabled = true` restores remembered visibility and calls `toggleControls`; bypassing `togglePlane` to re-enable a plane would leave `TransformControls` arrows on screen.
 - **The arbiter is silent during world teardown** — `SimplePlane.enabled` throws without a renderer, and `SectionBox._teardownWorldParts` drops `_active` without an event, so the arbiter's view can go stale there. Acceptable: everything is about to be disposed.
