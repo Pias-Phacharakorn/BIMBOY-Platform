@@ -2,7 +2,7 @@ import * as OBC from "@thatopen/components";
 import * as THREE from "three";
 // Relative, not the @/* alias: tsconfig excludes src/bim-components/**, so
 // vite-tsconfig-paths does not rewrite aliases inside this folder. Repo-wide convention here.
-import { AxisDragManager, AxisGizmoHandle, GizmoAxis, axisOf } from "../GizmoAxis";
+import { AxisDragManager, AxisGizmoHandle, GizmoAxis, framePalette } from "../GizmoAxis";
 import { ClipperOutlineManager } from "./src/ClipperOutlineManager";
 import { ClipperPlacementManager } from "./src/ClipperPlacementManager";
 import { ClipperPlaneState } from "./src/types";
@@ -31,9 +31,10 @@ const suppressDefaultArrow = (plane: any) => {
 /**
  * Interactive section planes on top of `OBC.Clipper`.
  *
- * Each cut plane draws as a bare rectangle outline coloured after the world axis its normal
- * points down, and is moved by the matching arrow on a world-aligned gizmo — never by the
- * plane itself, so a section can't swallow a click meant for an element.
+ * Each cut plane draws as a bare rectangle outline, and is moved by the one blue arrow on a
+ * gizmo sitting in that plane's own frame — never by the plane itself, so a section can't
+ * swallow a click meant for an element. The arrow runs along the plane's true normal, so it
+ * points where the cut actually goes even on a skewed plane.
  *
  * This class holds only the state React subscribes to and the policy that coordinates the
  * three managers, each of which owns and frees its own 3D objects:
@@ -189,12 +190,18 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     suppressDefaultArrow(plane);
     this.outlines.add(planeId, plane);
 
-    // The grabbable arrow is the one the outline is coloured after, so colour names the
-    // plane, the arrow and the drag direction all at once.
-    this._gizmos.set(
-      planeId,
-      this._gizmoAxis.create({ follow: plane.helper, grabAxis: axisOf(plane.normal).axis }),
-    );
+    // No grabAxis: the "plane" form grabs the helper's local +Z, which is where OBC puts the
+    // normal — so the arrow runs along the actual cut however the plane is skewed, instead of
+    // along whichever world axis the normal happened to be nearest.
+    //
+    // The palette has to be built here because only this side holds the frame: the gizmo is
+    // drawn in local space and cannot tell where its rotation aims each arm. A cut square to
+    // the grid gets the usual green/blue/red; a skewed one greys out, which is the honest
+    // answer rather than rounding it to whichever axis it happens to be nearest.
+    plane.helper.updateWorldMatrix(true, false);
+    const palette = framePalette(plane.helper.getWorldQuaternion(new THREE.Quaternion()));
+
+    this._gizmos.set(planeId, this._gizmoAxis.create({ follow: plane.helper, palette }));
 
     plane.onDisposed.add(() => {
       this.outlines.remove(planeId);

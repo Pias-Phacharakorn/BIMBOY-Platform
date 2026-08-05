@@ -1,7 +1,8 @@
 import * as OBC from "@thatopen/components";
 import * as THREE from "three";
-import { AXIS_COLORS, HIGHLIGHT_COLOR, PlaneAxis } from "./src/axis";
+import { HIGHLIGHT_COLOR } from "./src/axis";
 import { buildAxisGizmo, GIZMO_LENGTH } from "./src/axis-gizmo-mesh";
+import { applyFollowTransform } from "./src/follow-transform";
 import { AxisGizmoHandle, AxisGizmoOptions } from "./src/types";
 
 export * from "./src";
@@ -15,12 +16,17 @@ const GIZMO_VIEW_FRACTION = 0.068;
 
 /** One live gizmo. Private: consumers only ever see it as an {@link AxisGizmoHandle}. */
 class AxisGizmo implements AxisGizmoHandle {
-  readonly grabAxis: PlaneAxis;
   readonly picker: THREE.Mesh;
   readonly group: THREE.Group;
   readonly follow: THREE.Object3D;
 
   private readonly _grabMaterials: (THREE.LineBasicMaterial | THREE.MeshBasicMaterial)[];
+  /**
+   * What to repaint the grabbable arrow when a highlight drops. Kept from build time rather
+   * than looked up by axis letter, because the two forms read different colour tables — the
+   * `"plane"` form's normal is blue on local `z`, where `AXIS_COLORS` would say red.
+   */
+  private readonly _grabColor: number;
   private _highlighted = false;
   private _disposed = false;
 
@@ -28,15 +34,16 @@ class AxisGizmo implements AxisGizmoHandle {
     options: AxisGizmoOptions,
     private readonly _release: (gizmo: AxisGizmo) => void,
   ) {
-    const { group, picker, grabMaterials } = buildAxisGizmo(
-      options.grabAxis,
-      options.form ?? "axes",
-      options.direction ?? 1,
-    );
+    const { group, picker, grabMaterials, grabColor } = buildAxisGizmo({
+      form: options.form,
+      grabAxis: options.grabAxis,
+      direction: options.direction,
+      palette: options.palette,
+    });
     this.group = group;
     this.picker = picker;
     this._grabMaterials = grabMaterials;
-    this.grabAxis = options.grabAxis;
+    this._grabColor = grabColor;
     this.follow = options.follow;
   }
 
@@ -56,7 +63,7 @@ class AxisGizmo implements AxisGizmoHandle {
     if (this._highlighted === state) return;
     this._highlighted = state;
 
-    const color = state ? HIGHLIGHT_COLOR : AXIS_COLORS[this.grabAxis];
+    const color = state ? HIGHLIGHT_COLOR : this._grabColor;
     for (const material of this._grabMaterials) {
       material.color.setHex(color);
     }
@@ -79,7 +86,7 @@ class AxisGizmo implements AxisGizmoHandle {
 }
 
 /**
- * Reusable world-aligned axis gizmos, drawn on top of everything.
+ * Reusable axis gizmos in their target's own frame, drawn on top of everything.
  *
  * Every gizmo lives in **one** overlay scene rendered in a second pass with the clipping
  * planes suspended and `depthTest: false`. That is what makes a gizmo always visible — and
@@ -88,7 +95,7 @@ class AxisGizmo implements AxisGizmoHandle {
  *
  * ```ts
  * const gizmoAxis = components.get(GizmoAxis); // no cast needed — 1-arg constructor
- * const handle = gizmoAxis.create({ follow: plane.helper, grabAxis: axisOf(normal).axis });
+ * const handle = gizmoAxis.create({ follow: plane.helper }); // "plane" form, grabs the normal
  * handle.visible = true;
  * // raycast handle.picker to detect a grab; handle.dispose() when done
  * ```
@@ -103,14 +110,18 @@ class AxisGizmo implements AxisGizmoHandle {
  * ```
  *
  * ⚠️ **Naming debt, recorded rather than paid:** a component called `GizmoAxis` now serves
- * non-gizmo overlays too. Renaming it to something like `SceneOverlay` would be honest but
- * reaches into `ClipperCursor`, `bim-viewer.md`, ADR-0002 and ADR-0005 for no behaviour change.
+ * non-gizmo overlays too, and its gizmos are no longer world-*axis*-aligned. Renaming it to
+ * something like `SceneOverlay` would be honest but reaches into `ClipperCursor`,
+ * `bim-viewer.md`, ADR-0002, ADR-0005 and ADR-0009 for no behaviour change.
  *
- * **Current limits, deliberately not parameterised while nothing needs them.** A gizmo tracks
- * its target's *position* and ignores its rotation, and holds a fixed fraction of the viewport
- * height. World-alignment in particular is BIMBOY's section rationale — arrow and outline
- * colours agreeing — not a universal one, so an `orientation: "world" | "follow"` option is
- * the next thing a consumer will want. It is about four lines.
+ * **A gizmo tracks its target's position *and* rotation**, so it sits in that target's own
+ * frame — which is what lets a cut plane's arrow point along the actual cut however the plane
+ * is skewed (→ [ADR-0009](../../../docs/adr/0009-section-plane-gizmo-local-frame.md)). Scale is
+ * the one component ignored: a gizmo holds a fixed fraction of the viewport height instead.
+ *
+ * Rotation-following is unconditional rather than an `orientation: "world" | "follow"` option,
+ * because nothing wants `"world"`: `SectionBox`'s follow anchors are bare `Object3D`s that only
+ * ever receive `position.copy()`, so their identity quaternion makes this a no-op for the box.
  */
 export class GizmoAxis extends OBC.Component implements OBC.Disposable {
   static readonly uuid = "5b8d4e17-3a6c-42f9-b1d5-9c7e2f04a836" as const;
@@ -184,11 +195,15 @@ export class GizmoAxis extends OBC.Component implements OBC.Disposable {
       const camera = world.camera?.three;
       if (!webgl || !camera) return;
 
-      // Follow each target's position but not its rotation, so the gizmo stays
-      // world-axis-aligned: green along X, blue up along Y, red along Z.
+      // Follow each target's position *and* rotation, so a gizmo sits in its target's own
+      // frame. For a cut plane that means the grabbable arrow runs along the real cut normal,
+      // and — because the plane's outline is a child of the same helper — arrow and outline
+      // inherit one transform and so agree by construction, not by computation.
+      //
+      // The transform itself lives in `applyFollowTransform` so it can be asserted without a
+      // WebGL context; scale stays here because only this loop knows the camera.
       for (const gizmo of this._gizmos) {
-        gizmo.follow.updateWorldMatrix(true, false);
-        gizmo.group.position.setFromMatrixPosition(gizmo.follow.matrixWorld);
+        applyFollowTransform(gizmo.group, gizmo.follow);
         gizmo.group.scale.setScalar(this._scaleAt(gizmo.group.position, camera));
       }
 

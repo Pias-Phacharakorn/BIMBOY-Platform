@@ -1,14 +1,19 @@
 import * as OBC from "@thatopen/components";
 import * as THREE from "three";
-import { axisOf } from "../../GizmoAxis";
+import { colorOf } from "../../GizmoAxis";
 import { PlaneVisualState } from "./types";
 
 /**
  * A cut plane renders as a bare rectangle outline — no fill, nothing tinted behind it, and
- * no surface to swallow a click meant for an element. Colour states the plane's
- * orientation, so interaction state has to ride on opacity instead:
- * `LineBasicMaterial.linewidth` is ignored by WebGLRenderer (lines are always 1px), which
- * rules out carrying it in line weight without fat-line geometry.
+ * no surface to swallow a click meant for an element. Colour states the plane's orientation —
+ * its normal's world axis, or grey when the cut is skewed to the grid — so interaction state
+ * has to ride on opacity instead: `LineBasicMaterial.linewidth` is ignored by WebGLRenderer
+ * (lines are always 1px), which rules out carrying it in line weight without fat-line geometry.
+ *
+ * ⚠️ Hue used to be snapped to the *nearest* axis, so a skewed cut was painted as though it were
+ * square — and the same snap chose the grabbable arrow, which is how the arrow came to point up
+ * to 54.74° away from the cut. Grey is the fix
+ * (→ [ADR-0009](../../../../docs/adr/0009-section-plane-gizmo-local-frame.md)).
  */
 const OUTLINE_OPACITY: Record<PlaneVisualState, number> = {
   idle: 0.45,
@@ -76,7 +81,10 @@ export class ClipperOutlineManager {
     plane.size = this._planeSize;
 
     const outlineMaterial = new THREE.LineBasicMaterial({
-      color: axisOf(plane.normal).color,
+      // Same rule the gizmo's grabbable arrow is built from, applied to the same direction, so
+      // the plane and the arrow that moves it cannot end up different colours: the normal's
+      // world axis, or grey when it has none.
+      color: colorOf(plane.normal),
       transparent: true,
       opacity: OUTLINE_OPACITY.idle,
     });

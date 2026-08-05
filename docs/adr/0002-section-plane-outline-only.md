@@ -1,8 +1,16 @@
 # ADR-0002: Section planes are outline-only and never pickable; the gizmo is the sole handle
 
-**Status:** Accepted
+**Status:** Accepted — **outline-colour clause amended by [ADR-0009](0009-section-plane-gizmo-local-frame.md)**
 **Date:** 2026-08-03
 **Area:** `docs/feature/bim-viewer.md` § Section tool
+
+> ⚠️ **One clause amended; the rest stands.** Outline-only, not pickable at all, one arrow as the
+> sole handle, and interaction state on opacity rather than hue are all unchanged. The
+> **X green / Y blue / Z red** palette is unchanged too. What [ADR-0009](0009-section-plane-gizmo-local-frame.md)
+> replaces is the word *"dominant"*: colour was picked by **snapping** the normal to its nearest
+> world axis, which meant a skewed cut was painted as though it were square — and the same snap
+> chose the grabbable arrow, putting it up to 54.74° off the cut. A direction that lines up with no
+> axis is now **grey** instead of rounded.
 
 ## Context
 
@@ -21,6 +29,13 @@ The **only** drag handle is one arrow on a `GizmoAxis` gizmo: the arrow matching
 
 Outline colour states the normal's dominant world axis — **X green, Y blue, Z red**, which *inverts* the three.js/Blender convention. Interaction state rides on opacity, not hue.
 
+> ⚠️ **Amended by [ADR-0009](0009-section-plane-gizmo-local-frame.md): read "dominant" as "within
+> ~1.15°, else grey".** Snapping the normal to its *nearest* axis also chose the grabbable arrow,
+> which put the arrow up to 54.74° off the actual cut. The palette here is unchanged; a normal that
+> lines up with no world axis now takes `OFF_AXIS_COLOR` (light grey) rather than being rounded to
+> whichever axis it happened to be closest to. "Interaction state rides on opacity, not hue" is
+> untouched.
+
 ## Alternatives rejected
 
 - **Grabbable translucent quad** — built, shipped, reversed. See Context. The occlusion arbitration it needed (async depth compare per hover + a clipped-hit filter) is also the single largest chunk of code the reversal deleted.
@@ -28,6 +43,12 @@ Outline colour states the normal's dominant world axis — **X green, Y blue, Z 
 - **A modal "Edit sections" toggle** gating whether planes are pickable — unambiguous, but it is a mode to remember entering and leaving, and it does not make the plane readable, only reachable.
 - **Keeping a whisper of fill** (α 0.04–0.06) for edge-on legibility — any fill tints what is behind it, which is the thing being reacted against.
 - **Three.js axis colours (X red, Y green, Z blue)** — familiar to anyone arriving from three.js or Blender, but the developer's existing section-plane scheme is the inverted one, and the gizmo arrows and the plane outline reading from one table is what lets colour name the plane, the arrow *and* the drag direction at once. Two tables would let them drift.
+
+  > ✅ **Still holds, and [ADR-0009](0009-section-plane-gizmo-local-frame.md) kept it.** A role-based
+  > palette (normal always blue) was built and then reversed for exactly the reason argued here: one
+  > table, read by both the arrow and the outline, is what stops them drifting *and* what lets colour
+  > state orientation at all. ADR-0009 adds a fourth value (`OFF_AXIS_COLOR`) to the same table rather
+  > than introducing a second one.
 - **Carrying interaction state in line weight** — not available: `LineBasicMaterial.linewidth` is ignored by `WebGLRenderer`, so it would need `Line2` fat-line geometry from three's examples. Not worth a new dependency for a hover cue.
 
 ## Consequences
