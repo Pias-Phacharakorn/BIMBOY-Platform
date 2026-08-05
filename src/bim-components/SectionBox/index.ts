@@ -28,8 +28,12 @@ const ABSOLUTE_MIN_GAP = 0.05;
  * `ViewportRightToolbar` suppresses `Hoverer`, `Outliner` *and* `postproduction` for as long as
  * `activeTool !== "select"`, so wiring the box to it would kill selection outlines and the whole
  * post pass for as long as the box was cropping, and switching on Measure would silently drop the
- * crop. Consequence, intended: a box and a cut plane can both be live, and you can measure inside
- * a box.
+ * crop. Consequence, intended: you can select and measure inside a box.
+ *
+ * A box and a cut plane, however, **cannot** both be live — `SectioningArbiter` switches one off
+ * when the other starts cutting, and restores it afterwards. That interlock needs nothing from this
+ * class: the arbiter watches the `onStateChanged` below and drives `enable()`/`disable()`, so this
+ * file is unaware of it by design and `ClipperCursor` stays unimported here.
  *
  * `ClipAwareRaycaster` needs nothing from this class — it filters picks against
  * `renderer.three.clippingPlanes`, which is exactly the array {@link BoxFacesManager} writes to,

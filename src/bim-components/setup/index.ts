@@ -20,6 +20,7 @@ import { AreaMeasureCursor, LengthMeasureCursor } from "../MeasureCursor";
 import { SurfaceMeasureCursor } from "../SurfaceMeasureCursor";
 import { GizmoAxis } from "../GizmoAxis";
 import { SectionBox } from "../SectionBox";
+import { SectioningArbiter } from "../SectioningArbiter";
 import { PropertyTable } from "../PropertyTable";
 import { SpotCoordinate } from "../SpotCoordinate";
 import { CursorSurface } from "../CursorSurface";
@@ -59,10 +60,15 @@ export const setupComponents = async () => {
   setupClipperCursor(components, world, viewport)
 
   // A crop volume, not a pointer tool: it never sets bimStore.activeTool, so it composes with
-  // the section planes and the measure tools rather than excluding them.
+  // the measure tools rather than excluding them. It is mutually exclusive with the section
+  // planes, but through SectioningArbiter below — not through activeTool.
   const sectionBox = new SectionBox(components)
   sectionBox.world = world
   sectionBox.viewport = viewport
+
+  // After both sectioning tools exist: it reads their state on construction. Wires itself to
+  // their existing onStateChanged events, so there is nothing to connect here.
+  new SectioningArbiter(components)
 
   setupSmartViews(components)
   setupViews(components, world)

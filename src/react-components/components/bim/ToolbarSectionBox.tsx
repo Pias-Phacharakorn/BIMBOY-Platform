@@ -18,7 +18,11 @@ const AXES = [
  * Unlike Measure/Clip/Coordinate this button does **not** drive `bimStore.activeTool`: a crop is
  * view state you keep on while selecting and measuring, and `activeTool` would cost the selection
  * outliner and the whole postproduction pass for as long as the box was live. So there is no
- * mutual exclusion with the other three buttons, by design.
+ * mutual exclusion with **Measure or Coordinate**, by design.
+ *
+ * It *is* mutually exclusive with Clip, but through `SectioningArbiter` rather than `activeTool` —
+ * turning the box on switches the cut planes off and back on again afterwards. Nothing here has to
+ * arrange that: the arbiter watches `SectionBox.onStateChanged`, which `toggle()` already fires.
  */
 export function ToolbarSectionBox() {
   const { components, selectedElementIds } = useBimStore();

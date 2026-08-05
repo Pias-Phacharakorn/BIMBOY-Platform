@@ -10,6 +10,11 @@ export interface AxisDragOptions {
    * `ClipperCursor`, a box face to `SectionBox`.
    */
   pickTargets: () => { mesh: THREE.Mesh; id: string }[];
+  /**
+   * Optional select-only targets (e.g. translucent plane surface quads) that switch selection
+   * when clicked, but do not initiate an axis drag session.
+   */
+  pickSelectTargets?: () => { mesh: THREE.Mesh; id: string }[];
   /** True while something else owns the pointer — dragging stays out of the way. */
   isSuspended: () => boolean;
   /** World-space direction this id may slide along. `null` aborts the grab. */
@@ -105,6 +110,12 @@ export class AxisDragManager {
 
       e.preventDefault();
       e.stopPropagation();
+
+      if (hit.isSelectOnly) {
+        this._options.onSelect(hit.id);
+        return;
+      }
+
       this._begin(hit.id, hit.point, e);
     };
     window.addEventListener("pointerdown", this._downListener, true);
@@ -138,28 +149,43 @@ export class AxisDragManager {
   }
 
   /**
-   * No occlusion test is needed: the gizmo scene renders with clipping suspended and
-   * `depthTest: false`, so the handle is grabbable wherever it is drawn, even when the model
-   * stands between it and the camera.
+   * Raycasts grabbable handles and optional select-only plane surface targets.
    */
-  private _pickHandle(e: PointerEvent): { id: string; point: THREE.Vector3 } | null {
+  private _pickHandle(
+    e: PointerEvent,
+  ): { id: string; point: THREE.Vector3; isSelectOnly?: boolean } | null {
     const camera = this._options.world.camera?.three;
     const canvas = this._canvas;
     if (!camera || !canvas) return null;
 
-    const targets = this._options.pickTargets();
-    if (targets.length === 0) return null;
+    const dragTargets = this._options.pickTargets();
+    const selectTargets = this._options.pickSelectTargets ? this._options.pickSelectTargets() : [];
+
+    if (dragTargets.length === 0 && selectTargets.length === 0) return null;
 
     const ndc = this._pointerToNdc(e, canvas);
     if (!ndc) return null;
 
     this._raycaster.setFromCamera(ndc, camera);
-    const owners = new Map(targets.map(({ mesh, id }) => [mesh as THREE.Object3D, id]));
 
-    for (const hit of this._raycaster.intersectObjects(targets.map((t) => t.mesh), false)) {
-      const id = owners.get(hit.object);
-      if (id) return { id, point: hit.point.clone() };
+    // Drag handles have higher priority
+    if (dragTargets.length > 0) {
+      const dragOwners = new Map(dragTargets.map(({ mesh, id }) => [mesh as THREE.Object3D, id]));
+      for (const hit of this._raycaster.intersectObjects(dragTargets.map((t) => t.mesh), false)) {
+        const id = dragOwners.get(hit.object);
+        if (id) return { id, point: hit.point.clone(), isSelectOnly: false };
+      }
     }
+
+    // Select-only targets (translucent plane surface quads) checked next
+    if (selectTargets.length > 0) {
+      const selectOwners = new Map(selectTargets.map(({ mesh, id }) => [mesh as THREE.Object3D, id]));
+      for (const hit of this._raycaster.intersectObjects(selectTargets.map((t) => t.mesh), false)) {
+        const id = selectOwners.get(hit.object);
+        if (id) return { id, point: hit.point.clone(), isSelectOnly: true };
+      }
+    }
+
     return null;
   }
 

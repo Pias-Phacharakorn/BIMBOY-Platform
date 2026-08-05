@@ -66,6 +66,19 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
   private readonly _gizmoAxis: GizmoAxis;
   /** One gizmo handle per plane. Nothing else can reach them. */
   private readonly _gizmos = new Map<string, AxisGizmoHandle>();
+  /**
+   * One per plane, at the middle of that plane's outline rather than at the point the user
+   * clicked — the same reason `SectionBox` anchors its arrows at face centres. Detached from any
+   * scene on purpose: `GizmoAxis` only reads `follow.matrixWorld` after `updateWorldMatrix`,
+   * which resolves fine with no parent.
+   *
+   * Each carries the **helper's rotation** as well as the offset position, because the `"plane"`
+   * gizmo form grabs its target's local +Z — hand it an unrotated anchor and the arrow would
+   * point down world Z instead of along the cut.
+   */
+  private readonly _anchors = new Map<string, THREE.Object3D>();
+  /** Scratch for the in-plane offset, read on every drag frame. */
+  private readonly _offset = new THREE.Vector3();
 
   constructor(components: OBC.Components, world: OBC.World, viewport: HTMLElement) {
     super(components);
@@ -96,15 +109,24 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
         [...this._gizmos]
           .filter(([, handle]) => handle.visible)
           .map(([planeId, handle]) => ({ mesh: handle.picker, id: planeId })),
+      pickSelectTargets: () => this.outlines.getPickableMeshes(),
       isSuspended: () => this.placement.placing,
       getAxis: (planeId) => this._clipper.list.get(planeId)?.normal.clone() ?? null,
-      getOrigin: (planeId) => this._clipper.list.get(planeId)?.helper.position.clone() ?? null,
+      // The gizmo sits at the outline's middle, so that — not the helper — is where the drag
+      // starts from, or the arrow would jump to the cursor on grab.
+      getOrigin: (planeId) => this._anchors.get(planeId)?.position.clone() ?? null,
       onDrag: (planeId, position) => {
         const plane = this._clipper.list.get(planeId);
         if (!plane) return;
-        plane.helper.position.copy(position);
+        // `position` is the anchor displaced purely along the normal (AxisDragManager only ever
+        // moves along the axis), and the anchor sits an in-plane offset from the helper. That
+        // offset is perpendicular to the drag, so subtracting it recovers the helper's new
+        // position exactly rather than approximately.
+        this.outlines.centerOffset(planeId, this._offset);
+        plane.helper.position.copy(position).sub(this._offset);
         plane.helper.updateMatrix();
         plane.update();
+        this._syncAnchor(planeId);
       },
       onSelect: (planeId) => {
         if (this.selectedPlaneId !== planeId) this.selectPlane(planeId);
@@ -112,6 +134,12 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     });
     // Hover and drag change how outlines look, but not what React renders.
     this.drag.onStateChanged.add(() => this._repaintPlaneStates());
+
+    // Loading a model refits every outline, which moves their middles — and the arrows sit at
+    // those middles, so they have to move too.
+    this.outlines.onFitChanged.add(() => {
+      for (const planeState of this.planes) this._syncAnchor(planeState.id);
+    });
   }
 
   /** True while a click will place a plane. Read by ToolbarClip. */
@@ -201,13 +229,40 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     plane.helper.updateWorldMatrix(true, false);
     const palette = framePalette(plane.helper.getWorldQuaternion(new THREE.Quaternion()));
 
-    this._gizmos.set(planeId, this._gizmoAxis.create({ follow: plane.helper, palette }));
+    // Follows the anchor, not the helper: the arrow belongs at the middle of the outline it
+    // moves. `_syncAnchor` has to run first, so the gizmo's first frame is already in place.
+    const anchor = new THREE.Object3D();
+    this._anchors.set(planeId, anchor);
+    this._syncAnchor(planeId);
+
+    this._gizmos.set(planeId, this._gizmoAxis.create({ follow: anchor, palette }));
 
     plane.onDisposed.add(() => {
       this.outlines.remove(planeId);
       this._gizmos.get(planeId)?.dispose();
       this._gizmos.delete(planeId);
+      this._anchors.delete(planeId);
     });
+  }
+
+  /**
+   * Puts a plane's anchor at the middle of its outline, in the plane's own frame.
+   *
+   * The rotation is copied, not derived: a cut plane never rotates after creation, but the gizmo
+   * reads rotation off whatever it follows, so the anchor has to carry it for the arrow to run
+   * along the cut instead of down world Z.
+   */
+  private _syncAnchor(planeId: string) {
+    const plane = this._clipper.list.get(planeId);
+    const anchor = this._anchors.get(planeId);
+    if (!plane || !anchor) return;
+
+    plane.helper.updateWorldMatrix(true, false);
+    this.outlines.centerOffset(planeId, this._offset);
+
+    plane.helper.getWorldPosition(anchor.position).add(this._offset);
+    plane.helper.getWorldQuaternion(anchor.quaternion);
+    anchor.updateMatrix();
   }
 
   /**
@@ -263,6 +318,7 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     // GizmoAxis itself is a shared service and outlives us — only our handles go.
     for (const [, gizmo] of this._gizmos) gizmo.dispose();
     this._gizmos.clear();
+    this._anchors.clear();
     this.outlines.dispose();
 
     this.onDisposed.trigger(ClipperCursor.uuid);
