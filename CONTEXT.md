@@ -192,6 +192,227 @@ fourth row (*none of them → light grey*), plus a note on `AXIS_ALIGNMENT_DOT` 
 **world-aligned** handle"* becomes "a handle in that transform's own frame", and the "follows position
 only — rotation is ignored" bullet is rewritten.
 
+## The cut-plane gizmo spawns where you clicked, and slides around inside the cut
+
+_Staged 2026-08-05 (`/grill-with-docs`). Earmarked for **ADR-0013** once merged — it reverses a
+deliberate choice ADR-0011 shipped, and takes delivery of a drag mode
+[ADR-0009](docs/adr/0009-section-plane-gizmo-local-frame.md) deferred by name._
+
+_Reviewed 2026-08-05 via `/fable-advisor` **before** implementation. The seam (decision 6) was
+endorsed; four things changed as a result, and each is marked ⚠️ at its decision: the pick priority
+became **per-id** rather than global (4), decision 5's stated rationale was **wrong** and is corrected,
+`gizmoMoved` moved to a **dirty bit** to stop it lying on a zero-movement grab (9), and the clamp came
+back **at the refit only** as new decision 11 — an option that was never put to the developer during
+the grill._
+
+**Why this is a decision, not a bugfix.** The reported symptom — "the gizmo doesn't appear where I
+clicked, it appears in the middle" — is the code working as designed. `ClipperCursor`'s `_anchors`
+docstring says so outright: *"at the middle of that plane's outline rather than at the point the user
+clicked — the same reason `SectionBox` anchors its arrows at face centres."* Reversing it is a UX
+call, made by the developer against a stated recommendation to keep centre-anchoring. What makes it
+more than a preference flip is the second half: the gizmo becomes **movable**, which is the "new drag
+mode" ADR-0009 listed as deferred — *"`AxisDragManager` only slides along one axis; rotation needs a
+new drag mode, a new `getAxis`/`onDrag` contract"*. The same sentence applies to 2-DOF in-plane
+translation, and this entry is where that contract change gets made.
+
+**Three measurements that shaped the design**, all read off the code rather than guessed:
+
+- **The click point needs no new maths.** `_createPlane` passes the clicked point as
+  `createFromNormalAndCoplanarPoint`'s coplanar point, so `plane.helper.position` *already is* the
+  click point. "Spawn where I clicked" is the offset `(0, 0)` — the feature is the **removal** of the
+  `centerOffset` term, not the addition of a spawn rule.
+- **The centre diamond is entirely inside the arrow's grab cylinder.** Pick radius is `0.525`
+  (`GIZMO_PICK_RADIUS 0.35 × GRAB_AXIS_EMPHASIS 1.5`); the diamond's corners reach `0.424`
+  (`GIZMO_DIAMOND_SIZE 0.6 × √2 / 2`). `AxisDragManager._pickHandle` sorts hits by distance, so a
+  centre handle placed as-is could **never** win a raycast. This is why decision 4 exists.
+- **The fill rebuild after an in-plane drag would be redundant, not wrong.**
+  `ClipperFillManager.noteDragState` refreshes only on the transition to `null`, and
+  `ClipStyler.create()` holds the *live* `THREE.Plane`, so it would recompute a cut that never moved.
+  Harmless, but it is a full `ClipEdges.update()` per reposition — which is what decision 7 buys out.
+
+**Decisions taken:**
+
+| # | Decision |
+|---|----------|
+| 1 | **The gizmo anchor spawns at the click point** — `_syncAnchor` stops adding `outlines.centerOffset()` and adds a per-plane **owned** offset instead, initialised to zero. The offset has to be explicit state rather than a moved `Object3D`, because `onDrag` subtracts it to recover the helper's position; there is nothing else to derive it from once it is no longer the fitted centre. |
+| 2 | **The offset is stored in the helper's local X/Y**, not world space. A cut plane never rotates, so the two agree today — but local is invariant under sliding the cut along its own normal, which is the *only* thing dragging the arrow does (`fitBoxToFrame`'s stated ⚠️ invariant). World space would need re-deriving on every drag frame. |
+| 3 | **Grabbing the centre diamond slides the gizmo anywhere within the cut surface** — free 2-DOF, one gesture. Rejected: two 1-DOF drags on the inert in-plane arms, which would have reused the existing axis machinery verbatim (see alternatives). |
+| 4 | **`_pickHandle` gains a priority pass, scoped per id.** An id's `"inPlane"` hit preempts **that same id's** `"axis"` hit; results then merge back into one nearest-hit ordering across ids. This is what makes the enclosed diamond reachable, and it replaces carving a gap in the arrow's grab cylinder — no geometry surgery, no `BufferGeometryUtils` import (the repo has none today), and `AxisGizmoHandle.picker` stays a single `THREE.Mesh`, which is what `SectionBox` reads. ⚠️ **Per-id, not global — that distinction is the whole safety of it.** A global override (all `"inPlane"` beats all `"axis"`, how this was first specified) is correct today only *by accident*: `_syncVisibility` sets `gizmo.visible = enabled && isSelected` and `pickTargets` filters on it, so exactly one gizmo is ever pickable and there is no second diamond to out-rank a nearer plane's arrow. Land multi-select — or the rotation mode ADR-0009 deferred — and a farther plane's diamond silently steals a click from a nearer plane's arrow, with no compile error and nothing in `check:gizmo` to catch it. A third assumption this class depends on and cannot verify, so it is commented like the other two. ⚠️ **Accepted cost:** a ~37px region at the arrow's middle stops moving the cut. Honest, because the diamond is *drawn* there. |
+| 5 | **The diamond quad itself is the pick target** — not a dedicated invisible sphere. It preserves the property `axis-gizmo-mesh.ts` states for the arrow: what you can grab is what you can see. **No `dot(viewDir, normal)` guard is needed, and the reason matters.** ⚠️ An earlier draft of this entry claimed the diamond's edge-on blind spot *is* the maths degeneracy — that was wrong. A `PlaneGeometry` raycast is exact triangle intersection, not a screen-area threshold, so grazing incidence makes the diamond hard to **aim at** while leaving it perfectly hittable; it fails only at the true mathematical limit of a ray parallel to the plane. What actually makes the guard unnecessary is that `_begin` sets `world.camera.enabled = false`, so the view cannot rotate toward edge-on once a session has started — a grab-time condition holds for the whole drag. |
+| 6 | **`AxisDragManager` learns modes, not a second manager.** `pickTargets` entries gain `mode?: "axis" \| "inPlane"` (defaulting to `"axis"`), and a new **optional** `onInPlaneDrag(id, position)` receives the 2-DOF result. `getAxis`, `getOrigin` and `canDrag` are reused **verbatim** — the in-plane drag needs the plane's normal to build its drag plane, which is exactly what `getAxis` already returns. **`SectionBox` needs zero changes**: it omits `mode` and never passes `onInPlaneDrag`, so `"inPlane"` targets are inert for any consumer that does not opt in. ⚠️ **"Reused verbatim" describes the *contract*, not the internals** — `_begin` and `_update` genuinely branch. In-plane mode builds `dragPlane` as the **literal cut plane** (`normal = axis`, through `origin`), not the camera-facing plane the axis mode constructs to dodge degenerate ray angles, and `_update` skips the `dot(axis)` projection entirely and hands `onInPlaneDrag` the raw intersection. Two `DragSession` behaviours, not zero new branching. **Rejected: per-target callbacks** — `pickTargets()` runs on every `pointermove` during hover, so a closure per target per frame is real GC churn for no gain over one optional field on the options object. |
+| 7 | **`hoveredMode` and `draggingMode` join `hoveredId`/`draggingId`.** Two payoffs: hovering the diamond highlights the *diamond* rather than the arrow you are not about to grab, and `ClipperFillManager` can skip the redundant rebuild measured above. The handle gains a second highlight flag for the quad. |
+| 8 | **Recovery is a per-plane button in `ToolbarClip`, not a double-click gesture**, resetting the offset to the click point. It slots into the existing `handleSelectPlane`/`handleTogglePlane`/`handleDeletePlane` pattern, and — unlike a gesture on the handle — it still works in the case that motivates having a reset at all: a gizmo dragged off-screen cannot be double-clicked. |
+| 9 | **`ClipperPlaneState` gains `gizmoMoved: boolean`**, and an in-plane drag triggers `onStateChanged` **once on drag end**, never per frame. ⚠️ This deliberately breaks the existing rule that drag state never reaches React (*"Hover and drag change how outlines look, but not what React renders"*) — narrowly, at one transition, so the reset button can disable itself instead of sitting live and doing nothing. A boolean, not the offset: the type's docstring says it is a dropdown row. ⚠️ **The flag is set from a dirty bit inside `onInPlaneDrag`, not from the end transition itself.** Reading the `draggingId → null` transition alone would flip `gizmoMoved` true on a *press-and-release with no movement*: `onInPlaneDrag` never fires, nothing moved, yet the reset button would light up for a plane sitting exactly where it started. `onInPlaneDrag` only runs on real pointer movement, so a per-session bit set there is the honest signal. |
+| 10 | **Verified by a new Group D in `scripts/check-gizmo-frames.mjs`** (`npm run check:gizmo`), following ADR-0009's precedent rather than adding Vitest — which ADR-0009 deferred to its own branch specifically so it would not be *"smuggled into a gizmo fix"*, and this is a gizmo fix. |
+
+| 11 | **The clamp is split by moment: free while dragging, clamped on refit.** Interactive placement is never overridden — that is the feature. But `outlines.onFitChanged` is a one-shot, non-interactive event that *already* recomputes the footprint, so it is the one place a clamp is nearly free, and it closes precisely the hole decision 6's free placement opens: an owned offset outliving a footprint that just shrank. The offset is clamped into the new rectangle there, and decision 8's button stays as the fallback for anything a clamp cannot cover rather than as the sole rescue. ⚠️ **Consequence: `onFitChanged`'s loop is not deleted after all** — it changes job from anchor-resync to clamp-then-resync, and `ClipperOutlineManager` gains the extent accessor (`width`/`height` are local to `_applyFit` today; only `centerX`/`centerY` are stored). |
+
+| 12 | **The offset maths is extracted to `src/gizmoOffset.ts`** (`localOffsetToWorld`, `worldPointToLocalOffset`, `clampOffsetToExtent`) — **not planned, added during implementation.** Decision 10 could not be honoured without it: `ClipperCursor` needs a `Components`, a `World` and a viewport to construct, so nothing inside it is reachable headlessly, and a Group D that re-implemented the arithmetic beside it would keep passing if production stopped doing it. That is the exact failure ADR-0009 records under *"Re-implementing the follow transform inside the check script"*, which is why `applyFollowTransform` exists at all. Second benefit: `_syncAnchor` and `onDrag` previously held the same `set(x, y, 0).applyQuaternion(q)` line twice, and two copies of a conversion is how one exact and one approximate direction gets shipped. |
+
+**⚠️ Group D found a defect in itself, not in the code — and it is the one ADR-0009 predicted.**
+The first draft asserted the offset was perpendicular to the **exact** `plane.normal`. It failed only
+on plan cuts, with an error scaling exactly linearly with offset magnitude (`1e-4 × offset`:
+`2.5e-5` at offset 0.25, `4.0e-3` at 40, `1.75e-2` at 250). That is three's degenerate-`lookAt` nudge
+`_z.z += 0.0001`, leaving a plan cut's frame permanently **0.00573°** off its own normal — the figure
+Group B already asserts and [ADR-0009](docs/adr/0009-section-plane-gizmo-local-frame.md) already
+records, with the explicit warning that this script *"must tolerate ~0.01°, not 0, or it fails on the
+most common cut in the app for a non-bug."* Two consequences worth keeping:
+
+- **The correct invariant is perpendicularity to the frame's own local +Z**, not to the exact normal —
+  because local +Z is the direction the gizmo *and* the outline share (ADR-0009 decision 4), so it is
+  what "in-plane" means here. Asserted at `1e-9`; the deviation from the exact normal is separately
+  pinned to a `3e-4 × (|offset| + 1)` nudge bound, so a genuinely broken conversion (local z not
+  zeroed, giving a component of order `|offset|`) is still caught by orders of magnitude.
+- **`onDrag`'s exactness claim survives free placement, and the reason is structural.** Drift measured
+  `0.0e+0` on every frame/offset pair including a 250-unit offset on a diagonal cut, because
+  `_syncAnchor` built the anchor and `onDrag` subtracts it using the **same** function on the **same**
+  frame, so the offset cancels identically rather than approximately. This is the invariant that would
+  have failed silently, and it is now the one Group D exists for.
+
+⚠️ **A pre-existing, immaterial subtlety surfaced while fixing D2.** `planeFit`'s stated invariance
+holds exactly for sliding along the frame's local +Z, but a real drag slides along `getAxis` = the
+*exact* normal, which differs by that same 0.00573° on plan cuts. So a plan-cut drag does shift the
+fitted rectangle by ~`1e-4` of the distance dragged — **under 4mm over a 37.5m drag**. Immaterial, not
+introduced by this change, and nothing depends on it since the clamp only runs on a refit. Recorded
+so it is not rediscovered as a bug.
+
+**⚠️ One thing gets deleted.** `ClipperOutlineManager.centerOffset()` loses both its callers
+(`_syncAnchor` and `onDrag`) and goes with them — the `centerX`/`centerY` fields stay, since
+`_applyFit` still positions the band and outline with them. An earlier draft of this entry also
+deleted `onFitChanged`'s anchor loop; decision 11 keeps it, with a different job.
+
+**What Group D must assert** — the load-bearing one is the second:
+
+1. The offset is purely in-plane: `dot(rotatedOffset, plane.normal) ≈ 0`.
+2. **The cut-drag conversion stays exact for an *arbitrary* offset**, not just the fitted centre.
+   `onDrag`'s comment claims it recovers the helper position *"exactly rather than approximately"*,
+   and that claim currently rests on the offset coming from `centerOffset`. A user-set offset must
+   not weaken it — if it does, the cut drifts slightly on every drag, which reads as imprecision
+   rather than as a bug, and so would ship.
+3. World → local → world round-trips on a skewed plane.
+4. Sliding along local +Z leaves the offset untouched.
+
+**Alternatives rejected** (for the ADR):
+
+- **Keep centre-anchoring; fix the complaint with a highlight pulse on the newly placed band** — my
+  own recommendation, and it addresses the plausible underlying need ("I lose track of which plane I
+  just placed") without touching the drag contract at all. Rejected by the developer on the direct
+  reading of the request: the arrow should be where you pointed.
+- **Two 1-DOF drags on the inert in-plane arms** — genuinely tempting, and the cheapest option on the
+  table: it reuses `getAxis`/`onDrag` with **no new drag mode**, no degenerate case, and gives the
+  arms a job ADR-0009 says they do not have. Rejected because placing the gizmo diagonally then takes
+  two separate drags, and because the arms are barely outside the arrow's grab cylinder anyway (tip at
+  `0.63` vs radius `0.525`), so they would have needed pick surgery of their own.
+- **Carve a central gap in the arrow's grab cylinder** — physically disjoint pick volumes, no ordering
+  rule that a later edit could violate. Rejected for cost: two cylinders merged into one mesh to keep
+  `picker` a single `THREE.Mesh`, a new `three/examples` import for `mergeGeometries`, a sibling
+  constant to `GIZMO_PICK_RADIUS` — and the visible arrow line still runs through the gap, so it
+  breaks *"what you grab is what you see"* for the arrow instead of for the diamond.
+- **Both the gap and the priority pass** — belt and braces. Rejected because the second mechanism is
+  unreachable while the first works, so it never gets exercised and rots untested.
+- **A modifier key (Alt-drag the arrow)** — smallest change imaginable, no geometry and no pick
+  conflict. Rejected on three counts: undiscoverable, Alt is an OS/browser menu modifier on Windows,
+  and it is still a drag *along the normal*, so it cannot actually move the gizmo within the plane.
+- **Clamp the drag itself to the fitted band rectangle** — my original recommendation, and it
+  guarantees the arrow always visibly belongs to a band. Rejected on the developer's call: free
+  placement is the point of the feature, and a clamp that fights the pointer mid-drag is the wrong
+  place to enforce tidiness. Decision 11 keeps the guarantee without the fight, by moving the clamp
+  to the refit. Mitigating fact for the unclamped drag: it is view-bounded in practice, since the
+  drop point must be somewhere the pointer ray hits the plane.
+- **No clamp anywhere at all** — what this entry specified before review, with decision 8's button as
+  the only recovery. Rejected because the orphan case (offset outliving a shrunken footprint) is both
+  concrete and cheap to prevent at exactly the moment the footprint is already being recomputed.
+  Leaving it to a button made a rescue load-bearing that should have been a fallback.
+- **Clamp on refit only when the gizmo has ended up *fully* outside the new rectangle** — intervenes
+  only in the genuinely broken case and never merely tidies. Rejected as a threshold to define and
+  defend for a narrower guarantee at identical accessor cost.
+- **A second `AxisDragManager`-shaped class for in-plane dragging** — each class would do exactly one
+  kind of drag and `SectionBox` would be untouched. Rejected as unworkable rather than merely
+  inelegant: two capture-phase `pointerdown` listeners on `window` race for the same click, both
+  toggle `world.camera.enabled` so whichever ends second re-enables the camera mid-drag, and hover
+  state plus the `grab` cursor split across two owners — needing a coordinator, which is what
+  `AxisDragManager` already is.
+- **Thread `mode` through every callback** (`getAxis(id, mode)`, `onDrag(id, position, mode)`) rather
+  than adding `onInPlaneDrag` — symmetric signatures, one drag entry point, and `SectionBox` still
+  compiles untouched since TS permits a handler declaring fewer parameters. Rejected because
+  `onDrag`'s `position` would then mean two different things depending on a sibling argument, and
+  every `ClipperCursor` handler would open with a mode switch including the two that do not care.
+- **Stay mode-blind and let one `highlighted` flag light the whole gizmo** — zero new API. Rejected
+  because hovering the arrow would advertise the diamond as grabbable and vice versa, and it keeps the
+  redundant per-reposition `ClipEdges.update()`.
+- **Put the offset itself on `ClipperPlaneState`** instead of a boolean — opens a numeric-entry path
+  later. Rejected as a field built for a feature nobody asked for, in a type whose docstring says it
+  is a dropdown row.
+- **Add Vitest and write these as real unit tests** — ADR-0009 agrees the case is real and names four
+  pure-math defects in this subsystem with no unit seam. Deferred again, for its own reason: ADR-0009
+  deferred it to a separate branch precisely so a gizmo change would not carry a tooling change.
+
+**Open / to verify at runtime:**
+
+- Whether the diamond is comfortably grabbable at working zoom. It computes to ≈37px across on a
+  900px-tall viewport (`GIZMO_VIEW_FRACTION 0.068` per `GIZMO_LENGTH 1.4` ⇒ `0.6 × √2` gizmo units),
+  but that is arithmetic, not a hand on a mouse — and decision 5 accepts that it gets harder at
+  shallow angles.
+- At what viewing angle the diamond becomes *practically* ungrabbable, and whether that lands
+  somewhere a user would notice as broken rather than as "I can't see it either".
+- Whether losing the middle of the arrow to the diamond (decision 4) is felt when nudging a cut.
+- Whether a gizmo sitting far from its band reads as orphaned *within a session*, where decision 11's
+  refit clamp does not apply — it only fires on model load/unload, so free placement is still free
+  until then.
+- Whether decision 11's clamp is ever *felt* as the gizmo silently moving on a model load, which is
+  the specific thing the developer rejected when the clamp was proposed for the drag itself.
+
+## OPEN BUG: a cut's band and/or fill reaches past the model it cuts
+
+_Staged 2026-08-06 during testing of the movable-gizmo branch. **Not diagnosed** — the symptom is
+still unconfirmed, so nothing here is a decision yet. Triage recorded so it is not re-derived._
+
+**Reported as:** "there is a bug when section … I think the `ClipStyler` is out of the clipper",
+with a screenshot showing a red cut-plane rectangle, a large translucent red region extending off
+to the upper-left well past the building, a pale sheet near the roof line, and white outlines
+enclosing far more than the model. Several structures are loaded in that scene, which matters
+below.
+
+⚠️ **The symptom has four readings with four different root causes, and they were not yet
+discriminated** (the triage question was interrupted). Recorded because picking the wrong one
+means fixing the wrong thing:
+
+| Reading | Candidate root cause |
+|---|---|
+| the red rectangle itself is oversized | finding 3 — the band is fitted to *every* model |
+| a pale sheet overruns the cut face | finding 2 — fills are unbounded by design |
+| nothing is actually being cut | `SectioningArbiter` left neither tool cutting, or `_clipper.enabled` is false while bands still draw. ⚠️ Genuinely contradictory: `_syncVisibility` ties band visibility to `planeState.enabled`, so a visible band over an uncut model should be impossible — trace this one first if it is the reading |
+| a large soft translucent quad is back | the vendor's own `SimplePlane._planeMesh` rendering again, i.e. `plane.visible = false` / `suppressDefaultArrow` not holding. Exactly what [ADR-0002](docs/adr/0002-section-plane-outline-only.md) reversed, so it has a documented history and a known fix |
+
+**Finding 1 — the movable-gizmo branch is not implicated, established from the diff not by
+argument.** The only changes in `ClipperCursor` that touch rendering are `pickTargets` (which
+meshes are *clickable*), the argument passed to `noteDragState`, and the removal of two
+`centerOffset` calls. `_syncVisibility`, `outlines.setVisible`, `fills.setVisible` and
+`_applyFit`'s geometry are all untouched, and `ClipperFillManager.ts` is not in the diff at all —
+so band, outline and fill are produced by code identical to `main`. A `git stash push -u` /
+`git stash pop` cycle remains the definitive proof and has **not** been run. ⚠️ `-u` is required
+(`gizmoOffset.ts` is untracked), and since nothing is committed on this branch that stash entry
+would be the only copy of the work.
+
+**Finding 2 — fills cannot be bounded through the vendor API. This is the durable fact here.**
+`ClipEdgesCreationConfig` exposes only `id`, `items`, `link` and `world` — there is no extent,
+rectangle or bounds option — and `ClipEdges.plane` is a `THREE.Plane`, which is infinite by
+definition. `ClipStyler` therefore fills wherever that infinite plane meets **any** geometry, and
+`ClipperFillManager` has no extent concept to pass even if it wanted one. So "the fill overruns
+the band" is not a misconfiguration and no config change can fix it; bounding it would mean four
+side clipping planes on the fill material plus `localClippingEnabled` on the renderer, which is a
+decision, not a patch.
+
+**Finding 3 — a band is fitted to every loaded model, not the one that was cut.** `_measure()`
+calls `boxer.addFromModels()`, which unions all models, and `_applyFit` feeds that box to
+`fitBoxToFrame`. With several structures loaded, a plane placed on one building gets a rectangle
+spanning all of them. Pre-existing ([ADR-0010](docs/adr/0010-sectioning-arbiter-and-fitted-plane-outlines.md))
+and invisible in a single-model scene, which is likely why it has not been seen before.
+
+**Ruled out:** band/outline divergence. `_applyFit` positions **both** at `(centerX, centerY, 0)`,
+so the crisp rectangle and the translucent region are necessarily the same rectangle — they cannot
+drift apart.
+
 ---
 
 Last cleared 2026-08-04. Everything staged here has been promoted:

@@ -53,6 +53,12 @@ const { buildAxisGizmo } = await server.ssrLoadModule(
 const { applyFollowTransform } = await server.ssrLoadModule(
   "/src/bim-components/GizmoAxis/src/follow-transform.ts",
 );
+// The real function ClipperOutlineManager._applyFit and ClipperCursor._clampGizmoOffset both
+// depend on — Group D's fourth invariant is this function's own stated contract, not a copy of
+// its arithmetic.
+const { fitBoxToFrame } = await server.ssrLoadModule(
+  "/src/bim-components/ClipperCursor/src/planeFit.ts",
+);
 
 const failures = [];
 const fail = (msg) => failures.push(msg);
@@ -334,6 +340,235 @@ for (const axis of ["x", "y", "z"]) {
     const ok = err <= TOLERANCE_DEG;
     console.log(`   ${ok ? "ok  " : "FAIL"} ${axis}${direction > 0 ? "+" : "-"} ${err.toFixed(5)}deg`);
     if (!ok) fail(`arrow form ${axis}${direction}: ${err.toFixed(3)}deg off its world axis`);
+  }
+}
+
+// ─── Group D: the movable gizmo's in-plane offset ──────────────────────────────────────────
+//
+// A cut plane's gizmo sits at the clicked point plus an **owned** offset in the helper's local
+// X/Y, which the user drags around by grabbing the centre diamond. Four invariants hold the
+// feature up, and the second is the one that fails *silently* — a slightly-wrong conversion just
+// makes the cut drift a little on each drag, which reads as imprecision rather than as a bug.
+//
+// ⚠️ These import `gizmoOffset.ts` — the real functions `ClipperCursor` calls. That module exists
+// as a module precisely so this group can reach it: `ClipperCursor` needs a World and a viewport
+// element, so re-implementing the arithmetic here would keep passing even if production stopped
+// doing it. Same lesson as ADR-0009's rejected "re-implement the follow transform" approach.
+console.log("\nGroup D — in-plane gizmo offset");
+
+const { localOffsetToWorld, worldPointToLocalOffset, clampOffsetToExtent } =
+  await server.ssrLoadModule("/src/bim-components/ClipperCursor/src/gizmoOffset.ts");
+
+// Deliberately awkward: asymmetric, negative, large relative to the helper's own position, and
+// (0,0) for the spawn case. A fitted-centre offset would only ever be one modest vector.
+const OFFSETS = [
+  ["spawn, unmoved", new THREE.Vector2(0, 0)],
+  ["small +/+", new THREE.Vector2(1.5, 0.25)],
+  ["negative both", new THREE.Vector2(-12.75, -3.5)],
+  ["one axis only", new THREE.Vector2(0, 40)],
+  ["far outside any footprint", new THREE.Vector2(-250, 175.5)],
+];
+
+// Skewed frames only — an axis-aligned plane would pass a broken conversion by symmetry.
+const OFFSET_FRAMES = [
+  ["plan cut +Y (degenerate lookAt)", new THREE.Vector3(0, 1, 0)],
+  ["elevation +Z", new THREE.Vector3(0, 0, 1)],
+  ["raked 20deg about Y", rotAboutY(20)],
+  ["raked 44.9deg about Y", rotAboutY(44.9)],
+  ["full diagonal (1,1,1)", new THREE.Vector3(1, 1, 1)],
+];
+
+// World units. Positions here are order 10 and offsets order 100, so float64 leaves ~1e-13;
+// 1e-9 is far tighter than any real error while staying clear of noise. NOT the 0.01deg angular
+// tolerance used above — that one exists for three's `lookAt` nudge, which does not apply to a
+// subtraction.
+const EXACT_EPS = 1e-9;
+
+const scratchV = new THREE.Vector3();
+const scratchQ = new THREE.Quaternion();
+
+for (const [frameLabel, rawNormal] of OFFSET_FRAMES) {
+  const normal = rawNormal.clone().normalize();
+
+  for (const [offsetLabel, offset] of OFFSETS) {
+    const helper = helperFor(normal);
+    const helperPos = helper.getWorldPosition(new THREE.Vector3());
+
+    // (1) Purely in-plane: local z is passed as 0, and a rotation preserves angles, so the offset
+    // cannot carry the plane along the normal direction the gizmo and outline actually share.
+    //
+    // ⚠️ Measured against the **frame's own local +Z**, not against the exact `normal` — and the
+    // difference is not pedantry. For a plan cut three's `lookAt` is degenerate and nudges
+    // `_z.z += 0.0001`, leaving the frame permanently 0.00573deg off its own normal (ADR-0009
+    // records this, and Group B above asserts it). Testing against the exact normal reports a
+    // component of 1e-4 * |offset| and fails the app's most common cut for a non-bug — the exact
+    // trap ADR-0009 warns about when it says this script must tolerate ~0.01deg, not 0.
+    const worldOffset = localOffsetToWorld(
+      offset,
+      helper,
+      new THREE.Vector3(),
+      scratchQ,
+    ).clone();
+    const frameZ = new THREE.Vector3(0, 0, 1)
+      .applyQuaternion(helper.getWorldQuaternion(new THREE.Quaternion()))
+      .normalize();
+    const alongNormal = Math.abs(worldOffset.dot(frameZ));
+
+    // The deviation from the *exact* normal is real but bounded by the nudge, so it is pinned
+    // rather than ignored: a genuinely broken conversion (local z not zeroed) would put a
+    // component of order |offset| here, which this bound catches by orders of magnitude.
+    const alongExactNormal = Math.abs(worldOffset.dot(normal));
+    const nudgeBound = 3e-4 * (offset.length() + 1);
+
+    // (2) THE LOAD-BEARING ONE. Replays what AxisDragManager + ClipperCursor.onDrag do: the
+    // anchor is the helper displaced by the offset; an "axis" drag slides that anchor along the
+    // normal; onDrag subtracts the offset back off to recover the helper. The claim in onDrag's
+    // comment is "exactly rather than approximately" for *any* stored offset — so the recovered
+    // helper must differ from a pure slide along the normal by nothing but float noise, and its
+    // in-plane position must not have moved at all.
+    const anchor = helperPos.clone().add(worldOffset);
+    const slide = 13.25;
+    const draggedAnchor = anchor.clone().addScaledVector(normal, slide);
+    const recovered = draggedAnchor.clone().sub(worldOffset);
+    const expected = helperPos.clone().addScaledVector(normal, slide);
+    const driftErr = recovered.distanceTo(expected);
+    // The in-plane drift on its own, which is the component a user would see as the cut sliding
+    // sideways while they dragged it forwards.
+    const inPlaneDrift = recovered
+      .clone()
+      .sub(expected)
+      .sub(normal.clone().multiplyScalar(recovered.clone().sub(expected).dot(normal)))
+      .length();
+
+    // (3) Round-trip: the offset as a world point, read back as an offset, must return itself.
+    const worldPoint = helperPos.clone().add(worldOffset);
+    const roundTripped = worldPointToLocalOffset(
+      worldPoint,
+      helper,
+      scratchV,
+      new THREE.Vector2(),
+    );
+    const roundTripErr = roundTripped.distanceTo(offset);
+
+    const ok =
+      alongNormal <= EXACT_EPS &&
+      alongExactNormal <= nudgeBound &&
+      driftErr <= EXACT_EPS &&
+      inPlaneDrift <= EXACT_EPS &&
+      roundTripErr <= EXACT_EPS;
+
+    console.log(
+      `   ${ok ? "ok  " : "FAIL"} ${`${frameLabel} / ${offsetLabel}`.padEnd(52)}` +
+        ` normal ${alongNormal.toExponential(1)}` +
+        `  drift ${driftErr.toExponential(1)}` +
+        `  trip ${roundTripErr.toExponential(1)}`,
+    );
+
+    if (alongNormal > EXACT_EPS) {
+      fail(
+        `${frameLabel} / ${offsetLabel}: offset has a ${alongNormal.toExponential(2)} component ` +
+          `along the frame's local +Z — it must lie in the cut surface`,
+      );
+    }
+    if (alongExactNormal > nudgeBound) {
+      fail(
+        `${frameLabel} / ${offsetLabel}: offset is ${alongExactNormal.toExponential(2)} off the ` +
+          `exact normal, over the ${nudgeBound.toExponential(2)} lookAt-nudge bound — local z is ` +
+          `probably no longer being zeroed`,
+      );
+    }
+    if (driftErr > EXACT_EPS || inPlaneDrift > EXACT_EPS) {
+      fail(
+        `${frameLabel} / ${offsetLabel}: recovering the helper after a drag is off by ` +
+          `${driftErr.toExponential(2)} (in-plane ${inPlaneDrift.toExponential(2)}). onDrag's ` +
+          `"exactly rather than approximately" no longer holds for an arbitrary offset`,
+      );
+    }
+    if (roundTripErr > EXACT_EPS) {
+      fail(
+        `${frameLabel} / ${offsetLabel}: world->local->world round-trip lost ` +
+          `${roundTripErr.toExponential(2)} — dragging the diamond would not land where clicked`,
+      );
+    }
+  }
+}
+
+// (4) `fitBoxToFrame`'s own stated invariant: the fitted rectangle is unchanged by sliding the
+// frame along its own local +Z, which is the only thing dragging a cut does. This is what makes a
+// stored offset stable during a drag — and what makes clamping safe to do only at a refit, since
+// a drag can never invalidate the rectangle it was clamped into.
+console.log("\nGroup D2 — fit invariance under sliding along the cut normal");
+
+const FIT_BOX = new THREE.Box3(
+  new THREE.Vector3(-30, -4, -17.5),
+  new THREE.Vector3(22.5, 61, 9),
+);
+
+for (const [frameLabel, rawNormal] of OFFSET_FRAMES) {
+  const normal = rawNormal.clone().normalize();
+  const helper = helperFor(normal);
+
+  const before = fitBoxToFrame(FIT_BOX, helper);
+
+  // `fitBoxToFrame` states its invariant for sliding along the frame's **own local +Z**, so that
+  // is what is asserted here.
+  //
+  // ⚠️ A real drag slides along `getAxis` = the *exact* `plane.normal`, which on a plan cut is
+  // 0.00573deg off local +Z (the same three.js nudge as Group D above). So in the app the
+  // rectangle does shift very slightly during a drag on a plan cut — ~1e-4 of the distance
+  // dragged, i.e. under 4mm over a 37.5m drag. Immaterial, pre-existing, and independent of the
+  // movable gizmo, but it means `planeFit`'s invariant is exact for local +Z and merely
+  // near-exact for what actually happens. The clamp only runs on a refit, so nothing depends on
+  // the difference.
+  const slideDir = new THREE.Vector3(0, 0, 1)
+    .applyQuaternion(helper.getWorldQuaternion(new THREE.Quaternion()))
+    .normalize();
+  helper.position.addScaledVector(slideDir, 37.5);
+  helper.updateMatrix();
+  helper.updateWorldMatrix(true, false);
+  const after = fitBoxToFrame(FIT_BOX, helper);
+
+  if (!before || !after) {
+    console.log(`   FAIL ${frameLabel.padEnd(52)} fit returned null`);
+    fail(`${frameLabel}: fitBoxToFrame returned null for a non-empty box`);
+    continue;
+  }
+
+  const err = Math.max(
+    Math.abs(before.width - after.width),
+    Math.abs(before.height - after.height),
+    Math.abs(before.centerX - after.centerX),
+    Math.abs(before.centerY - after.centerY),
+  );
+  const ok = err <= EXACT_EPS;
+  console.log(`   ${ok ? "ok  " : "FAIL"} ${frameLabel.padEnd(52)} max delta ${err.toExponential(1)}`);
+  if (!ok) {
+    fail(
+      `${frameLabel}: sliding along the cut normal changed the fitted rectangle by ` +
+        `${err.toExponential(2)} — a drag would silently move the clamp bounds`,
+    );
+  }
+}
+
+// The clamp itself: an offset outside the rectangle lands on its boundary, one inside is left
+// exactly alone. Only a refit ever calls this, never a drag.
+console.log("\nGroup D3 — refit clamp");
+
+const CLAMP_EXTENT = { halfWidth: 10, halfHeight: 4, centerX: 2, centerY: -1 };
+const CLAMP_CASES = [
+  ["inside, untouched", new THREE.Vector2(3, -2), new THREE.Vector2(3, -2)],
+  ["far outside +/+", new THREE.Vector2(500, 500), new THREE.Vector2(12, 3)],
+  ["far outside -/-", new THREE.Vector2(-500, -500), new THREE.Vector2(-8, -5)],
+  ["outside on one axis only", new THREE.Vector2(4, 99), new THREE.Vector2(4, 3)],
+];
+
+for (const [label, input, want] of CLAMP_CASES) {
+  const got = clampOffsetToExtent(input.clone(), CLAMP_EXTENT);
+  const err = got.distanceTo(want);
+  const ok = err <= EXACT_EPS;
+  console.log(`   ${ok ? "ok  " : "FAIL"} ${label.padEnd(52)} got (${got.x}, ${got.y})`);
+  if (!ok) {
+    fail(`clamp ${label}: got (${got.x}, ${got.y}), want (${want.x}, ${want.y})`);
   }
 }
 

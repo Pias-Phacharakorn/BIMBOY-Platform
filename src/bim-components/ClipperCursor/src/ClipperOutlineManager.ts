@@ -17,7 +17,7 @@ import { PlaneVisualState } from "./types";
  * (→ [ADR-0009](../../../../docs/adr/0009-section-plane-gizmo-local-frame.md)).
  */
 const OUTLINE_OPACITY: Record<PlaneVisualState, number> = {
-  idle: 0.45,
+  idle: 0.05,
   selected: 0.85,
   active: 1,
 };
@@ -69,6 +69,13 @@ interface OutlineEntry {
   /** In-plane offset from the helper's origin to the rectangle's middle, in local X/Y. */
   centerX: number;
   centerY: number;
+  /**
+   * The fitted rectangle's full width/height in the plane's local X/Y — {@link _applyFit}'s own
+   * `fit.width`/`fit.height`, kept here rather than staying local to that method because
+   * {@link extent} is the first reader outside it.
+   */
+  width: number;
+  height: number;
 }
 
 /**
@@ -171,6 +178,8 @@ export class ClipperOutlineManager {
       outlineMaterial,
       centerX: 0,
       centerY: 0,
+      width: 0,
+      height: 0,
     };
     this._outlines.set(planeId, entry);
 
@@ -235,20 +244,25 @@ export class ClipperOutlineManager {
   }
 
   /**
-   * World-space offset from a plane's helper origin to the middle of its rectangle — what the
-   * gizmo anchor adds so the arrow grows from the centre of what it moves, rather than from
-   * wherever the user happened to click. Zero when the plane is unknown.
+   * The fitted rectangle's current half-extents and middle, in the plane's own local X/Y.
+   * `null` when the plane is unknown.
    *
-   * Purely in-plane, so it is perpendicular to every drag: that is what makes the anchor
-   * conversion in `ClipperCursor` exact rather than approximate.
+   * The one reader is `ClipperCursor`'s refit clamp (decision 11): `onFitChanged` recomputes
+   * this rectangle on every model load/unload, and that is the one moment a gizmo's owned offset
+   * gets clamped back into it — the drag itself stays completely free. Half-extents rather than
+   * corners, because clamping an (x, y) offset only needs the box bounds around `centerX`/
+   * `centerY`, which already carry the rectangle's middle.
    */
-  centerOffset(planeId: string, target: THREE.Vector3) {
+  extent(planeId: string): { halfWidth: number; halfHeight: number; centerX: number; centerY: number } | null {
     const entry = this._outlines.get(planeId);
-    if (!entry) return target.set(0, 0, 0);
+    if (!entry) return null;
 
-    return target
-      .set(entry.centerX, entry.centerY, 0)
-      .applyQuaternion(entry.plane.helper.getWorldQuaternion(SYNC_QUATERNION));
+    return {
+      halfWidth: entry.width / 2,
+      halfHeight: entry.height / 2,
+      centerX: entry.centerX,
+      centerY: entry.centerY,
+    };
   }
 
   /** Recompute on model load/unload, debounced so a batch load refits once. */
@@ -299,6 +313,8 @@ export class ClipperOutlineManager {
     const height = fit ? fit.height : FALLBACK_PLANE_SIZE;
     entry.centerX = fit ? fit.centerX : 0;
     entry.centerY = fit ? fit.centerY : 0;
+    entry.width = width;
+    entry.height = height;
 
     const halfWidth = width / 2;
     const halfHeight = height / 2;
