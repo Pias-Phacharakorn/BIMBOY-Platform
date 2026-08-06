@@ -11,6 +11,12 @@ export const GIZMO_LENGTH = 1.4;
 const GIZMO_CONE_HEIGHT = 0.3;
 const GIZMO_CONE_RADIUS = 0.08;
 const GIZMO_DIAMOND_SIZE = 0.6;
+/**
+ * Base colour of the centre diamond — pure white, so `AxisGizmo.centreHighlighted` (in
+ * `GizmoAxis/index.ts`) has a fixed value to restore rather than needing its own colour
+ * parameter, the same role `grabColor` plays for the arrow's `highlighted`.
+ */
+export const GIZMO_DIAMOND_COLOR = 0xffffff;
 /** Radius of the invisible grab cylinder around the grabbable axis, in gizmo units. */
 const GIZMO_PICK_RADIUS = 0.35;
 /** Draw after everything else in the overlay pass. */
@@ -47,6 +53,8 @@ export interface GizmoMesh {
   group: THREE.Group;
   /** The invisible cylinder wrapping the grabbable arrow. */
   picker: THREE.Mesh;
+  /** The centre diamond mesh, already built for the `"plane"` form — `null` for `"arrow"`. */
+  diamond: THREE.Mesh | null;
   /**
    * Materials of the grabbable arrow only, for the caller to recolour on hover. Fresh per
    * gizmo — recolouring one can never leak into another.
@@ -128,11 +136,18 @@ export function buildAxisGizmo({
   // moves, not in the middle of anything. It lies in local XY, which for the plane form is the
   // cut surface itself, so it reads as a scrap of the plane rather than a floating badge.
   // Accepted consequence: being a flat quad, it disappears when the plane is sighted edge-on.
+  //
+  // It is also the pick target for AxisDragManager's "inPlane" mode — the mesh itself, not a
+  // dedicated invisible proxy, which preserves "what you can grab is what you can see" for the
+  // diamond the same way the arrow's picker preserves it for the arrow. No dot(viewDir, normal)
+  // guard is needed: AxisDragManager._begin disables camera.enabled for the whole drag, so a
+  // session that starts grabbable cannot rotate itself edge-on mid-drag.
+  let diamond: THREE.Mesh | null = null;
   if (isPlane) {
-    const diamond = new THREE.Mesh(
+    diamond = new THREE.Mesh(
       new THREE.PlaneGeometry(GIZMO_DIAMOND_SIZE, GIZMO_DIAMOND_SIZE),
       new THREE.MeshBasicMaterial({
-        color: 0xffffff,
+        color: GIZMO_DIAMOND_COLOR,
         transparent: true,
         opacity: 0.35,
         side: THREE.DoubleSide,
@@ -226,6 +241,7 @@ export function buildAxisGizmo({
   return {
     group,
     picker,
+    diamond,
     grabMaterials: [lineMaterials.get(grabbable)!, coneMaterials.get(grabbable)!],
     grabColor: palette[grabbable],
   };

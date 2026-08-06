@@ -130,6 +130,14 @@ export function ToolbarClip() {
     clipper.deletePlane(id);
   };
 
+  // Recentres a plane's gizmo on the point it was clicked at — the fallback recovery for a
+  // gizmo dragged somewhere the refit clamp doesn't reach (only a model load/unload triggers
+  // that clamp). Disabled via plane.gizmoMoved until there is actually something to recentre.
+  const handleResetGizmo = (id: string) => {
+    const clipper = components.get(ClipperCursor as any) as ClipperCursor;
+    clipper.resetGizmo(id);
+  };
+
   const isActive = activeTool === "clip";
   const buttonClass = `inline-flex items-center justify-center gap-2 min-h-8 p-1 border border-transparent rounded-radius bg-transparent cursor-pointer text-xs font-semibold hover:border-border hover:bg-surface-alt hover:text-fg transition-all duration-120 ${
     isActive || isDropdownOpen ? "text-accent-2 bg-surface-alt border-border" : "text-white"
@@ -227,16 +235,35 @@ export function ToolbarClip() {
                       <span className="text-xs truncate font-semibold">{plane.name}</span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeletePlane(plane.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 flex items-center justify-center p-0.5 rounded text-muted hover:text-status-danger hover:bg-status-danger/10 transition-all cursor-pointer"
-                    >
-                      <Icon name="CLOSE" size={14} />
-                    </button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResetGizmo(plane.id);
+                        }}
+                        disabled={!plane.gizmoMoved}
+                        title="Recentre gizmo to the clicked point"
+                        className={`flex items-center justify-center p-0.5 rounded transition-colors ${
+                          plane.gizmoMoved
+                            ? "text-muted hover:text-accent-2 hover:bg-accent-2/10 cursor-pointer"
+                            : "text-muted/40 cursor-not-allowed"
+                        }`}
+                      >
+                        <Icon name="FOCUS" size={14} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeletePlane(plane.id);
+                        }}
+                        className="flex items-center justify-center p-0.5 rounded text-muted hover:text-status-danger hover:bg-status-danger/10 transition-all cursor-pointer"
+                      >
+                        <Icon name="CLOSE" size={14} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}

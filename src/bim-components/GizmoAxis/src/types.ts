@@ -23,6 +23,20 @@ import { PlaneAxis } from "./axis";
  */
 export type AxisGizmoForm = "plane" | "arrow";
 
+/**
+ * Which handle on a `"plane"` gizmo a drag session targets.
+ *
+ * - `"axis"` — the long arrow, 1-DOF along the followed transform's local +Z (the cut normal).
+ *   Moves the thing the gizmo is attached to.
+ * - `"inPlane"` — the centre diamond, free 2-DOF inside the local XY plane. Moves only the
+ *   gizmo itself; whatever it is attached to does not move.
+ *
+ * Defaults to `"axis"` wherever it is optional, which is every target `SectionBox` ever
+ * supplies — so that class needs no change to keep behaving exactly as it did before this mode
+ * existed.
+ */
+export type AxisDragMode = "axis" | "inPlane";
+
 export interface AxisGizmoOptions {
   /**
    * Object whose world **transform** the gizmo tracks each frame — position *and* rotation, so
@@ -63,9 +77,22 @@ export interface AxisGizmoHandle {
    * since the gizmo is drawn on top of everything.
    */
   readonly picker: THREE.Mesh;
+  /**
+   * The centre diamond's own pick target — `null` on the `"arrow"` form, which has no diamond.
+   * Unlike `picker`, this is the mesh that is **drawn**, not an invisible proxy: the diamond
+   * quad itself is what a raycast hits, which is what keeps "what you can grab is what you can
+   * see" true for it too, the same property `axis-gizmo-mesh.ts` states for the arrow.
+   */
+  readonly diamond: THREE.Mesh | null;
   visible: boolean;
   /** Turns the grabbable arrow yellow. Set it while the handle is hovered or dragged. */
   highlighted: boolean;
+  /**
+   * Turns the centre diamond yellow, independent of {@link highlighted} — hovering or dragging
+   * the diamond must not light up the arrow you are not about to grab, and vice versa. No-op on
+   * the `"arrow"` form, which has no diamond to recolour.
+   */
+  centreHighlighted: boolean;
   /** Leaves the overlay scene and frees this gizmo's geometry and materials. */
   dispose(): void;
 }

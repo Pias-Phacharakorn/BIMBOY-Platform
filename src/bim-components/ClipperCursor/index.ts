@@ -2,10 +2,18 @@ import * as OBC from "@thatopen/components";
 import * as THREE from "three";
 // Relative, not the @/* alias: tsconfig excludes src/bim-components/**, so
 // vite-tsconfig-paths does not rewrite aliases inside this folder. Repo-wide convention here.
-import { AxisDragManager, AxisGizmoHandle, GizmoAxis, framePalette } from "../GizmoAxis";
+import { AxisDragManager, AxisDragMode, AxisGizmoHandle, GizmoAxis, framePalette } from "../GizmoAxis";
 import { ClipperFillManager } from "./src/ClipperFillManager";
 import { ClipperOutlineManager } from "./src/ClipperOutlineManager";
 import { ClipperPlacementManager } from "./src/ClipperPlacementManager";
+// Pure offset maths, extracted so `scripts/check-gizmo-frames.mjs` Group D can assert the code
+// that actually runs — this class needs a World and a viewport, so nothing inside it is reachable
+// headlessly. Same reason `applyFollowTransform` lives outside GizmoAxis's render loop.
+import {
+  clampOffsetToExtent,
+  localOffsetToWorld,
+  worldPointToLocalOffset,
+} from "./src/gizmoOffset";
 import { ClipperPlaneState } from "./src/types";
 
 export * from "./src";
@@ -75,18 +83,48 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
   /** The arrow gizmo per plane, shown for the selected one. Nothing else can reach them. */
   private readonly _gizmos = new Map<string, AxisGizmoHandle>();
   /**
-   * One per plane, at the middle of that plane's outline rather than at the point the user
-   * clicked — the same reason `SectionBox` anchors its arrows at face centres. Detached from any
-   * scene on purpose: `GizmoAxis` only reads `follow.matrixWorld` after `updateWorldMatrix`,
-   * which resolves fine with no parent.
+   * One per plane, at the click point plus that plane's owned {@link _gizmoOffsets} entry.
+   * Detached from any scene on purpose: `GizmoAxis` only reads `follow.matrixWorld` after
+   * `updateWorldMatrix`, which resolves fine with no parent.
    *
    * Each carries the **helper's rotation** as well as the offset position, because the `"plane"`
    * gizmo form grabs its target's local +Z — hand it an unrotated anchor and the arrow would
    * point down world Z instead of along the cut.
    */
   private readonly _anchors = new Map<string, THREE.Object3D>();
-  /** Scratch for the in-plane offset, read on every drag frame. */
+  /**
+   * Where each plane's gizmo sits, in the helper's local X/Y — the state this whole feature
+   * turns on. Starts at `(0, 0)` per plane: `plane.helper.position` **already is** the clicked
+   * point (`_createPlane` passes it as the coplanar point to
+   * `createFromNormalAndCoplanarPoint`), so "spawn where I clicked" needs no offset at all.
+   *
+   * Local, not world: a cut plane never rotates after creation, but local is *also* invariant
+   * under sliding the plane along its own normal — the only thing an `"axis"` drag does
+   * (`fitBoxToFrame`'s stated ⚠️ invariant) — so the offset survives a normal drag with no
+   * re-derivation. `onDrag` below is what depends on that.
+   *
+   * Free within a session — the drag itself is never clamped, on the developer's call — but
+   * clamped into the newly fitted rectangle on `outlines.onFitChanged` (decision 11), since a
+   * model load/unload is the one moment a clamp is nearly free.
+   */
+  private readonly _gizmoOffsets = new Map<string, THREE.Vector2>();
+  /**
+   * Ids whose in-plane drag has moved the gizmo at least once during the *current* gesture — the
+   * dirty bit `gizmoMoved` reads at drag end. Written only inside {@link _onInPlaneDrag}, which
+   * fires only on real pointer movement, so a press-and-release with zero movement leaves this
+   * empty and `gizmoMoved` correctly stays false rather than flipping true off the bare
+   * `draggingId → null` transition.
+   */
+  private readonly _gizmoDirty = new Set<string>();
+  /**
+   * Previous `draggingId`, read the same way `ClipperFillManager.noteDragState` reads its own
+   * private copy — so {@link _commitGizmoMoved} can tell a real end-of-drag transition from
+   * every other `onStateChanged` firing (hover changes included).
+   */
+  private _prevDraggingId: string | null = null;
+  /** Scratch for converting a stored local offset into world space, read on every drag frame. */
   private readonly _offset = new THREE.Vector3();
+  private readonly _offsetQuaternion = new THREE.Quaternion();
 
   constructor(components: OBC.Components, world: OBC.World, viewport: HTMLElement) {
     super(components);
@@ -109,28 +147,38 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     });
     this.placement.onChanged.add(() => this.onStateChanged.trigger());
 
-    // The manager knows nothing about clipping: these four callbacks are the whole of what a
-    // "plane" means to it, which is what lets SectionBox drive the same pointer handling.
+    // The manager knows nothing about clipping: these callbacks are the whole of what a "plane"
+    // means to it, which is what lets SectionBox drive the same pointer handling.
     this.drag = new AxisDragManager({
       world,
       viewport,
       /**
-       * Exactly **one** target per enabled plane, and which one depends on selection: the
-       * selected plane offers its arrow, every other offers its border band.
+       * Two targets for the selected plane — its arrow (`"axis"`) and its centre diamond
+       * (`"inPlane"`) — and one for every other enabled plane: its border band, select-only.
        *
-       * That split is forced by `canDrag`, which is keyed on plane id — offer both and it could
-       * not tell an arrow grab from a band click on the same plane. It also keeps every target
-       * thin: a band is a ring around the footprint perimeter, never a surface over the model,
-       * which is the invariant `AxisDragManager` depends on and cannot check for itself.
+       * The arrow/band split is forced by `canDrag`, which is keyed on plane id — offer both and
+       * it could not tell an arrow grab from a band click on the same plane. It also keeps every
+       * target thin: a band is a ring around the footprint perimeter, never a surface over the
+       * model, which is the invariant `AxisDragManager` depends on and cannot check for itself.
+       *
+       * The diamond needs no thinness argument of its own — it *is* the drawn quad — but it does
+       * lean on `AxisDragManager._pickHandle`'s per-id "inPlane" priority: the diamond's corners
+       * (`0.424` gizmo units) sit entirely inside the arrow's grab cylinder (`0.525`), so without
+       * that override it could never win a nearest-hit raycast against its own arrow.
        */
       pickTargets: () => {
-        const targets: { mesh: THREE.Mesh; id: string }[] = [];
+        const targets: { mesh: THREE.Mesh; id: string; mode?: AxisDragMode }[] = [];
         for (const planeState of this.planes) {
           if (!planeState.enabled) continue;
 
           if (planeState.id === this.selectedPlaneId) {
             const gizmo = this._gizmos.get(planeState.id);
-            if (gizmo?.visible) targets.push({ mesh: gizmo.picker, id: planeState.id });
+            if (gizmo?.visible) {
+              targets.push({ mesh: gizmo.picker, id: planeState.id, mode: "axis" });
+              if (gizmo.diamond) {
+                targets.push({ mesh: gizmo.diamond, id: planeState.id, mode: "inPlane" });
+              }
+            }
             continue;
           }
 
@@ -140,22 +188,26 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
         }
         return targets;
       },
-      // Only the selected plane's arrow drags. A band takes the click, selects, and stops — so a
-      // click meant to switch planes can never nudge the cut.
+      // Only the selected plane's arrow and diamond drag. A band takes the click, selects, and
+      // stops — so a click meant to switch planes can never nudge the cut or the gizmo.
       canDrag: (planeId) => planeId === this.selectedPlaneId,
       isSuspended: () => this.placement.placing,
       getAxis: (planeId) => this._clipper.list.get(planeId)?.normal.clone() ?? null,
-      // The gizmo sits at the outline's middle, so that — not the helper — is where the drag
-      // starts from, or the arrow would jump to the cursor on grab.
+      // The gizmo sits at the anchor, so that — not the helper — is where the drag starts from,
+      // or the arrow would jump to the cursor on grab. Read for the in-plane session too: it is
+      // the coplanar point AxisDragManager._begin builds the literal cut plane through.
       getOrigin: (planeId) => this._anchors.get(planeId)?.position.clone() ?? null,
       onDrag: (planeId, position) => {
         const plane = this._clipper.list.get(planeId);
-        if (!plane) return;
+        const offset = this._gizmoOffsets.get(planeId);
+        if (!plane || !offset) return;
         // `position` is the anchor displaced purely along the normal (AxisDragManager only ever
-        // moves along the axis), and the anchor sits an in-plane offset from the helper. That
-        // offset is perpendicular to the drag, so subtracting it recovers the helper's new
-        // position exactly rather than approximately.
-        this.outlines.centerOffset(planeId, this._offset);
+        // moves along the axis for an "axis" session), and the anchor sits an in-plane offset
+        // from the helper. That offset is perpendicular to the drag, so subtracting it recovers
+        // the helper's new position exactly rather than approximately — true for *any* stored
+        // offset, not only a fitted centre, which is what makes free placement safe to combine
+        // with this subtraction.
+        localOffsetToWorld(offset, plane.helper, this._offset, this._offsetQuaternion);
         plane.helper.position.copy(position).sub(this._offset);
         plane.helper.updateMatrix();
         plane.update();
@@ -165,23 +217,34 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
         this.outlines.syncTransform(planeId);
         this._syncAnchor(planeId);
       },
+      onInPlaneDrag: this._onInPlaneDrag,
       onSelect: (planeId) => {
         if (this.selectedPlaneId !== planeId) this.selectPlane(planeId);
       },
     });
-    // Hover and drag change how outlines look, but not what React renders. The fills also learn
-    // here that a drag ended, since the manager infers it from `draggingId` reaching null rather
-    // than being told — see `ClipperFillManager.noteDragState`.
+    // Hover and drag change how outlines look, but not what React renders — with one deliberate
+    // exception, `gizmoMoved`, committed below. The fills also learn here that a drag ended,
+    // since the manager infers it from `draggingId` reaching null rather than being told — see
+    // `ClipperFillManager.noteDragState`.
     this.drag.onStateChanged.add(() => {
       this._repaintPlaneStates();
-      this.fills.noteDragState(this.drag.draggingId);
+      // An in-plane reposition never moves the cut, so ClipEdges has nothing to recompute for
+      // it. Feeding fills `null` for the whole gesture keeps `noteDragState`'s null → null path a
+      // no-op instead of a redundant `ClipEdges.update()` on every pointer-move frame.
+      this.fills.noteDragState(this.drag.draggingMode === "inPlane" ? null : this.drag.draggingId);
+      this._commitGizmoMoved(this.drag.draggingId);
     });
 
-    // Loading a model refits every outline, which moves their middles — and the arrows sit at
-    // those middles, so they have to move too. The fills need rebuilding for a different reason:
-    // no plane moved, but there is new geometry for the existing cuts to pass through.
+    // Loading a model refits every outline, which resizes and can reposition its rectangle. A
+    // gizmo's owned offset does not track that on its own — decision 11 clamps it into the new
+    // rectangle first, so an offset does not outlive a footprint that just shrank underneath it,
+    // then resyncs the anchor either way. The fills need rebuilding for a different reason: no
+    // plane moved, but there is new geometry for the existing cuts to pass through.
     this.outlines.onFitChanged.add(() => {
-      for (const planeState of this.planes) this._syncAnchor(planeState.id);
+      for (const planeState of this.planes) {
+        this._clampGizmoOffset(planeState.id);
+        this._syncAnchor(planeState.id);
+      }
       this.fills.refreshAll();
     });
   }
@@ -235,6 +298,29 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     this.placement.exit();
   }
 
+  /**
+   * Resets a plane's gizmo back to the click point it spawned at — the offset's zero state —
+   * and clears `gizmoMoved` so the FOCUS button in `ToolbarClip` disables itself again.
+   *
+   * The fallback recovery decision 8 keeps around for whatever decision 11's refit clamp does
+   * not reach: that clamp only fires on a model load/unload, so a gizmo can still wander
+   * anywhere within a session, off-screen included — which is exactly the case a double-click
+   * gesture on the handle could never rescue.
+   */
+  public resetGizmo(id: string) {
+    const offset = this._gizmoOffsets.get(id);
+    if (!offset) return;
+
+    offset.set(0, 0);
+    this._syncAnchor(id);
+
+    const planeState = this.planes.find((p) => p.id === id);
+    if (planeState && planeState.gizmoMoved) {
+      planeState.gizmoMoved = false;
+      this.onStateChanged.trigger();
+    }
+  }
+
   private get _clipper() {
     return this._components.get(OBC.Clipper);
   }
@@ -247,7 +333,12 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
       point,
     );
 
-    this.planes.push({ id: planeId, name: `Plane ${this.nextPlaneIndex}`, enabled: true });
+    this.planes.push({
+      id: planeId,
+      name: `Plane ${this.nextPlaneIndex}`,
+      enabled: true,
+      gizmoMoved: false,
+    });
     this.nextPlaneIndex++;
 
     this._adoptPlane(planeId);
@@ -273,8 +364,12 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     plane.helper.updateWorldMatrix(true, false);
     const palette = framePalette(plane.helper.getWorldQuaternion(new THREE.Quaternion()));
 
-    // Follows the anchor, not the helper: the arrow belongs at the middle of the outline it
-    // moves. `_syncAnchor` has to run first, so the gizmo's first frame is already in place.
+    // Owned offset, not derived: the gizmo now spawns at the click point, which is offset
+    // (0, 0) — see the field doc on `_gizmoOffsets`.
+    this._gizmoOffsets.set(planeId, new THREE.Vector2(0, 0));
+
+    // Follows the anchor, not the helper: the arrow belongs at the click point plus the owned
+    // offset. `_syncAnchor` has to run first, so the gizmo's first frame is already in place.
     const anchor = new THREE.Object3D();
     this._anchors.set(planeId, anchor);
     this._syncAnchor(planeId);
@@ -291,11 +386,13 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
       this._gizmos.get(planeId)?.dispose();
       this._gizmos.delete(planeId);
       this._anchors.delete(planeId);
+      this._gizmoOffsets.delete(planeId);
+      this._gizmoDirty.delete(planeId);
     });
   }
 
   /**
-   * Puts a plane's anchor at the middle of its outline, in the plane's own frame.
+   * Puts a plane's anchor at the click point plus its owned offset, in the plane's own frame.
    *
    * The rotation is copied, not derived: a cut plane never rotates after creation, but the gizmo
    * reads rotation off whatever it follows, so the anchor has to carry it for the arrow to run
@@ -304,14 +401,75 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
   private _syncAnchor(planeId: string) {
     const plane = this._clipper.list.get(planeId);
     const anchor = this._anchors.get(planeId);
-    if (!plane || !anchor) return;
+    const offset = this._gizmoOffsets.get(planeId);
+    if (!plane || !anchor || !offset) return;
 
     plane.helper.updateWorldMatrix(true, false);
-    this.outlines.centerOffset(planeId, this._offset);
+    localOffsetToWorld(offset, plane.helper, this._offset, this._offsetQuaternion);
 
     plane.helper.getWorldPosition(anchor.position).add(this._offset);
-    plane.helper.getWorldQuaternion(anchor.quaternion);
+    anchor.quaternion.copy(this._offsetQuaternion);
     anchor.updateMatrix();
+  }
+
+  /**
+   * Converts an `"inPlane"` drag's raw world-space intersection into the helper's local X/Y and
+   * stores it — the offset `_syncAnchor`/`onDrag` both read. Marks the plane dirty so
+   * {@link _commitGizmoMoved} can flip `gizmoMoved` once the gesture ends, but only if it
+   * actually ran: a press-and-release with no pointer movement never calls this at all.
+   *
+   * `AxisDragManager` hands over the raw intersection with no axis projection — free 2-DOF is
+   * the whole point of this mode — so all that is left is a frame change, not any maths on the
+   * value itself.
+   */
+  private readonly _onInPlaneDrag = (planeId: string, worldPoint: THREE.Vector3) => {
+    const plane = this._clipper.list.get(planeId);
+    const offset = this._gizmoOffsets.get(planeId);
+    if (!plane || !offset) return;
+
+    worldPointToLocalOffset(worldPoint, plane.helper, this._offset, offset);
+
+    this._gizmoDirty.add(planeId);
+    this._syncAnchor(planeId);
+  };
+
+  /**
+   * Clamps a plane's stored offset into its just-recomputed fitted rectangle. The one moment a
+   * clamp is nearly free — `outlines.onFitChanged` already recomputed the footprint — and the
+   * one hole free placement (decision 3) leaves open: an offset that outlived a footprint which
+   * just shrank underneath it. The drag itself stays completely unclamped; only a model
+   * load/unload ever reaches here.
+   */
+  private _clampGizmoOffset(planeId: string) {
+    const offset = this._gizmoOffsets.get(planeId);
+    const extent = this.outlines.extent(planeId);
+    if (!offset || !extent) return;
+
+    clampOffsetToExtent(offset, extent);
+  }
+
+  /**
+   * Flips a plane's `gizmoMoved` true the moment its in-plane drag ends, but only if that drag
+   * actually moved the offset. `ClipperPlaneState` is a dropdown row, and this is the one
+   * deliberate exception to "drag state never reaches React" — kept to a single transition
+   * rather than a live subscription, the same way `ClipperFillManager.noteDragState` reads a
+   * `draggingId → null` transition instead of a per-frame callback.
+   *
+   * Reads {@link _gizmoDirty} rather than the transition alone: a press-and-release with zero
+   * movement also transitions `draggingId` to `null`, with nothing ever added to that set, so it
+   * correctly leaves `gizmoMoved` untouched.
+   */
+  private _commitGizmoMoved(draggingId: string | null) {
+    const ended = this._prevDraggingId;
+    this._prevDraggingId = draggingId;
+    if (ended === null || draggingId !== null) return;
+    if (!this._gizmoDirty.delete(ended)) return;
+
+    const planeState = this.planes.find((p) => p.id === ended);
+    if (planeState && !planeState.gizmoMoved) {
+      planeState.gizmoMoved = true;
+      this.onStateChanged.trigger();
+    }
   }
 
   /**
@@ -349,9 +507,9 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
   /** Outline opacity and gizmo highlight both follow the same hover/drag state. */
   private _repaintPlaneStates() {
     for (const planeState of this.planes) {
-      const isActive =
-        this.drag.hoveredId === planeState.id ||
-        this.drag.draggingId === planeState.id;
+      const isHovered = this.drag.hoveredId === planeState.id;
+      const isDragging = this.drag.draggingId === planeState.id;
+      const isActive = isHovered || isDragging;
 
       this.outlines.setState(
         planeState.id,
@@ -361,7 +519,14 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
       // Hovering an unselected plane's band brightens it, so you can see which cut you are about
       // to switch to before committing. Falls out of the existing `active` state; no extra wiring.
       const gizmo = this._gizmos.get(planeState.id);
-      if (gizmo) gizmo.highlighted = isActive;
+      if (!gizmo) continue;
+
+      // Route the highlight to whichever handle is actually live: hovering or dragging the
+      // centre diamond must not light up the arrow you are not about to grab, and vice versa. A
+      // band hit (mode undefined, since bands never carry one) highlights neither.
+      const mode = isDragging ? this.drag.draggingMode : isHovered ? this.drag.hoveredMode : null;
+      gizmo.highlighted = isActive && mode === "axis";
+      gizmo.centreHighlighted = isActive && mode === "inPlane";
     }
   }
 
@@ -380,6 +545,9 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     for (const [, gizmo] of this._gizmos) gizmo.dispose();
     this._gizmos.clear();
     this._anchors.clear();
+    this._gizmoOffsets.clear();
+    this._gizmoDirty.clear();
+    this._prevDraggingId = null;
     this.outlines.dispose();
     this.fills.dispose();
 

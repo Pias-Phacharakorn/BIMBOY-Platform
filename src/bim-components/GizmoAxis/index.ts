@@ -1,7 +1,7 @@
 import * as OBC from "@thatopen/components";
 import * as THREE from "three";
 import { HIGHLIGHT_COLOR } from "./src/axis";
-import { buildAxisGizmo, GIZMO_LENGTH } from "./src/axis-gizmo-mesh";
+import { buildAxisGizmo, GIZMO_DIAMOND_COLOR, GIZMO_LENGTH } from "./src/axis-gizmo-mesh";
 import { applyFollowTransform } from "./src/follow-transform";
 import { AxisGizmoHandle, AxisGizmoOptions } from "./src/types";
 
@@ -17,6 +17,7 @@ const GIZMO_VIEW_FRACTION = 0.068;
 /** One live gizmo. Private: consumers only ever see it as an {@link AxisGizmoHandle}. */
 class AxisGizmo implements AxisGizmoHandle {
   readonly picker: THREE.Mesh;
+  readonly diamond: THREE.Mesh | null;
   readonly group: THREE.Group;
   readonly follow: THREE.Object3D;
 
@@ -28,13 +29,14 @@ class AxisGizmo implements AxisGizmoHandle {
    */
   private readonly _grabColor: number;
   private _highlighted = false;
+  private _centreHighlighted = false;
   private _disposed = false;
 
   constructor(
     options: AxisGizmoOptions,
     private readonly _release: (gizmo: AxisGizmo) => void,
   ) {
-    const { group, picker, grabMaterials, grabColor } = buildAxisGizmo({
+    const { group, picker, diamond, grabMaterials, grabColor } = buildAxisGizmo({
       form: options.form,
       grabAxis: options.grabAxis,
       direction: options.direction,
@@ -42,6 +44,7 @@ class AxisGizmo implements AxisGizmoHandle {
     });
     this.group = group;
     this.picker = picker;
+    this.diamond = diamond;
     this._grabMaterials = grabMaterials;
     this._grabColor = grabColor;
     this.follow = options.follow;
@@ -67,6 +70,21 @@ class AxisGizmo implements AxisGizmoHandle {
     for (const material of this._grabMaterials) {
       material.color.setHex(color);
     }
+  }
+
+  get centreHighlighted() {
+    return this._centreHighlighted;
+  }
+
+  set centreHighlighted(state: boolean) {
+    if (this._centreHighlighted === state) return;
+    this._centreHighlighted = state;
+
+    // No-op on the "arrow" form: it has no diamond, so nothing here needs an early return
+    // guarded any more carefully than this.
+    if (!this.diamond) return;
+    const material = this.diamond.material as THREE.MeshBasicMaterial;
+    material.color.setHex(state ? HIGHLIGHT_COLOR : GIZMO_DIAMOND_COLOR);
   }
 
   dispose() {
