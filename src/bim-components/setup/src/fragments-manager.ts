@@ -1,12 +1,16 @@
 // @ts-nocheck
 import * as OBC from "@thatopen/components"
+import fragmentsWorkerUrl from "@thatopen/fragments/worker?url"
 
 export const setupFragmentsManager = (components: OBC.Components, world: OBC.SimpleWorld<OBC.SimpleScene, OBC.OrthoPerspectiveCamera, OBC.SimpleRenderer>) => {
   const fragments = components.get(OBC.FragmentsManager);
-  // The worker is set from the node_modules for simplicity purposes.
-  // To build the app, the worker file should be set inside the public folder
-  // at the root of the project and be referenced as "worker.mjs"
-  fragments.init("/worker.mjs");
+  // ⚠️ Resolved from node_modules through the package's own "./worker" export, NOT copied into
+  // public/. A hand-copied `public/worker.mjs` is what this replaces: it was committed once and
+  // never refreshed across the bump to @thatopen/fragments 3.4.3, so the main thread and the
+  // worker were running different versions of the library that computes getSection() and
+  // getCoordinates(). Importing it makes the version match a property of the build, not of
+  // somebody remembering to re-copy a 3 MB binary.
+  fragments.init(fragmentsWorkerUrl);
 
   fragments.list.onItemSet.add(async ({ value: model }) => {
     // Clears the ItemsFinder cache, so the next time a query

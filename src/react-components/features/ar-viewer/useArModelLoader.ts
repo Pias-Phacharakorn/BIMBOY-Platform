@@ -7,6 +7,7 @@
 // property of the /ar page intact.
 import { useCallback, useEffect, useRef } from "react";
 import * as OBC from "@thatopen/components";
+import fragmentsWorkerUrl from "@thatopen/fragments/worker?url";
 import { cloudModelsService } from "@/react-components/features/cloud-models/cloudModelsService";
 
 export function useArModelLoader() {
@@ -16,8 +17,9 @@ export function useArModelLoader() {
     if (!componentsRef.current) {
       const components = new OBC.Components();
       const fragments = components.get(OBC.FragmentsManager);
-      // Same worker the main viewer uses (served from /public).
-      fragments.init("/worker.mjs");
+      // Same worker the main viewer uses — resolved from node_modules so it cannot drift from the
+      // installed @thatopen/fragments. See setupFragmentsManager for why the /public copy went.
+      fragments.init(fragmentsWorkerUrl);
       components.init();
       componentsRef.current = components;
     }
