@@ -5,7 +5,6 @@ import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
 import { setupComponents, CursorSurface } from "@/bim-components";
 import { setupViewCube } from "@/bim-components/setup/src/view-cube";
-import { installFillProbe } from "@/lib/debugFills";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { MiniMapOverlay } from "./MiniMapOverlay";
 
@@ -168,8 +167,6 @@ export function ViewportWrapper({
     let onHighlightCallback: any = null;
     let onClearCallback: any = null;
     let cleanupViewCube: (() => void) | null = null;
-    // ⚠️ TEMPORARY — remove with `@/lib/debugFills`. See that file's header.
-    let cleanupFillProbe: (() => void) | null = null;
 
     setupComponents().then(({ components, viewport }) => {
       if (isCancelled) {
@@ -188,10 +185,6 @@ export function ViewportWrapper({
 
       // Sync active state to Zustand store
       useBimStore.getState().setBimData(components, world, viewport);
-
-      // ⚠️ TEMPORARY — remove with `@/lib/debugFills`. Self-gates on `?debugFills=1`
-      // (or a dev build) and is inert otherwise. See that file's header for why it ships.
-      cleanupFillProbe = installFillProbe(components);
 
       // Subscribe to selection events
       const highlighter = components.get(OBF.Highlighter);
@@ -258,11 +251,6 @@ export function ViewportWrapper({
       
       if (cleanupViewCube) {
         cleanupViewCube();
-      }
-
-      // ⚠️ TEMPORARY — remove with `@/lib/debugFills`. See that file's header.
-      if (cleanupFillProbe) {
-        cleanupFillProbe();
       }
 
       if (activeComponents) {
