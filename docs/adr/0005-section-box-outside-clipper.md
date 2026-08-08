@@ -2,7 +2,7 @@
 
 **Status:** Accepted — § Consequences bullet 4 amended by [ADR-0010](0010-sectioning-arbiter-and-fitted-plane-outlines.md)
 **Date:** 2026-08-04
-**Area:** `docs/feature/bim-viewer.md` § Section box
+**Area:** `docs/feature/bim-viewport-righttoolbars.md` § Section box
 
 > **What still stands.** Everything except the *scope* of bullet 4. The decision to clip with bare
 > `THREE.Plane`s outside `OBC.Clipper` is unchanged, and the § Alternatives rejected entry for

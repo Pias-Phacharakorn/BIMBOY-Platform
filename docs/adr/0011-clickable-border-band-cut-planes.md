@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-08-05
-**Area:** `docs/feature/bim-viewer.md` § Section tool
+**Area:** `docs/feature/bim-viewport-righttoolbars.md` § Section tool
 **Supersedes:** [ADR-0002](0002-section-plane-outline-only.md) (four of its five clauses)
 
 ## Context

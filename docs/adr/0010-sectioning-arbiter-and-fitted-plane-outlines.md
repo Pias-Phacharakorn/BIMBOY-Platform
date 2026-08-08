@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-08-05
-**Area:** `docs/feature/bim-viewer.md` § Section tool, § Section box, § Sectioning interlock
+**Area:** `docs/feature/bim-viewport-righttoolbars.md` § Section tool, § Section box, § Sectioning interlock
 
 ## Context
 
@@ -52,3 +52,4 @@ Suspension is reversible: the loser is switched off through the same `togglePlan
 - **`ClipperCursor`'s drag path changed again** — `getOrigin` now returns the anchor and `onDrag` subtracts an in-plane offset. Exact rather than approximate, because `AxisDragManager` only ever moves along the axis, but ADR-0005 § Consequences bullet 5 already flagged this path as where regressions land.
 - **Restoring cut planes relies on `togglePlane` re-suppressing the vendor arrow.** `SimplePlane.enabled = true` restores remembered visibility and calls `toggleControls`; bypassing `togglePlane` to re-enable a plane would leave `TransformControls` arrows on screen.
 - **The arbiter is silent during world teardown** — `SimplePlane.enabled` throws without a renderer, and `SectionBox._teardownWorldParts` drops `_active` without an event, so the arbiter's view can go stale there. Acceptable: everything is about to be disposed.
+- ⚠️ **OPEN, unresolved: "the model" is *every* model.** `_measure()` calls `boxer.addFromModels()`, which unions all loaded models, so a plane placed on one building gets a rectangle spanning every structure in the scene. This ADR's requirement 2 was written for a single-model scene and never said which model a fitted plane belongs to. Invisible until a multi-model project surfaced it on 2026-08-08, alongside (but unrelated to) the displaced-fill bug of [ADR-0014](0014-frags-worker-from-node-modules.md). **The open question is what a cut plane should fit to** — the model under the click point, the union as today, or the current selection — and each answer implies different behaviour when a model loads *after* the plane exists, which `onFitChanged` currently handles only for the union. Not yet decided; recorded here rather than staged, since it is a consequence of this decision.

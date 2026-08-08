@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-08-03
-**Area:** `docs/feature/bim-viewer.md` § Measure tools → Vertex snapping
+**Area:** `docs/feature/bim-viewport-righttoolbars.md` § Measure tools → Vertex snapping
 
 ## Context
 

@@ -2,7 +2,7 @@
 
 **Status:** **Superseded by [ADR-0011](0011-clickable-border-band-cut-planes.md)** — colour clause previously amended by [ADR-0009](0009-section-plane-gizmo-local-frame.md)
 **Date:** 2026-08-03
-**Area:** `docs/feature/bim-viewer.md` § Section tool
+**Area:** `docs/feature/bim-viewport-righttoolbars.md` § Section tool
 
 > ⚠️ **Superseded — but do not delete, and read the Context before proposing a pickable plane again.**
 > [ADR-0011](0011-clickable-border-band-cut-planes.md) reverses four of the five clauses below: a cut

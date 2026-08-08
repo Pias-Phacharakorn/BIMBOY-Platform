@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-08-05
-**Area:** `docs/feature/bim-viewer.md` § Section tool → Fills
+**Area:** `docs/feature/bim-viewport-righttoolbars.md` § Section tool → Fills
 
 ## Context
 

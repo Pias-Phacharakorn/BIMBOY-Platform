@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-08-05
-**Area:** `docs/feature/bim-viewer.md` § Section tool, § GizmoAxis
+**Area:** `docs/feature/bim-viewport-righttoolbars.md` § Section tool, § GizmoAxis
 **Amends:** the outline-colour clause of [ADR-0002](0002-section-plane-outline-only.md) — the world-axis palette is **kept**, the *snap* that fed it is replaced. ADR-0002's other four decisions stand untouched.
 
 ## Context
