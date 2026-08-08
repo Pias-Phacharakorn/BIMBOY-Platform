@@ -84,10 +84,37 @@ export function useLoadCloudModelBatch() {
 
     let hasError = false;
 
-    for (let i = 0; i < files.length; i += MAX_PARALLEL) {
+    /**
+     * ⚠️ **The very first model into an empty scene loads alone, and that is a correctness fix,
+     * not a throttle.** FRAGS and OBC each pick a "first model" to coordinate everything else
+     * against, by two different rules that only agree when one load is in flight:
+     *
+     * - `FragmentsModels.load` sets `baseCoordinates` from the first model to **finish**
+     *   (`await model._setup(...)`, then the `baseCoordinates === null` check), and positions
+     *   every later model at `baseCoordinates − ownCoordinates`.
+     * - `FragmentsManager`'s `onModelLoaded` handler sets `baseCoordinationMatrix` from
+     *   `[...this.list.values()][0]` — and `list` **is** `core.models.list`, which `load()` writes
+     *   *before* awaiting `_setup`, so it is the first model to **start**.
+     *
+     * Load ten at once and the first to start is usually not the first to finish, so the two
+     * bases name different models. Nothing warns: models are placed off one base and
+     * `OBF.ClipStyler`'s section fills off the other, leaving every fill displaced from its own
+     * geometry by the constant difference between them (measured at 23.5 units on this project).
+     * With one load in flight the two rules cannot disagree, and both bases stay latched for the
+     * rest of the session.
+     *
+     * Only the *first* wave is serialised, and only into an empty scene — once
+     * `fragments.list` is non-empty the bases are already set, so later loads run full width.
+     */
+    const fragments = components.get(OBC.FragmentsManager);
+    const serialiseFirstLoad = fragments.list.size === 0;
+
+    for (let i = 0; i < files.length; ) {
       // Cancelled between waves — stop launching new downloads.
       if (controller.signal.aborted) break;
-      const batch = files.slice(i, i + MAX_PARALLEL);
+      const waveSize = i === 0 && serialiseFirstLoad ? 1 : MAX_PARALLEL;
+      const batch = files.slice(i, i + waveSize);
+      i += waveSize;
       await Promise.all(
         batch.map(async (file) => {
           updateLoadingFileStatus(file.name, "loading");
