@@ -31,7 +31,8 @@ This file holds the **rules**; these guides hold the **detail** — deep and pro
 |--------------|-----------|
 | React, routing, Zustand stores, views/features/components, Tailwind | `docs/feature/frontend.md` |
 | ThatOpen/OBC viewer wiring, world setup, IFC/FRAG loading, BUI containment | `docs/feature/bim-viewer.md` |
-| Viewport toolbar rails, `Toolbar*.tsx` buttons, dropdown/menu conventions | `docs/feature/bim-viewport-toolbars.md` |
+| Bottom toolbar rail, dropdown/menu conventions, cross-button hazards | `docs/feature/bim-viewport-toolbars.md` |
+| Right rail tools — Measure, Clip (section planes), Sectionbox, Coordinate — button **and** engine, plus `GizmoAxis` | `docs/feature/bim-viewport-righttoolbars.md` |
 | Supabase auth, DB, storage, feature services, `AuthContext` | `docs/feature/backend.md` |
 | Clash import (BCF), clash register/table/filters, clash dashboard | `docs/feature/clash-detection.md` |
 | Drawing Directory, shop-drawing register, PDF revisions | `docs/feature/drawing.md` |
@@ -42,7 +43,7 @@ This file holds the **rules**; these guides hold the **detail** — deep and pro
 
 | Path | Holds |
 |------|-------|
-| `docs/feature/` | The 8 domain guides above — a **map** of how this project wires each area: what exists, how it fits together, and what will bite you |
+| `docs/feature/` | The 9 domain guides above — a **map** of how this project wires each area: what exists, how it fits together, and what will bite you |
 | `docs/adr/` | Architecture decision records — *why* a decision was made, with the alternatives rejected. See `docs/adr/README.md` |
 | `docs/ThatOpen_docs/` | Vendored ThatOpen documentation snapshot (v3.4.x). Read-only reference — start at its `INDEX.md`, never hand-edit |
 

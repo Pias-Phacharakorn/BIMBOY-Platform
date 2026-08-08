@@ -1,7 +1,7 @@
 # Viewport toolbars — the floating React rails over the 3D canvas
 
 > Status: seed — expand as you work this area.
-> Covers the two rails and every `Toolbar*.tsx` button: layout, menu conventions, and what each button does to the engine. **Not** the engines themselves — `ClipperCursor`, `MeasureCursor`, `SpotCoordinate`, `OBC.Views` and the world bootstrap live in [`bim-viewer.md`](bim-viewer.md). Each button below links to its engine section there.
+> Covers the **bottom rail** (`ViewportToolbar.tsx`) button by button, plus what both rails share: layout, the dropdown idiom, and cross-button hazards. The **right rail** and its four tools — button *and* engine together — live in [`bim-viewport-righttoolbars.md`](bim-viewport-righttoolbars.md). World bootstrap, camera navigation, picking and the Drawing Editor live in [`bim-viewer.md`](bim-viewer.md).
 
 ## Overview
 
@@ -85,43 +85,11 @@ The one dropdown that is a form. Grid visible · Mini Map · Auto Rotate · Grid
 
 ## Right rail — per button
 
-**Three of the four are `activeTool`-driven, which is what makes *those three* mutually exclusive.** Sectionbox is not — see its entry below.
+→ **[`bim-viewport-righttoolbars.md`](bim-viewport-righttoolbars.md)** — Measure, Clip, Sectionbox and Coordinate, each documented button **and** engine in one place, plus the rail's own FX suppression and the shared `GizmoAxis` overlay service.
 
-### Measure (`ToolbarMeasure.tsx`)
+Split off because a right-rail button is never worked on without its engine: Clip is `ClipperCursor`, Sectionbox is `SectionBox`, Measure is the cursor family. The bottom rail has no such pairing — its buttons drive vendor components or the store directly — which is why it stays here.
 
-Tool list (Length, Area, Angle "Soon", Surface "Soon") plus a live measurement list per tool. Local `activeType` picks which cursor is enabled; a separate `useEffect` per cursor sets `cursor.enabled` and disables it on cleanup. → engine: `bim-viewer.md` § Measure tools.
-
-### Clip (`ToolbarClip.tsx`)
-
-Add plane · Clear all, plus a plane checklist (select, show/hide, delete per row). → engine: `bim-viewer.md` § Section tool.
-
-- **Placement is one-shot.** `handleEnterPlacement` sets `activeTool = "clip"` and enters placement; when `ClipperCursor` reports it has stopped placing (plane placed, or Escape), the sync effect resets `activeTool` to `"select"`. The button label switches to "Placing (ESC to cancel)" meanwhile.
-- **`activeTool` is also the interlock:** if any other tool becomes active while placement is armed, an effect calls `clipper.exitPlacementMode()`.
-- ⚠️ **`components.get(ClipperCursor as any)` is deliberate** — `ClipperCursor`'s 3-arg constructor doesn't match what `Components.get()` expects. It is the last component in the repo still needing this cast; see `bim-viewer.md` § Section tool.
-
-### Sectionbox (`ToolbarSectionBox.tsx`)
-
-`Section box` on/off · `Fit to selection` · `Reset to model`, plus a live extents pane reading X/Y/Z min→max and size to 2 decimals. → engine: [`bim-viewer.md`](bim-viewer.md) § Section box.
-
-- ⚠️ **The one right-rail button that does *not* use `activeTool`.** It sits on this rail because it is a sectioning tool, but a crop is view state, not a pointer mode — so it is exempt from the FX suppression below and is **not** mutually exclusive with Measure/Clip/Coordinate. A cut plane and a box can both be live, and you can measure inside a box. Wiring it to `activeTool` would have cost the selection outliner and the whole postproduction pass for as long as the box cropped.
-- **Holds no authoritative state**: mirrors `SectionBox.state` through `onStateChanged`, as `ToolbarClip` mirrors `ClipperCursor`.
-- **The store gates, the engine serves** — the same split as `ToolbarVisibility`: `bimStore.selectedElementIds` drives whether `Fit to selection` is enabled, but the handler acts on the live `highlighter.selection.select`, because `selectionMap` is a clone one event behind.
-- **`Fit to selection` and `Reset to model` both switch the box on** if it was off. Clicking either means you want to see the result.
-- Sits between Clip and Coordinate on the rail.
-
-### Coordinate (`ToolbarCoordinate.tsx`)
-
-Add coordinate · Clear all, plus a list of placed points showing X/Y/Z to 3 decimals with per-row delete. Subscribes `SpotCoordinate.onLabelsChanged` to stay in sync. Placement is **double-click** on the model, which the button label states.
-
-- **Ownership swap, for the whole tool session:** `activeTool === "coordinate"` disables `OBF.Highlighter` and enables `SpotCoordinate`; anything else does the reverse. A second effect repeats the restore on unmount, so navigating away mid-tool can't leave selection dead.
-
-### FX suppression (the rail itself)
-
-**The right rail suppresses viewport FX while any tool is active.** On the first transition of `activeTool` to anything other than `select`, `ViewportRightToolbar` snapshots `OBF.Hoverer.enabled`, `OBF.Outliner.enabled` and `postproduction.enabled` into a ref, disables all three, and **restores that snapshot** — not defaults — on return to idle, and again on unmount if a tool is still active.
-
-Rationale: `CursorSurface` is the on-model guide while a tool runs, so the element hover-highlight and the outliner pass are redundant, and they cost a raycast plus a fullscreen post pass every frame.
-
-⚠️ **Anything that toggles those three must respect the snapshot or it will be silently reverted.** This rule binds engine code too, not just toolbars — `bim-viewer.md` § Gotchas carries a pointer back here for that reason.
+⚠️ **The `activeTool` split still matters across both guides:** three of the four right-rail tools are `activeTool`-driven and therefore mutually exclusive; Sectionbox is not. Bottom-rail buttons never touch `activeTool` at all.
 
 ## Cross-button hazards
 
