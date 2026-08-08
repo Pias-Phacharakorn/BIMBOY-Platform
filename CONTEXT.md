@@ -27,7 +27,9 @@ Last cleared 2026-08-08. Everything previously staged has been promoted:
 | A cut plane is a clickable border band in the overlay | `bim-viewport-righttoolbars.md` § Section tool | [ADR-0011](docs/adr/0011-clickable-border-band-cut-planes.md) — supersedes ADR-0002 |
 | Solid fills at the cut face | `bim-viewport-righttoolbars.md` § Fills at the cut | [ADR-0012](docs/adr/0012-section-fills-via-clipstyler.md) |
 | The cut-plane gizmo spawns where you clicked and slides in-plane | `bim-viewport-righttoolbars.md` § Section tool, § GizmoAxis | [ADR-0013](docs/adr/0013-movable-cut-plane-gizmo.md) |
-| Cut fills drawn detached from the model — a stale vendored FRAGS worker | `bim-viewer.md` § Gotchas (version lock) · `bim-viewport-righttoolbars.md` § Fills → Vendor traps · `ar-webxr.md` | [ADR-0014](docs/adr/0014-frags-worker-from-node-modules.md) |
+| A stale vendored FRAGS worker (⚠️ real, but **not** the cause of the displaced fills) | `bim-viewer.md` § Gotchas (version lock) · `bim-viewport-righttoolbars.md` § Fills → Vendor traps · `ar-webxr.md` | [ADR-0014](docs/adr/0014-frags-worker-from-node-modules.md) |
+| Cut fills drawn detached from the model — FRAGS and OBC disagreeing on the base model | `bim-viewer.md` § Patterns & conventions (first load is serialised) | [ADR-0015](docs/adr/0015-one-base-model-for-coordination.md) |
+| Performance + Scene Diagnostics rows in Viewport Settings | `bim-viewport-toolbars.md` § Settings → The two diagnostic rows | — (the probe that found ADR-0015, made permanent) |
 
 **Two things that were staged here are open questions, not decisions, and now live where they belong:**
 

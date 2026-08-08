@@ -1,8 +1,18 @@
 # ADR-0014: The FRAGS worker is imported from `node_modules`, never copied into `public/`
 
-**Status:** Accepted
+**Status:** Accepted — **causation claim corrected by [ADR-0015](0015-one-base-model-for-coordination.md)**
 **Date:** 2026-08-08
 **Area:** `docs/feature/bim-viewer.md` § Gotchas (version lock), `docs/feature/bim-viewport-righttoolbars.md` § Fills → Vendor traps, `docs/feature/ar-webxr.md`
+
+> ⚠️ **Read this first.** The **Decision below stands** — the worker really was version-mismatched,
+> that really is a breach of the version lock, and importing it from `node_modules` is still right.
+> **What this ADR got wrong is the cause of the bug that led us to it.** The displaced section fills
+> were *not* caused by the stale worker; they came from FRAGS and OBC disagreeing about which model
+> is the coordination base, diagnosed and fixed in
+> [ADR-0015](0015-one-base-model-for-coordination.md). The symptom went away here by luck — the
+> underlying defect is a load race, and a race resolves cleanly some of the time. Everything in
+> § Context below about *why the worker mattered* is therefore speculation that turned out false;
+> the version-mismatch facts themselves are unaffected.
 
 ## Context
 
@@ -24,9 +34,16 @@ That second file exists because FRAGS' own default is
 right worker was one argument away the whole time.
 
 **What exposed it** was a rendering bug, not a version audit: a cut plane's `ClipStyler` fill drew
-as floor-plan linework floating clear of any geometry. The worker is what computes `getSection()`
-(the fill geometry) and `getCoordinates()` (model coordination), so a version-mismatched worker
-returns section data the 3.4.3 main thread then places wrongly.
+as floor-plan linework floating clear of any geometry.
+
+> ❌ **The next sentence was the mistake.** It read: *"The worker is what computes `getSection()`
+> (the fill geometry) and `getCoordinates()` (model coordination), so a version-mismatched worker
+> returns section data the 3.4.3 main thread then places wrongly."* Both halves of the premise are
+> true and the conclusion still does not follow — it was never measured, only made plausible by the
+> symptom clearing after the fix. The real cause is in
+> [ADR-0015](0015-one-base-model-for-coordination.md). Kept visible rather than deleted, because
+> the reasoning error is the lesson: a plausible mechanism plus a symptom that stops is not a
+> diagnosis.
 
 ⚠️ **The diagnosis history matters more than the fix, because it was mostly wrong.** Five
 reproduction attempts: two positive (both on the deployed Worker build), three negative (all local).
@@ -95,12 +112,17 @@ established in the repo by `CompareDrawingsModal.tsx` for pdf.js.
   | local dev, real auto-loaded project | local dev | displaced fill | **clean** ❌ |
 
   The single-model run **is** explained: with one model the base coordination is that model's own,
-  so the offset is zero and a mismatched worker's error is invisible. The last two are not. The
-  likeliest reading is that the local scenes simply held fewer models than the deployed one, but
-  that was never verified — a `?debugFills=1` probe was built for exactly this and never run,
-  because the worker fix landed first. It reported every model's position/box/coordinates, every
-  `OBC.Clipper` plane, and every `ClipEdges` fill mesh's child count and rendered centre (a child
-  count above the model count would have proven the `getStyleMeshes` race). It lives in git history
-  at commit `55f172e` — **restore it rather than rebuilding it.**
+  so the offset is zero and a mismatched worker's error is invisible. The last two are not.
+
+  > ✅ **Resolved by [ADR-0015](0015-one-base-model-for-coordination.md), and the two misfits were
+  > the tell.** They did not fit because the theory was wrong. The real cause is a **load race**
+  > between two different "first model" rules, so a clean run proves nothing — sequential manual
+  > loads always coordinate correctly, and a ten-wide parallel load usually does not. Every row
+  > above falls out of that. **The lesson to keep: two observations that did not fit were treated
+  > as noise, and they were the signal.**
+  >
+  > The probe was later restored, extended and promoted into the permanent **Scene Diagnostics**
+  > panel (Viewport Settings), which is what finally produced the measurement. It is no longer in
+  > git history only — see `bim-viewport-toolbars.md` § Settings.
 - **A stale vendored binary is now a named hazard, not a one-off.** `public/resources/` still holds
   vendored assets; the same rot applies to any of them that shadow a versioned package.
