@@ -75,13 +75,21 @@ Sets which world direction the ViewCube calls "front".
 
 ### Settings (`ToolbarSettings.tsx`)
 
-The one dropdown that is a form. Grid visible · Mini Map · Auto Rotate · Grid Level (m) · Camera Projection │ Hover Highlight · Hover Colour.
+The one dropdown that is a form. Grid visible · Mini Map · Auto Rotate · Grid Level (m) · Camera Projection │ Hover Highlight · Hover Colour │ Performance · Scene Diagnostics.
 
 - **It re-reads the engine on every open** (the sync effect depends on `isSettingsOpen`), because every one of these values can be changed by something other than this menu.
 - **It subscribes `world.onCameraChanged` to keep the projection select honest** — opening or closing a 2D view swaps `world.camera` to an orthographic camera and back, and the dropdown would otherwise lie. Changing projection here also calls `postproduction.updateCamera()`, per the resync gotcha in `bim-viewer.md`.
 - **Mini Map is the only setting that lives in `uiStore`** (`showMinimap`) rather than being written straight to the engine — it gates the `MiniMapOverlay` component, not an OBC flag.
 - **Auto Rotate is a hand-rolled `requestAnimationFrame` loop**, not a camera-controls feature: it targets the `BoundingBoxer` model centre, then calls `controls.rotate(0.005, 0, false)` per frame. It cancels itself on the first `controlstart` (any user input wins) and when the last model unloads, and is disabled outright with no model loaded. `hasModel` is tracked by subscribing `fragments.list.onItemSet`/`onItemDeleted`, with a `setTimeout` retry because those events aren't available until the manager initialises.
 - ⚠️ **Hover Highlight writes `OBF.Hoverer.enabled` directly** — see § Cross-button hazards. This is the one setting the right rail will silently undo.
+
+#### The two diagnostic rows (`features/viewport-diagnostics/`)
+
+Both are off by default and follow the Mini Map shape exactly — a `uiStore` flag, a checkbox here, and an overlay component mounted in `ViewportWrapper`. Neither writes to the engine.
+
+- **Performance** → `PerformanceOverlay.tsx`, a stats.js meter top-left of the viewport. `stats.module.js` ships inside `three`, so this adds **no dependency**. ⚠️ **`showPanel(0)`, not the tutorial's `2`:** the panels are `0: FPS`, `1: MS`, `2: MB`, and panel 2 is only *created* when `self.performance.memory` exists — Chromium-only — so `showPanel(2)` selects a child that was never added and renders a blank box on Safari/iOS. stats.js cycles panels on click, so MS and MB stay one tap away. ⚠️ **The `renderer.onBeforeUpdate`/`onAfterUpdate` hooks are removed on unmount**, which the tutorial snippet does not do: `ViewportWrapper` unmounts on leaving the model view, so without the matching `.remove()` every revisit stacks another `begin`/`end` pair. Renderer access is `try`-wrapped per the teardown gotcha.
+- **Scene Diagnostics** → `SceneDiagnosticsPanel.tsx` + `sceneReport.ts`. Prints every loaded model with its position, box and coordinates; every `OBC.Clipper` plane; every non-model object in `world.scene`; and every `ClipEdges` fill mesh with where it renders. ⚠️ **A snapshot, never live** — `buildSceneReport` runs `Box3.setFromObject` over 200k-vertex fill buffers, so it recomputes on open and on **Refresh** only. "Checked" therefore means *the panel is visible*, not *diagnostics are running* — the one row in this dropdown whose checkbox is not really a setting.
+- **Its first line, `base model`, is a live invariant check, not decoration.** It must name the model sitting at `pos [0, 0, 0]`; when it does not, FRAGS and OBC disagree about the coordination base and every section fill is displaced from its geometry. That is the defect in [ADR-0015](../adr/0015-one-base-model-for-coordination.md), which this panel is what finally measured — after three wrong diagnoses reasoned from screenshots.
 
 ## Right rail — per button
 
