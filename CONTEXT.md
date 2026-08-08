@@ -413,6 +413,109 @@ and invisible in a single-model scene, which is likely why it has not been seen 
 so the crisp rectangle and the translucent region are necessarily the same rectangle — they cannot
 drift apart.
 
+**Finding 4 — a model and its fill are placed by two different coordination mechanisms, and they
+agree only for a pure translation.** Read off the pinned bundles, not inferred. This is the durable
+vendor fact that a second screenshot (2026-08-08, one cut's fill drawn as floating floor-plan
+linework well clear of any geometry) sent us looking for.
+
+| | the **model** | its **fill** |
+|---|---|---|
+| placed by | `FragmentsModels.load` when `settings.autoCoordinate` — `model.object.position.add(baseCoords − modelCoords)` | `ClipEdges.getStyleMeshes` — `FragmentsManager.applyBaseCoordinateSystem(mesh, await model.getCoordinationMatrix())`, i.e. `C_model⁻¹ · C_base` |
+| derived from | `getCoordinates()[0..2]` — the origin triple only | `getCoordinationMatrix()` — origin **plus** `xDir`/`yDir` |
+| carries rotation | **no**, translation only | **yes** |
+| re-evaluated | per load | **once, at mesh creation**, then cached in `_modelStyleGeometries` |
+
+The two bases are also tracked separately — FRAGS `baseCoordinates` vs OBC `baseCoordinationMatrix`
+— though both reset when their list empties, so they stay in step on unload.
+
+For **model #1** both reduce to identity, so its fill is always correctly placed. For a later model
+they coincide iff its coordination is a pure translation: `C₂⁻¹·C₁` and `translate(t₁ − t₂)` are
+equal only when `R₂ = I`. With a site rotation the fill offsets by `R₂ᵀ(t₁ − t₂)` while the model
+moves by `(t₁ − t₂)` — same magnitude, wrong direction, which is what a horizontally displaced fill
+looks like.
+
+✅ **Measured 2026-08-08: with a single model loaded the fill is correctly placed** — the developer
+ran the cut on the building alone and saw no displacement.
+
+✅ **Measured 2026-08-08: reversing the load order (other model first, building second) also shows
+no bug.** Two hypotheses die on that one result, and both are worth keeping dead:
+
+- **The floating plan is a second model's *correct* fill, for a model that genuinely sits there.**
+  Ruled out — that plan would appear at a fixed world location whatever the load order.
+- **Coordination *rotation* is the divergent term.** Ruled out by algebra the reversal exposes: if
+  the other model carries rotation `R`, loading it first gives the building a fill transform of
+  `C₂⁻¹C₁ = (R, t_o − t_b)`, still rotated and still divergent. Reversal should have *moved* the
+  bug, not removed it. And for pure translations `C₂⁻¹·C₁` **equals** `translate(t₁ − t₂)`, so the
+  coordination matrices are self-consistent in both directions.
+
+⚠️ **So the defect is timing-dependent, not order-dependent** — which is why two careful sequential
+runs both came back clean, and why the original screenshot came out of a messier session. The
+surviving mechanism is the "re-evaluated: once, at mesh creation" row of the table above, plus an
+async window in OBC:
+
+```js
+this.baseCoordinationModel = firstModel.modelId;                        // guard closes here
+this.baseCoordinationMatrix = await firstModel.getCoordinationMatrix(); // resolves later
+```
+
+`_hasCoordinationModel` goes true the instant the id is assigned, so nothing re-enters, but
+`baseCoordinationMatrix` stays **identity** until the worker round-trip returns. A fill mesh created
+inside that window latches `C_model⁻¹ · I` and keeps it for good — `updateMeshes` afterwards
+rewrites `geometry.attributes.position` and the index but **never re-applies the transform**.
+⚠️ Still a hypothesis: it has *not* been reproduced deliberately, and the reproduction recipe below
+is the next thing to establish.
+
+⚠️ **`ClipEdges.three` is added straight to `world.scene.three`, never parented to `model.object`.**
+That is *why* the two mechanisms can disagree at all — a parented fill would inherit the model's
+transform and the question could not arise. Worth knowing before anyone proposes "just reparent it":
+`ClipEdges` holds one `three` group spanning **all** models, so it has no single model to parent to.
+
+**Finding 5 — `ClipEdges.create()` sections every model in `fragments.list`, unconditionally.** No
+visibility test, no filter — `for (const [modelId] of fragments.list) updateMeshes(modelId, style)`.
+Not reachable as a bug in the viewer today (nothing there toggles `model.object.visible`; the only
+such toggle is `DrawingEditorPanel.tsx`, a different context), but it means a fill can outlive any
+future hide feature. Recorded so the hidden-model reading can be ruled out quickly next time.
+
+**Finding 7 — the bug is build-dependent, which is the signature of a race.** Five attempts,
+2026-08-08:
+
+| Run | Build | Result |
+|---|---|---|
+| original desktop | deployed | **reproduces** |
+| one model only | local dev | clean |
+| reversed load order | local dev | clean |
+| phone | deployed | **reproduces** |
+| local dev, real project | local dev | clean |
+
+Never on dev, twice on the fast minified production bundle. That pattern fits the `getStyleMeshes`
+cache race (candidate 1 in `lib/debugFills.ts`) and fits no transform bug, since a wrong matrix
+would be wrong deterministically on every build. ⚠️ It also means **an `import.meta.env.DEV` probe
+gate is useless here** — the instrumentation has to ship to reach the environment that fails.
+
+**Finding 8 — the app loads a stale FRAGS worker, and the correct one is bundled but unused.**
+
+```
+dist/worker.mjs            3,297,151   ← committed Jul 13 in public/, what init() actually loads
+dist/assets/worker-*.mjs   3,216,090   ← @thatopen/fragments 3.4.3's own worker, never loaded
+```
+
+`fragments.init("/worker.mjs")` in **both** `setup/src/fragments-manager.ts` and
+`features/ar-viewer/useArModelLoader.ts` pins the app to `public/worker.mjs`, committed in `5fe9915`
+and never refreshed across the bump to 3.4.3. So main-thread FRAGS is 3.4.3 and the worker is not —
+a direct breach of CLAUDE.md's *"never mix ThatOpen versions"*, and the worker is exactly what
+computes `getSection()` (the fill geometry) and `getCoordinates()` (coordination).
+
+⚠️ **Not a candidate for *this* bug on its own** — `public/` is served identically by dev and by
+the Worker build, so a stale worker cannot produce a dev/prod split. Must be fixed regardless; the
+fix is `FragmentsManager.getWorker()` (version-matched by construction) rather than re-copying a
+file that will rot again.
+
+**Finding 6 — the fills mesh is not `frustumCulled = false`, and its bounding volume is never
+recomputed.** `getStyleMeshes` sets `frustumCulled = false` on the **lines** mesh only; `updateMeshes`
+then assigns `m.geometry.attributes.position = g` directly and calls `setIndex`, which leaves
+`boundingSphere` stale. Symptom would be a fill *vanishing* at certain camera angles, not moving — so
+it is not this bug, but it is a live trap in the same code path.
+
 ---
 
 Last cleared 2026-08-04. Everything staged here has been promoted:
