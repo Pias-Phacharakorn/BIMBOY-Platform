@@ -8,7 +8,14 @@ import * as OBF from "@thatopen/components-front";
 
 export function ToolbarSettings() {
   const { components, world } = useBimStore();
-  const { showMinimap, setShowMinimap } = useUIStore();
+  const {
+    showMinimap,
+    setShowMinimap,
+    showSceneDiagnostics,
+    setShowSceneDiagnostics,
+    showPerformance,
+    setShowPerformance,
+  } = useUIStore();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Viewport Settings States
@@ -350,6 +357,32 @@ export function ToolbarSettings() {
               type="checkbox"
               checked={hoverHighlight}
               onChange={handleToggleHoverer}
+              className="w-4.5 h-4.5 rounded border-border text-accent bg-transparent accent-accent cursor-pointer"
+            />
+          </div>
+
+          <div className="h-[1px] bg-border/60 my-0.5" />
+
+          {/* Performance — live stats.js frame meter. Opens on FPS; tap the widget to cycle
+              FPS -> MS -> MB. */}
+          <div className="flex items-center justify-between text-xs text-fg">
+            <span className="font-medium text-muted">Performance</span>
+            <input
+              type="checkbox"
+              checked={showPerformance}
+              onChange={(e) => setShowPerformance(e.target.checked)}
+              className="w-4.5 h-4.5 rounded border-border text-accent bg-transparent accent-accent cursor-pointer"
+            />
+          </div>
+
+          {/* Scene Diagnostics — a snapshot panel, not a live readout: it recomputes on open and
+              on Refresh only. "Checked" means the panel is visible. */}
+          <div className="flex items-center justify-between text-xs text-fg">
+            <span className="font-medium text-muted">Scene Diagnostics</span>
+            <input
+              type="checkbox"
+              checked={showSceneDiagnostics}
+              onChange={(e) => setShowSceneDiagnostics(e.target.checked)}
               className="w-4.5 h-4.5 rounded border-border text-accent bg-transparent accent-accent cursor-pointer"
             />
           </div>

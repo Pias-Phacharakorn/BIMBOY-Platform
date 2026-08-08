@@ -5,6 +5,10 @@ import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
 import { setupComponents, CursorSurface } from "@/bim-components";
 import { setupViewCube } from "@/bim-components/setup/src/view-cube";
+import {
+  PerformanceOverlay,
+  SceneDiagnosticsPanel,
+} from "@/react-components/features/viewport-diagnostics";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { MiniMapOverlay } from "./MiniMapOverlay";
 
@@ -299,6 +303,8 @@ export function ViewportWrapper({
         </div>
       </div>
       <MiniMapOverlay />
+      <PerformanceOverlay />
+      <SceneDiagnosticsPanel />
     </div>
   );
 }

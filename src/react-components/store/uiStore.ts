@@ -9,6 +9,12 @@ interface UIState {
   setCloudModalOpen: (open: boolean) => void
   showMinimap: boolean
   setShowMinimap: (show: boolean) => void
+  /** Scene Diagnostics panel — a snapshot, recomputed on open and on Refresh. Never live. */
+  showSceneDiagnostics: boolean
+  setShowSceneDiagnostics: (show: boolean) => void
+  /** stats.js FPS meter. Unlike the panel above this genuinely is live state. */
+  showPerformance: boolean
+  setShowPerformance: (show: boolean) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -23,4 +29,8 @@ export const useUIStore = create<UIState>((set) => ({
   setCloudModalOpen: (open) => set({ isCloudModalOpen: open }),
   showMinimap: false,
   setShowMinimap: (show) => set({ showMinimap: show }),
+  showSceneDiagnostics: false,
+  setShowSceneDiagnostics: (show) => set({ showSceneDiagnostics: show }),
+  showPerformance: false,
+  setShowPerformance: (show) => set({ showPerformance: show }),
 }))
