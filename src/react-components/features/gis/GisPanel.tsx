@@ -4,6 +4,7 @@ import * as BUI from "@thatopen/ui";
 import { RotateCcw, Save } from "lucide-react";
 import { GisLayers } from "@/bim-components";
 import { useProject, useUpdateProject } from "@/react-components/features/projects/useProjects";
+import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useProjectStore } from "@/react-components/store/projectStore";
 import { Icon } from "@/react-components/components/ui";
 import { useBimStore } from "@/react-components/store/bimStore";
@@ -38,6 +39,7 @@ const initialState: GisState = {
 
 export function GisPanel() {
   const { components } = useBimStore();
+  const { isGuest } = useAuth();
   const { activeProjectId } = useProjectStore();
   const updateProjectMutation = useUpdateProject();
   const { data: activeProject } = useProject(activeProjectId);
@@ -358,15 +360,20 @@ export function GisPanel() {
           <span>GIS Cesium</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <button
-            className="inline-flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-alt text-muted transition-colors hover:border-border-strong hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
-            type="button"
-            onClick={saveGisData}
-            disabled={!isReady || !activeProjectId || saveState === "saving"}
-            title="Save GIS data to database"
-          >
-            <Save size={13} className={cn(saveState === "saving" && "animate-spin")} />
-          </button>
+          {/* Saving writes the project's coordinates to Supabase. The GIS tab is
+              reachable in the guest demo, but a guest has no session, so the button
+              is hidden rather than left to fail. */}
+          {!isGuest && (
+            <button
+              className="inline-flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-alt text-muted transition-colors hover:border-border-strong hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
+              type="button"
+              onClick={saveGisData}
+              disabled={!isReady || !activeProjectId || saveState === "saving"}
+              title="Save GIS data to database"
+            >
+              <Save size={13} className={cn(saveState === "saving" && "animate-spin")} />
+            </button>
+          )}
           <button
             className="inline-flex h-7 w-7 items-center justify-center rounded border border-border bg-surface-alt text-muted transition-colors hover:border-border-strong hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
             type="button"

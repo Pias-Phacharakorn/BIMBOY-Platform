@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/react-components/features/auth/useAuth";
 import { Icon } from "@/react-components/components/ui";
 
@@ -179,6 +180,22 @@ export function LoginView() {
             <Icon name="MICROSOFT" size={16} />
             <span>Microsoft</span>
           </button>
+        </div>
+
+        {/* Guest entry — a plain link to /demo, whose route guard owns the
+            flag-then-redirect flow. No imperative navigation here, for the same
+            reason the sign-in path has none: it would race the guard. */}
+        <div className="mt-6 pt-6 border-t border-border text-center">
+          <Link
+            to="/demo"
+            className="inline-flex items-center justify-center gap-2 w-full min-h-10 px-4 border border-dashed border-border-strong rounded-radius bg-transparent hover:bg-surface-alt text-muted hover:text-fg cursor-pointer text-xs font-semibold transition-all duration-120 no-underline"
+          >
+            <Icon name="SHOW" size={14} />
+            <span>Explore as Guest — no account needed</span>
+          </Link>
+          <p className="mt-2.5 text-[10px] leading-relaxed text-muted-2">
+            Opens a read-only sample project. Nothing you do is saved.
+          </p>
         </div>
       </div>
     </div>

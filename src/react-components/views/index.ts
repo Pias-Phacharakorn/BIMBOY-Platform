@@ -1,6 +1,7 @@
 export * from './ClashView';
 export * from './DocumentsView';
 export * from './DrawingView';
+export * from './GuestEntryView';
 export * from './HubSettingsView';
 export * from './LoginView';
 export * from './ModelsView';

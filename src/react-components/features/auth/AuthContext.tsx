@@ -1,9 +1,17 @@
 import React, { createContext, useState, useEffect, useRef, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isGuestSession, startGuestSession, endGuestSession } from "@/lib/guestSession";
 import type { User, Session } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+
+// Guest mode is a purely client-side flag: no Supabase session, no anonymous
+// sign-in, no rows in auth.users. A guest reads one hard-coded demo project and
+// its .frag files from public/resources/demo — nothing else is reachable, so
+// there is no server-side privilege to grant or revoke.
+// The flag itself lives in lib/guestSession.ts because the route guards need to
+// read it synchronously, before this context exists.
 
 export interface AuthContextType {
   user: User | null;
@@ -11,10 +19,16 @@ export interface AuthContextType {
   session: Session | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  /** True while browsing the read-only demo without an account. Never implies isAuthenticated. */
+  isGuest: boolean;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   loginWithOAuth: (provider: "google" | "azure") => Promise<void>;
   signOut: () => Promise<void>;
+  /** Enter the demo. Synchronous and offline — route guards do the navigating. */
+  continueAsGuest: () => void;
+  /** Leave the demo and return to the login screen. */
+  exitGuest: () => void;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,6 +42,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isGuest, setIsGuest] = useState(isGuestSession);
   const devAutoLoginState = useRef<"idle" | "attempting" | "settled">("idle");
 
   const fetchProfile = async (uid: string, retries = 3): Promise<void> => {
@@ -184,8 +199,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const signOut = async () => {
+    // Clear guest mode too: signing out from any state should land on the login
+    // screen, not silently drop into the demo.
+    endGuestSession();
+    setIsGuest(false);
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+  };
+
+  const continueAsGuest = () => {
+    startGuestSession();
+    setIsGuest(true);
+  };
+
+  const exitGuest = () => {
+    endGuestSession();
+    setIsGuest(false);
   };
 
   const value: AuthContextType = {
@@ -194,10 +223,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     session,
     isLoading,
     isAuthenticated: !!user,
+    isGuest,
     loginWithEmail,
     signUpWithEmail,
     loginWithOAuth,
     signOut,
+    continueAsGuest,
+    exitGuest,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

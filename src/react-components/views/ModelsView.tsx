@@ -14,6 +14,7 @@ import { DrawingEditorPanel, DrawingEditorBoard } from "@/react-components/featu
 import { useProject, useIsProjectAdmin } from "@/react-components/features/projects/useProjects";
 import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useAutoLoadCloudModels } from "@/react-components/features/cloud-models/useAutoLoadCloudModels";
+import { useGuestDemoModels } from "@/react-components/features/guest-demo/useGuestDemoModels";
 
 const workspaceTabs = ["Models", "Queries", "Viewer", "Smart Views", "GIS", "Viewpoint", "Drawing Editor", "AR"];
 
@@ -21,8 +22,9 @@ export function ModelsView() {
   const { projectId } = useParams({ strict: false });
   const navigate = useNavigate();
   const { data: project, isLoading } = useProject(projectId);
-  const { user, profile } = useAuth();
+  const { user, profile, isGuest } = useAuth();
   useAutoLoadCloudModels(projectId);
+  useGuestDemoModels(isGuest);
   const showSettings = useIsProjectAdmin(project?.id, user?.id, profile?.hub_role === "hub_admin");
 
   const [modelSearchQuery, setModelSearchQuery] = useState("");

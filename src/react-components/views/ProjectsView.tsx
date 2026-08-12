@@ -5,8 +5,10 @@ import { useProjects } from "@/react-components/features/projects/useProjects";
 import { NewProjectModal } from "@/react-components/features/projects/NewProjectModal";
 import type { ProjectView } from "@/types";
 import { UserAccountDropdown } from "@/react-components/features/auth/UserAccountDropdown";
+import { useAuth } from "@/react-components/features/auth/useAuth";
 
 export function ProjectsView() {
+  const { isGuest } = useAuth();
   const [view, setView] = useState<ProjectView>("card");
   const [query, setQuery] = useState("");
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
@@ -77,13 +79,16 @@ export function ProjectsView() {
               </svg>
             </button>
           </div>
-          <button
-            className="inline-flex items-center justify-center gap-2 min-h-8 px-3 py-1.5 border rounded-radius cursor-pointer text-xs font-semibold no-underline hover:-translate-y-[1px] active:translate-y-0 transition-all duration-120 border-[oklch(69%_0.15_252)] bg-gradient-to-b from-[oklch(70%_0.16_252)] to-[oklch(57%_0.16_252)] text-[oklch(99%_0.004_255)] hover:from-[oklch(73%_0.16_252)] hover:to-[oklch(60%_0.16_252)]"
-            type="button"
-            onClick={() => setIsNewProjectOpen(true)}
-          >
-            New Project
-          </button>
+          {/* Creating a project needs a session — hidden in the read-only demo. */}
+          {!isGuest && (
+            <button
+              className="inline-flex items-center justify-center gap-2 min-h-8 px-3 py-1.5 border rounded-radius cursor-pointer text-xs font-semibold no-underline hover:-translate-y-[1px] active:translate-y-0 transition-all duration-120 border-[oklch(69%_0.15_252)] bg-gradient-to-b from-[oklch(70%_0.16_252)] to-[oklch(57%_0.16_252)] text-[oklch(99%_0.004_255)] hover:from-[oklch(73%_0.16_252)] hover:to-[oklch(60%_0.16_252)]"
+              type="button"
+              onClick={() => setIsNewProjectOpen(true)}
+            >
+              New Project
+            </button>
+          )}
           <div className="w-[1px] h-5 bg-border mx-1" />
           <UserAccountDropdown />
         </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { useClashStore } from "@/react-components/store/clashStore";
+import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useUpdateClashViewpoint } from "./useClashViewpoints";
 import { useFilteredClashItems } from "./useFilteredClashItems";
 import type { ClashViewpointRow } from "./clashService";
@@ -42,6 +43,7 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
     isClashModalOpen: isModalOpen,
     setIsClashModalOpen: setIsModalOpen,
   } = useClashStore();
+  const { isGuest } = useAuth();
   // Same report/quick-filtered set as ClashTable, so the same clash gets the same #ID in both places.
   const { data: clashItems } = useFilteredClashItems(projectId);
   const updateMutation = useUpdateClashViewpoint();
@@ -170,10 +172,16 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
   }
 
   const saveField = (updates: Partial<Pick<ClashViewpointRow, "name" | "status" | "type" | "comments" | "solution">>) => {
+    // Guests have no session, so this write cannot succeed — the fields below are
+    // disabled, and this is the matching guard for any path that bypasses them.
+    if (isGuest) return;
     updateMutation.mutate({ id: item.id, updates });
   };
 
   const isSaving = updateMutation.isPending;
+  // Status, type, comments and solution are inline-editable for members. In the
+  // read-only demo they display their values but cannot be changed.
+  const isReadOnly = isSaving || isGuest;
 
   return (
     <div className="flex flex-col gap-4">
@@ -233,7 +241,7 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
         <EditableTextField
           label="Name"
           value={item.name}
-          disabled={isSaving}
+          disabled={isReadOnly}
           onSave={(newVal) => saveField({ name: newVal })}
         />
 
@@ -241,7 +249,7 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
           label="Status"
           value={item.status}
           options={STATUS_OPTIONS}
-          disabled={isSaving}
+          disabled={isReadOnly}
           onSave={(newVal) => saveField({ status: newVal as ClashViewpointRow["status"] })}
           renderView={(value) => (
             <span
@@ -256,7 +264,7 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
           label="Type"
           value={item.type}
           options={TYPE_OPTIONS}
-          disabled={isSaving}
+          disabled={isReadOnly}
           onSave={(newVal) => saveField({ type: newVal as ClashViewpointRow["type"] })}
           renderView={(value) => (
             <span className="inline-flex items-center gap-2 text-sm text-fg font-medium">
@@ -289,7 +297,7 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
             label="Comments"
             value={item.comments || ""}
             multiline
-            disabled={isSaving}
+            disabled={isReadOnly}
             placeholder="Add comments about this clash..."
             valueClassName="text-xs text-fg"
             onSave={(newVal) => saveField({ comments: newVal })}
@@ -300,7 +308,7 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
           label="Solution Notes"
           value={item.solution || ""}
           multiline
-          disabled={isSaving}
+          disabled={isReadOnly}
           placeholder="Add mitigation or solution details..."
           valueClassName="text-xs text-fg"
           onSave={(newVal) => saveField({ solution: newVal })}
@@ -444,7 +452,7 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
                 <EditableTextField
                   label="Name"
                   value={item.name}
-                  disabled={isSaving}
+                  disabled={isReadOnly}
                   valueClassName="text-[13px] text-muted-2 font-medium leading-normal"
                   onSave={(newVal) => saveField({ name: newVal })}
                 />
@@ -485,7 +493,7 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
                   label="Comments"
                   value={item.comments || ""}
                   multiline
-                  disabled={isSaving}
+                  disabled={isReadOnly}
                   placeholder="No comments available"
                   valueClassName="text-xs text-muted"
                   editClassName="w-full bg-surface-alt/40 border border-border rounded px-3 py-2 text-xs text-fg resize-none focus:outline-none focus:border-accent leading-normal"
@@ -499,7 +507,7 @@ export function ClashPreview({ projectId }: ClashPreviewProps) {
                   label="Solution"
                   value={item.solution || ""}
                   multiline
-                  disabled={isSaving}
+                  disabled={isReadOnly}
                   placeholder="No solution details available"
                   valueClassName="text-xs text-muted"
                   editClassName="w-full bg-surface-alt/40 border border-border rounded px-3 py-2 text-xs text-fg resize-none focus:outline-none focus:border-accent leading-normal"
