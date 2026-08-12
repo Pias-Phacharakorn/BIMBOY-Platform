@@ -1,0 +1,12 @@
+{
+  "models": [
+    { "file": "PSM1_Main_Link_AR.frag" },
+    { "file": "PSM1_Main_Link_ST.frag" },
+    { "file": "PSM2_Main_Link_AR.frag" },
+    { "file": "PSM2_Main_Link_ST.frag" },
+    { "file": "PSM_EXT-PSM2 Bath_Ex_Link_CSA.frag" },
+    { "file": "PSM_EXT.frag" },
+    { "file": "PSM_SN.frag" },
+    { "file": "PSM_AC.frag" }
+  ]
+}

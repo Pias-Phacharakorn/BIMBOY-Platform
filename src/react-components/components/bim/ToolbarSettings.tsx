@@ -19,7 +19,10 @@ export function ToolbarSettings() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Viewport Settings States
-  const [gridVisible, setGridVisible] = useState(true);
+  // Matches the world's default (create-world.ts sets grid.config.visible = false).
+  // The effect below re-syncs this from the live grid, but the seed must agree or the
+  // checkbox reads "on" for the first paint while the viewport shows no grid.
+  const [gridVisible, setGridVisible] = useState(false);
   const [gridLevel, setGridLevel] = useState(0);
   const [projection, setProjection] = useState("Perspective");
   const [hoverHighlight, setHoverHighlight] = useState(true);

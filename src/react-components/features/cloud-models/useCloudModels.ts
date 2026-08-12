@@ -20,11 +20,24 @@ export function useCloudModelFiles(prefix: string, enabled: boolean) {
   });
 }
 
+/**
+ * How a model's bytes are obtained. Defaults to Supabase storage; the guest demo
+ * injects a static `fetch` from public/resources/demo instead, so it reuses this
+ * loader's first-load serialisation (ADR-0015), progress modal and Stop button
+ * rather than duplicating them.
+ */
+export type FragDownloader = (
+  prefix: string,
+  fileName: string,
+  signal?: AbortSignal
+) => Promise<Uint8Array>;
+
 interface LoadCloudModelVariables {
   prefix: string;
   file: CloudFragFile;
   components: OBC.Components;
   signal?: AbortSignal;
+  download?: FragDownloader;
 }
 
 /**
@@ -34,8 +47,9 @@ interface LoadCloudModelVariables {
  */
 export function useLoadCloudModel() {
   return useMutation({
-    mutationFn: async ({ prefix, file, components, signal }: LoadCloudModelVariables) => {
-      const bytes = await cloudModelsService.downloadFragFile(prefix, file.name, signal);
+    mutationFn: async ({ prefix, file, components, signal, download }: LoadCloudModelVariables) => {
+      const fetchBytes = download ?? cloudModelsService.downloadFragFile;
+      const bytes = await fetchBytes(prefix, file.name, signal);
       // Download resolved just before a cancel — don't load an aborted file.
       if (signal?.aborted) return;
       const fragments = components.get(OBC.FragmentsManager);
@@ -65,7 +79,8 @@ export function useLoadCloudModelBatch() {
   return async function loadFiles(
     files: CloudFragFile[],
     prefix: string,
-    components: OBC.Components
+    components: OBC.Components,
+    download?: FragDownloader
   ): Promise<boolean> {
     if (files.length === 0) return false;
 
@@ -124,6 +139,7 @@ export function useLoadCloudModelBatch() {
               file,
               components,
               signal: controller.signal,
+              download,
             });
             // A cancel may have flipped this file to 'cancelled' already.
             if (!controller.signal.aborted) updateLoadingFileStatus(file.name, "done");

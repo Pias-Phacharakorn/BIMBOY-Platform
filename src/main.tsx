@@ -17,10 +17,12 @@ function App() {
   // Key on whether the profile is loaded (not the object) so guards that gate on
   // it (e.g. hub-settings' hub_role) re-run once it arrives — WITHOUT re-firing
   // on every profile object churn (e.g. hourly TOKEN_REFRESHED refetches).
+  // isGuest is in the dep list for the same reason: entering the demo changes what
+  // the guards should allow, and /demo's guard is what performs the redirect.
   const hasProfile = !!auth.profile
   useEffect(() => {
     router.invalidate()
-  }, [auth.isAuthenticated, hasProfile])
+  }, [auth.isAuthenticated, hasProfile, auth.isGuest])
 
   if (auth.isLoading) {
     return (

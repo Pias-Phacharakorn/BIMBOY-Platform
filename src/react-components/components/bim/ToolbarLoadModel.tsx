@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { useUIStore } from "@/react-components/store/uiStore";
+import { useAuth } from "@/react-components/features/auth/useAuth";
 import { Icon } from "@/react-components/components/ui";
 import * as OBC from "@thatopen/components";
 import { CloudModelModal } from "./CloudModelModal";
@@ -8,6 +9,7 @@ import { cn } from "@/lib/utils";
 
 export function ToolbarLoadModel() {
   const { components } = useBimStore();
+  const { isGuest } = useAuth();
   const { isCloudModalOpen, setCloudModalOpen } = useUIStore();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -122,20 +124,25 @@ export function ToolbarLoadModel() {
         {/* Dropdown */}
         {isOpen && (
           <div className="absolute bottom-full mb-2 left-0 w-44 rounded-lg bg-surface border border-border shadow-xl z-50 overflow-hidden py-1 backdrop-blur-md animate-in fade-in slide-in-from-bottom-1 duration-150">
-            {/* Cloud Models */}
-            <button
-              onClick={() => {
-                setCloudModalOpen(true);
-                closeDropdown();
-              }}
-              className={menuItemClass}
-              type="button"
-            >
-              <Icon name="CLOUD" size={14} className="text-accent shrink-0" />
-              <span>Cloud Models</span>
-            </button>
+            {/* Cloud Models — lists a project's Supabase storage folder, which a
+                guest has no session for. Loading a local file still works for them. */}
+            {!isGuest && (
+              <>
+                <button
+                  onClick={() => {
+                    setCloudModalOpen(true);
+                    closeDropdown();
+                  }}
+                  className={menuItemClass}
+                  type="button"
+                >
+                  <Icon name="CLOUD" size={14} className="text-accent shrink-0" />
+                  <span>Cloud Models</span>
+                </button>
 
-            <div className="mx-3 my-0.5 border-t border-border/60" />
+                <div className="mx-3 my-0.5 border-t border-border/60" />
+              </>
+            )}
 
             {/* Local Model — always expanded */}
             <div className={cn(menuItemClass, "pointer-events-none opacity-60")}>

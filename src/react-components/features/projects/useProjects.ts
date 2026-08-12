@@ -5,6 +5,8 @@ import type { InsertProject, ProjectRow, UpdateProject, ProjectMemberWithProfile
 import type { AppProject } from "@/types";
 import { projectsManager } from "@/classes/ProjectsManager";
 import { Project } from "@/classes/Project";
+import { useAuth } from "@/react-components/features/auth/useAuth";
+import { DEMO_PROJECT_ROW } from "@/react-components/features/guest-demo/demoProject";
 
 export const projectsKeys = {
   all: ["projects"] as const,
@@ -79,10 +81,15 @@ export function mapProjectRowToAppProject(row: ProjectRow): AppProject {
  * Hook to query all active projects, mapped to UI AppProject format.
  */
 export function useProjects() {
+  // Guests have no session, so Supabase would return nothing. They get the single
+  // client-side demo project instead — mapped and registered exactly like a real
+  // one, so ProjectsView, projectsManager and the GIS listeners see no difference.
+  const { isGuest } = useAuth();
+
   return useQuery<AppProject[]>({
-    queryKey: projectsKeys.lists(),
+    queryKey: isGuest ? [...projectsKeys.lists(), "guest"] : projectsKeys.lists(),
     queryFn: async () => {
-      const rows = await projectsService.getProjects();
+      const rows = isGuest ? [DEMO_PROJECT_ROW] : await projectsService.getProjects();
       const mapped = rows.map(mapProjectRowToAppProject);
 
       // Populate projectsManager with proper Class Project objects
@@ -123,9 +130,17 @@ export function useProjects() {
  * Hook to query a single project by ID, mapped to UI AppProject format.
  */
 export function useProject(id: string | null | undefined) {
+  const { isGuest } = useAuth();
+
   return useQuery<AppProject | null>({
-    queryKey: projectsKeys.detail(id || ""),
+    queryKey: isGuest
+      ? [...projectsKeys.details(), "guest", id || ""]
+      : projectsKeys.detail(id || ""),
     queryFn: async () => {
+      // Guest mode resolves any project id to the demo project: the only route a
+      // guest can reach is /projects/<demo id>/model, and hand-typing another id
+      // must not fall through to an unauthenticated Supabase read.
+      if (isGuest) return mapProjectRowToAppProject(DEMO_PROJECT_ROW);
       const row = await projectsService.getProjectById(id || "");
       return row ? mapProjectRowToAppProject(row) : null;
     },
@@ -181,9 +196,19 @@ export function useDeleteProject() {
  * Hook to query members of a specific project.
  */
 export function useProjectMembers(projectId: string | null | undefined) {
+  const { isGuest } = useAuth();
+
   return useQuery<ProjectMemberWithProfile[]>({
-    queryKey: projectsKeys.membersOfProject(projectId || ""),
-    queryFn: () => projectsService.getProjectMembers(projectId || ""),
+    // The guest branch gets its own cache key: sharing one would let the demo's empty
+    // list linger after exiting into a real account, briefly showing a project as
+    // having no members.
+    queryKey: isGuest
+      ? [...projectsKeys.membersAll, "guest", projectId || ""]
+      : projectsKeys.membersOfProject(projectId || ""),
+    // No member list in the demo: it would be an unauthenticated Supabase read, and
+    // real colleagues' emails have no business in a public preview. The empty list
+    // also makes useIsProjectAdmin resolve false, which hides Settings for guests.
+    queryFn: () => (isGuest ? Promise.resolve([]) : projectsService.getProjectMembers(projectId || "")),
     enabled: !!projectId,
   });
 }

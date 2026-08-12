@@ -7,7 +7,78 @@ alternatives rejected are worth preserving — into an ADR under `docs/adr/`
 (the record of **why**). Then clear it from here; this file is never the
 permanent record. See `docs/adr/README.md` for the promotion flow._
 
-**Nothing is currently staged.**
+## Staged: guest demo mode is client-side only (branch `feat/guest-demo-mode`)
+
+**Decision.** A guest gets **no Supabase session at all**. `AuthContext` carries an `isGuest`
+flag in `sessionStorage`; `useProjects`/`useProject`/`useProjectMembers` short-circuit to a
+hard-coded `DEMO_PROJECT_ROW` before any network call; the viewer loads `.frag` files from
+`public/resources/demo/` as static assets. `/demo` is the single entry point, and its
+`beforeLoad` guard performs the navigation, so the one-redirect-mechanism rule holds.
+
+**Rejected — Supabase anonymous sign-in + `projects.is_demo` + RLS.** Fully planned and the
+migration was written before being deleted. Three findings killed it, and they are worth
+keeping because they are *pre-existing* risks that will resurface the day anyone enables
+anonymous sign-ins:
+
+1. **Anonymous users hold the `authenticated` Postgres role.** Any policy checking only the
+   role (`auth.role() = 'authenticated'`, or `to authenticated` with no predicate) starts
+   admitting guests the instant the dashboard switch is flipped — no policy edit, no error,
+   nothing in the logs. This is why enabling the switch and shipping guest policies would have
+   had to be one atomic change.
+2. **`create_dummy_user` is a SECURITY DEFINER function in `public`**, called straight from the
+   browser (`projectsService.addProjectMember`, `hubSettingsService`). Postgres grants EXECUTE
+   to PUBLIC by default, so RPCs are not RLS-gated at all: today any registered user can mint
+   `auth.users` rows; with anonymous sign-in on it becomes an unauthenticated endpoint.
+3. **Possible self-promotion chain:** if `profiles` UPDATE lets a caller set their own
+   `hub_role`, a guest becomes `hub_admin` and `is_hub_admin()` opens every policy in the
+   database. Never verified — the Supabase MCP was unauthorised for that whole session.
+
+None were confirmed against the database. `supabase/audits/guest_mode_preflight.sql` held the
+read-only queries and was deleted with the migration; the queries survive in git history on
+this branch and in the scrutiny above.
+
+**Also worth knowing:** dev and production share one Supabase project
+(`tbrnwnghjfkwnzsldfit` in both `.env.local` and the Cloudflare build variables), so there is
+no staging database — a reason the zero-backend design won on risk alone.
+
+**Verified in a production preview (2026-08-12):** `/demo` → guest session → model route,
+8 demo `.frag` files auto-download (all HTTP 200) and render. Two bugs found and fixed by that
+testing — see below. Open: the MODELS LIST panel shows 7 of the 8 on first paint and *which*
+one is absent varies per run; all 8 fetch cleanly and no load error surfaces, so it looks like
+a list-subscription race rather than a dropped model, but that is **not proven**.
+
+**Bug found by testing: guest mode did not survive a page refresh.** A hard load of any
+`/projects/*` URL bounced guests to `/login` even with the flag in `sessionStorage`. On a hard
+load the router evaluates `beforeLoad` before `RouterProvider`'s context is wired
+(`router.tsx` starts with `auth: undefined!`). A signed-in user self-heals because
+`login.tsx`'s guard bounces them to `?redirect=`; a guest has nothing to bounce them back, so
+they were stranded. Fix: `src/lib/guestSession.ts` owns the flag and the guards read it
+**synchronously**, not only off `context.auth`. It lives in `lib/` because both `AuthContext`
+and the route guards need it and features may not import one another.
+
+## Staged: the viewport grid is off by default (same branch)
+
+`create-world.ts` now sets `grid.config.visible = false`. Through `config`, not
+`three.visible`: the config setter also drives the component's own setter, which
+adds/removes the grid from the scene. `ToolbarSettings`' `useState` seed changed `true` →
+`false` to match — the effect re-syncs from the live grid, but a mismatched seed makes the
+checkbox read "on" for the first paint. `SimpleGrid.visible` reads `this.three.visible`, so
+the toggle and the AR path share one flag; verified the checkbox reflects the new default and
+still turns the grid on.
+
+**Landmine fixed in passing:** `ArSession` hid the grid and restored it with
+`visible = true` **unconditionally**. Harmless while the grid was always visible; with it off
+by default, leaving AR would have switched on a grid the user never had. It now only takes
+ownership of a grid that was actually showing.
+
+**Rejected:** grid off for the guest demo only — it would push an `isGuest` check into
+`bim-components/setup`, the OBC singleton layer CLAUDE.md keeps free of app state. **Also
+rejected:** persisting the toggle to `localStorage` (as `AppShell` does for
+`sidebarCollapsed`) — more useful, but wider than the ask; the choice still resets per reload.
+
+**Promotion note:** this belongs in `docs/feature/bim-viewer.md` (a line under the world-setup
+defaults), not an ADR — the rationale is thin and the rejected alternatives are recorded here.
+Awaiting the developer's own test before promoting.
 
 ---
 

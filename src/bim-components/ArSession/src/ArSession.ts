@@ -275,7 +275,10 @@ export class ArSession extends OBC.Component implements OBC.Disposable {
 
     try {
       const grid = this.components.get(OBC.Grids).list.get(world.uuid);
-      if (grid?.three) {
+      // Only take ownership of a grid that is actually showing. The grid is now hidden
+      // by default (create-world.ts), so restoring unconditionally on AR exit would
+      // switch on a grid the user never had.
+      if (grid?.three?.visible) {
         this._hiddenGrid = grid.three;
         grid.three.visible = false;
       }

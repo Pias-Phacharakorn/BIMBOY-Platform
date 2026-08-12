@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as OBC from "@thatopen/components";
 import { useProject } from "@/react-components/features/projects/useProjects";
+import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { cloudModelsService } from "./cloudModelsService";
 import { useLoadCloudModelBatch } from "./useCloudModels";
@@ -12,6 +13,9 @@ import { useLoadCloudModelBatch } from "./useCloudModels";
  */
 export function useAutoLoadCloudModels(projectId: string | null | undefined) {
   const { data: project } = useProject(projectId);
+  // Guests load from public/resources/demo via useGuestDemoModels instead — this
+  // path would be an unauthenticated Supabase storage list.
+  const { isGuest } = useAuth();
   const components = useBimStore((s) => s.components);
   const engineReady = useBimStore((s) => s.engineReady);
   const resetLoadedModels = useBimStore((s) => s.resetLoadedModels);
@@ -19,6 +23,7 @@ export function useAutoLoadCloudModels(projectId: string | null | undefined) {
   const prevProjectIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
+    if (isGuest) return;
     if (!engineReady || !components || !project) return;
 
     const prefix = `${project.projectnumber}_${project.projectName}/02_frag`;
@@ -68,5 +73,5 @@ export function useAutoLoadCloudModels(projectId: string | null | undefined) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engineReady, components, project, projectId]);
+  }, [engineReady, components, project, projectId, isGuest]);
 }
