@@ -57,6 +57,12 @@ export const createWorld = (components: OBC.Components) => {
   grid.config.color = new THREE.Color("#666666");
   grid.config.primarySize = 1;
   grid.config.secondarySize = 10;
+  // Off by default — OBC ships the grid visible, but it competes with the model for
+  // attention and reads as scaffolding in screenshots. Viewport Settings → Grid turns
+  // it back on per session (ToolbarSettings seeds its checkbox from this value).
+  // Set through `config`, not `three.visible`: the config setter also drives the
+  // component's own setter, which adds/removes the grid from the scene.
+  grid.config.visible = false;
   grid.three.raycast = () => null;
 
   return { world, viewport }
