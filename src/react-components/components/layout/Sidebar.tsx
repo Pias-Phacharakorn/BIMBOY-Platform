@@ -27,7 +27,12 @@ interface SidebarProps {
   showSettings?: boolean;
 }
 
-export function Sidebar({ project, collapsed, onToggleCollapsed, showSettings = false }: SidebarProps) {
+export function Sidebar({
+  project,
+  collapsed,
+  onToggleCollapsed,
+  showSettings = false,
+}: SidebarProps) {
   const baseNavItemClass = `flex items-center gap-[11px] min-h-[36px] py-2 overflow-hidden border border-transparent rounded-[var(--radius-radius)] text-muted no-underline whitespace-nowrap transition-all duration-140 ease-in-out hover:bg-[oklch(21%_0.02_255/0.78)] hover:border-[oklch(36%_0.025_255)] hover:text-fg ${
     collapsed ? "justify-center px-0" : "px-[11px]"
   }`;
@@ -35,6 +40,9 @@ export function Sidebar({ project, collapsed, onToggleCollapsed, showSettings = 
   const activeNavItemClass =
     "!bg-[linear-gradient(90deg,oklch(28%_0.07_252/0.7),oklch(21%_0.025_255/0.92))] !border-[oklch(48%_0.08_252)] !text-fg font-semibold";
 
+  // Guests fall through the `showSettings === false` branch: they can browse every
+  // section, but Settings stays hidden (useIsProjectAdmin resolves false without a
+  // session), which is also what a non-admin member sees.
   const filteredNavItems = showSettings
     ? navItems
     : navItems.filter((item) => item.key !== "settings");
