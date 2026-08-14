@@ -102,6 +102,26 @@ Last cleared 2026-08-08. Everything previously staged has been promoted:
 | Cut fills drawn detached from the model — FRAGS and OBC disagreeing on the base model | `bim-viewer.md` § Patterns & conventions (first load is serialised) | [ADR-0015](docs/adr/0015-one-base-model-for-coordination.md) |
 | Performance + Scene Diagnostics rows in Viewport Settings | `bim-viewport-toolbars.md` § Settings → The two diagnostic rows | — (the probe that found ADR-0015, made permanent) |
 
+**Cleared 2026-08-14** — the Room tab (`feat/room-view`), promoted to:
+
+| Was staged | How it works | Why |
+|------------|--------------|-----|
+| The dead "Viewer" tab becomes a "Room" IFCSPACE browser | `bim-viewer.md` § Room browser (IFCSPACE) | — (the two decisions below carry the *why*) |
+| A room is selected through the app's own select style, not a private one | `bim-viewer.md` § Room browser → Selection is the app's selection | [ADR-0016](docs/adr/0016-rooms-select-through-the-app-select-style.md) |
+| The Room tab owns no visibility state — no hide, no ghost | `bim-viewer.md` § Room browser → The tab does not touch visibility | [ADR-0017](docs/adr/0017-room-tab-owns-no-visibility-state.md) |
+
+⚠️ **Promoted one step early, deliberately.** The tab itself was tested against a real model on
+2026-08-14 and works — list, storey grouping, selection, chips. Six later changes were **not**
+retested before this promotion: no-zoom-on-row-click, the per-row zoom control, ctrl/cmd
+multi-select, the `number  name` chip text, the ghost removal, and the panel following viewport
+picks. The guide and both ADRs describe the code as it stands; if testing moves any of it, they
+are what needs correcting.
+
+**Still open, and not recorded anywhere else:** whether any *other* model in this project contains
+`IFCSPACE` at all. Spaces are normally exported only by architectural models, so the structural,
+MEP and eight demo `.frag` files may have none — which is why the empty state distinguishes "no
+model loaded" from "no spaces in this model".
+
 **Two things that were staged here are open questions, not decisions, and now live where they belong:**
 
 - **A cut plane's band is fitted to *every* loaded model** — `boxer.addFromModels()` unions all of

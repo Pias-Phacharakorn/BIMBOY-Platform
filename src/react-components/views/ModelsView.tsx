@@ -4,6 +4,7 @@ import { AppShell, WorkspaceHeader, LeftPanel, RightPanel, PanelSection } from "
 import { ViewportWrapper, ViewportRightToolbar, ViewportToolbar, ModelsList, Views2DList, CloudModelLoadingModal } from "@/react-components/components/bim";
 import { GisPanel } from "@/react-components/features/gis";
 import { PropertyPanel } from "@/react-components/features/property-panel";
+import { RoomPanel } from "@/react-components/features/room-view/RoomPanel";
 import { PropertyTable } from "@/react-components/features/property-table/PropertyTable";
 import { ClashList, ClashPreview } from "@/react-components/features/clash-dashboard";
 import { DrawingEditorPanel, DrawingEditorBoard } from "@/react-components/features/drawing-editor";
@@ -16,7 +17,7 @@ import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useAutoLoadCloudModels } from "@/react-components/features/cloud-models/useAutoLoadCloudModels";
 import { useGuestDemoModels } from "@/react-components/features/guest-demo/useGuestDemoModels";
 
-const workspaceTabs = ["Models", "Queries", "Viewer", "Smart Views", "GIS", "Viewpoint", "Drawing Editor", "AR"];
+const workspaceTabs = ["Models", "Queries", "Room", "Smart Views", "GIS", "Viewpoint", "Drawing Editor", "AR"];
 
 export function ModelsView() {
   const { projectId } = useParams({ strict: false });
@@ -28,12 +29,15 @@ export function ModelsView() {
   const showSettings = useIsProjectAdmin(project?.id, user?.id, profile?.hub_role === "hub_admin");
 
   const [modelSearchQuery, setModelSearchQuery] = useState("");
+  const [roomSearchQuery, setRoomSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("Models");
   const isQueriesTab = activeTab === "Queries";
   const isGisTab = activeTab === "GIS";
   const isViewpointTab = activeTab === "Viewpoint";
   const isDrawingEditorTab = activeTab === "Drawing Editor";
-  const isFlexLayout = activeTab === "Models" || isGisTab || isViewpointTab || isDrawingEditorTab;
+  const isRoomTab = activeTab === "Room";
+  const isFlexLayout =
+    activeTab === "Models" || isGisTab || isViewpointTab || isDrawingEditorTab || isRoomTab;
 
   // The "AR" tab escapes ModelsView entirely: it navigates to the standalone
   // full-screen /ar page instead of swapping panels here, so the WebXR session
@@ -108,6 +112,19 @@ export function ModelsView() {
           </PanelSection>
         </LeftPanel>
 
+        {/*
+          Mounted conditionally, not hidden with a class like the Models panels above: RoomPanel
+          ghosts the model for as long as it is mounted, so a hidden-but-mounted one would leave
+          every other tab translucent.
+        */}
+        {isRoomTab && (
+          <LeftPanel icon="ROOM" defaultOpen={true}>
+            <PanelSection label="Rooms" icon="ROOM" defaultOpen={true} fullHeight={true} onSearch={setRoomSearchQuery}>
+              <RoomPanel searchQuery={roomSearchQuery} />
+            </PanelSection>
+          </LeftPanel>
+        )}
+
         {isViewpointTab && (
           <LeftPanel icon="MODEL" defaultOpen={true}>
             <PanelSection label="Viewpoints" icon="MODEL" defaultOpen={true} noPadding={true} fullHeight={true}>
@@ -140,10 +157,12 @@ export function ModelsView() {
           </div>
         )}
 
+        {/* Shared by Models and Room: selecting a room writes the store, so this fills with its
+            level, area and property sets exactly as a picked element would. */}
         <RightPanel
           icon="SETTINGS"
           defaultOpen={true}
-          className={activeTab === "Models" ? "" : "hidden"}
+          className={activeTab === "Models" || isRoomTab ? "" : "hidden"}
         >
           <PanelSection
             label="Item Properties"
