@@ -27,6 +27,7 @@ import { CursorSurface } from "../CursorSurface";
 import { CursorZoom } from "../CursorZoom";
 import { GisLayers } from "../GisLayers";
 import { DrawingEditorSetup } from "../DrawingEditorSetup";
+import { RoomView } from "../RoomView";
 
 export const setupComponents = async () => {
   BUI.Manager.init();
@@ -86,6 +87,11 @@ export const setupComponents = async () => {
   spotCoordinate.world = world;
   new GisLayers(components);
   new DrawingEditorSetup(components);
+
+  // Idle until the Room tab opens it: it ghosts the model and paints IFCSPACE volumes only while
+  // that panel is mounted, and restores everything on the way out.
+  const roomView = new RoomView(components);
+  roomView.world = world;
 
 
   components.init()
