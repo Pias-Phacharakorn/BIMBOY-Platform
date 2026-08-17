@@ -44,6 +44,25 @@ const BAND_OPACITY: Record<PlaneVisualState, number> = {
  * with no model there is no footprint to take a shape from.
  */
 const FALLBACK_PLANE_SIZE = 10;
+/**
+ * How much larger than the model's own footprint a plane is drawn. Tune this one number to
+ * resize every cut plane; `BAND_RATIO` is deliberately left out of it, so the ring keeps its
+ * proportion and the plane looks the same, only bigger.
+ *
+ * A tightly fitted plane reads as part of the model rather than as a surface through it, and at
+ * 1× the band ring lands *on* the geometry it cuts. At 3× the ring sits clear of the model
+ * entirely, so it tints nothing and is easier to click for switching plane.
+ *
+ * ⚠️ **Applied here, never inside {@link fitBoxToFrame}.** `scripts/check-gizmo-frames.mjs`
+ * Group D2 imports that function directly to assert its slide-invariance — the one assertion
+ * that lands on production code instead of a re-implementation beside it. Padding the fit itself
+ * would leave that check passing while testing a value it does not name.
+ *
+ * ⚠️ This changes only what is **drawn**. `OBC.Clipper`'s plane is mathematically infinite, so a
+ * bigger rectangle does not cut more of the model, and `ClipperFillManager`'s `ClipStyler` fills
+ * stay bounded by real geometry either way.
+ */
+const PLANE_FIT_SCALE = 3;
 /** Collapses the burst of onItemSet events a batch load fires into a single refit. */
 const SIZE_REFRESH_DEBOUNCE = 150;
 
@@ -80,9 +99,11 @@ interface OutlineEntry {
 
 /**
  * Owns how a cut plane looks: a **border band** with an empty interior, and a crisp outline on its
- * outer edge. Both are sized to the model's own footprint on that plane — the loaded models'
- * bounding box projected into the plane's frame (→ {@link fitBoxToFrame}), which for a cut square
- * to the grid is exactly the matching `SectionBox` face.
+ * outer edge. Both are sized from the model's own footprint on that plane — the loaded models'
+ * bounding box projected into the plane's frame (→ {@link fitBoxToFrame}) — then enlarged by
+ * {@link PLANE_FIT_SCALE}, so a plane extends well past the geometry it cuts instead of vanishing
+ * into it. Only the extent is scaled: the rectangle stays centred on the footprint, so for a cut
+ * square to the grid it is still the matching `SectionBox` face, concentric and three times wider.
  *
  * ## Why these live in the overlay pass
  *
@@ -244,7 +265,8 @@ export class ClipperOutlineManager {
   }
 
   /**
-   * The fitted rectangle's current half-extents and middle, in the plane's own local X/Y.
+   * The **drawn** rectangle's current half-extents and middle, in the plane's own local X/Y —
+   * already scaled by {@link PLANE_FIT_SCALE}, not the tight fit `fitBoxToFrame` returned.
    * `null` when the plane is unknown.
    *
    * The one reader is `ClipperCursor`'s refit clamp (decision 11): `onFitChanged` recomputes
@@ -252,6 +274,10 @@ export class ClipperOutlineManager {
    * gets clamped back into it — the drag itself stays completely free. Half-extents rather than
    * corners, because clamping an (x, y) offset only needs the box bounds around `centerX`/
    * `centerY`, which already carry the rectangle's middle.
+   *
+   * ⚠️ Reporting the drawn size rather than the fit is the point: the gizmo may be parked
+   * anywhere the user can see the plane, and a model load must never yank it back to a boundary that
+   * was never drawn.
    */
   extent(planeId: string): { halfWidth: number; halfHeight: number; centerX: number; centerY: number } | null {
     const entry = this._outlines.get(planeId);
@@ -309,8 +335,12 @@ export class ClipperOutlineManager {
   private _applyFit(entry: OutlineEntry) {
     const fit = this._box ? fitBoxToFrame(this._box, entry.plane.helper) : null;
 
-    const width = fit ? fit.width : FALLBACK_PLANE_SIZE;
-    const height = fit ? fit.height : FALLBACK_PLANE_SIZE;
+    // Scaled here, before anything is built or stored, so outline, band and `extent` all agree
+    // by construction. The centre is *not* scaled: the rectangle grows concentrically around the
+    // footprint, so the model stays in the middle of its own cut plane whichever corner of it
+    // was clicked to place the plane.
+    const width = (fit ? fit.width : FALLBACK_PLANE_SIZE) * PLANE_FIT_SCALE;
+    const height = (fit ? fit.height : FALLBACK_PLANE_SIZE) * PLANE_FIT_SCALE;
     entry.centerX = fit ? fit.centerX : 0;
     entry.centerY = fit ? fit.centerY : 0;
     entry.width = width;
