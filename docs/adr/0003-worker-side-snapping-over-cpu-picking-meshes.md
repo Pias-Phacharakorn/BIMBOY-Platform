@@ -1,8 +1,23 @@
 # ADR-0003: Measure tools snap in the FRAGS worker; the CPU picking-mesh path is deleted
 
-**Status:** Accepted
+**Status:** Accepted — premise re-tested and upheld on 3.4.8; see [ADR-0018](0018-thatopen-3-4-8-patch-bump.md)
 **Date:** 2026-08-03
 **Area:** `docs/feature/bim-viewport-righttoolbars.md` § Measure tools → Vertex snapping
+
+> ⚠️ **Two things to know before trusting the detail below**, both from the bump to
+> `@thatopen/components@3.4.8` / `@thatopen/fragments@3.4.7` ([ADR-0018](0018-thatopen-3-4-8-patch-bump.md)):
+>
+> 1. **The decision holds.** `raycastWithSnapping` still exists, the picker's default mode still
+>    routes to it, and `getClippingPlanesEvent` still defaults to `() => []` — so the worker still
+>    does no clip culling and this app's main-thread filtering is still required. Snapping was
+>    re-tested by hand after the bump and works. Nothing here was reversed.
+> 2. **But the premise now has a live alternative it did not have when written.** Upstream added
+>    `SnapResolver` — main-thread snapping from *cached shell* geometry, not the per-instance
+>    extraction this ADR deleted. "FRAGS snaps in the worker, so a main-thread path is
+>    reimplementation" is no longer the whole picture. Adopting it was considered and deferred.
+>
+> **The `index.mjs` / `index.js` line numbers throughout this record predate the bump and are stale.**
+> The symbol names are still correct; search by name, not offset.
 
 ## Context
 
