@@ -60,8 +60,16 @@ export const setupFragmentsManager = (components: OBC.Components, world: OBC.Sim
     await fragments.core.update(true);
   };
 
+  // ⚠️ **Never pass `force` here.** `update(force)` means "finish all the models' pending
+  // requests" — awaiting it on `controls.update`, which fires continuously through an orbit,
+  // pins the render loop to the worker draining its whole streaming/LOD/culling queue every
+  // event. On a large model that is the difference between ~10 fps while moving and the
+  // ~80 fps the same view holds when still, and it gets worse the bigger the model.
+  // The forced form belongs on discrete state changes (a load, a config change), which is
+  // exactly how the vendor uses it: 36 of its 37 examples wire this event as a bare
+  // `fragments.core.update()`, and none of them force it.
   const onControlsUpdate = async () => {
-    await fragments.core.update(true);
+    await fragments.core.update();
   };
 
   world.onCameraChanged.add(onCameraChange);
