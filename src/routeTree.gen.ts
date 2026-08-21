@@ -9,36 +9,26 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ProjectsRouteImport } from './routes/projects'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as HubSettingsRouteImport } from './routes/hub-settings'
-import { Route as DemoRouteImport } from './routes/demo'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DemoRouteImport } from './routes/demo'
+import { Route as HubSettingsRouteImport } from './routes/hub-settings'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as ArProjectIdRouteImport } from './routes/ar.$projectId'
 import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
-import { Route as ArProjectIdRouteImport } from './routes/ar.$projectId'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects/$projectId/index'
-import { Route as ProjectsProjectIdStandardRouteImport } from './routes/projects/$projectId/standard'
-import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects/$projectId/settings'
-import { Route as ProjectsProjectIdPowerbiRouteImport } from './routes/projects/$projectId/powerbi'
-import { Route as ProjectsProjectIdModelRouteImport } from './routes/projects/$projectId/model'
-import { Route as ProjectsProjectIdDrawingRouteImport } from './routes/projects/$projectId/drawing'
-import { Route as ProjectsProjectIdDocumentsRouteImport } from './routes/projects/$projectId/documents'
 import { Route as ProjectsProjectIdClashesRouteImport } from './routes/projects/$projectId/clashes'
+import { Route as ProjectsProjectIdDocumentsRouteImport } from './routes/projects/$projectId/documents'
+import { Route as ProjectsProjectIdDrawingRouteImport } from './routes/projects/$projectId/drawing'
+import { Route as ProjectsProjectIdModelRouteImport } from './routes/projects/$projectId/model'
+import { Route as ProjectsProjectIdPowerbiRouteImport } from './routes/projects/$projectId/powerbi'
+import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects/$projectId/settings'
+import { Route as ProjectsProjectIdStandardRouteImport } from './routes/projects/$projectId/standard'
 
-const ProjectsRoute = ProjectsRouteImport.update({
-  id: '/projects',
-  path: '/projects',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HubSettingsRoute = HubSettingsRouteImport.update({
-  id: '/hub-settings',
-  path: '/hub-settings',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DemoRoute = DemoRouteImport.update({
@@ -46,9 +36,24 @@ const DemoRoute = DemoRouteImport.update({
   path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const HubSettingsRoute = HubSettingsRouteImport.update({
+  id: '/hub-settings',
+  path: '/hub-settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsRoute = ProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ArProjectIdRoute = ArProjectIdRouteImport.update({
+  id: '/ar/$projectId',
+  path: '/ar/$projectId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
@@ -61,43 +66,15 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   path: '/$projectId',
   getParentRoute: () => ProjectsRoute,
 } as any)
-const ArProjectIdRoute = ArProjectIdRouteImport.update({
-  id: '/ar/$projectId',
-  path: '/ar/$projectId',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ProjectsProjectIdIndexRoute = ProjectsProjectIdIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
-const ProjectsProjectIdStandardRoute =
-  ProjectsProjectIdStandardRouteImport.update({
-    id: '/standard',
-    path: '/standard',
-    getParentRoute: () => ProjectsProjectIdRoute,
-  } as any)
-const ProjectsProjectIdSettingsRoute =
-  ProjectsProjectIdSettingsRouteImport.update({
-    id: '/settings',
-    path: '/settings',
-    getParentRoute: () => ProjectsProjectIdRoute,
-  } as any)
-const ProjectsProjectIdPowerbiRoute =
-  ProjectsProjectIdPowerbiRouteImport.update({
-    id: '/powerbi',
-    path: '/powerbi',
-    getParentRoute: () => ProjectsProjectIdRoute,
-  } as any)
-const ProjectsProjectIdModelRoute = ProjectsProjectIdModelRouteImport.update({
-  id: '/model',
-  path: '/model',
-  getParentRoute: () => ProjectsProjectIdRoute,
-} as any)
-const ProjectsProjectIdDrawingRoute =
-  ProjectsProjectIdDrawingRouteImport.update({
-    id: '/drawing',
-    path: '/drawing',
+const ProjectsProjectIdClashesRoute =
+  ProjectsProjectIdClashesRouteImport.update({
+    id: '/clashes',
+    path: '/clashes',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
 const ProjectsProjectIdDocumentsRoute =
@@ -106,10 +83,33 @@ const ProjectsProjectIdDocumentsRoute =
     path: '/documents',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
-const ProjectsProjectIdClashesRoute =
-  ProjectsProjectIdClashesRouteImport.update({
-    id: '/clashes',
-    path: '/clashes',
+const ProjectsProjectIdDrawingRoute =
+  ProjectsProjectIdDrawingRouteImport.update({
+    id: '/drawing',
+    path: '/drawing',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdModelRoute = ProjectsProjectIdModelRouteImport.update({
+  id: '/model',
+  path: '/model',
+  getParentRoute: () => ProjectsProjectIdRoute,
+} as any)
+const ProjectsProjectIdPowerbiRoute =
+  ProjectsProjectIdPowerbiRouteImport.update({
+    id: '/powerbi',
+    path: '/powerbi',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdSettingsRoute =
+  ProjectsProjectIdSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdStandardRoute =
+  ProjectsProjectIdStandardRouteImport.update({
+    id: '/standard',
+    path: '/standard',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
 
@@ -232,25 +232,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/projects': {
-      id: '/projects'
-      path: '/projects'
-      fullPath: '/projects'
-      preLoaderRoute: typeof ProjectsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/hub-settings': {
-      id: '/hub-settings'
-      path: '/hub-settings'
-      fullPath: '/hub-settings'
-      preLoaderRoute: typeof HubSettingsRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/demo': {
@@ -260,11 +246,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/hub-settings': {
+      id: '/hub-settings'
+      path: '/hub-settings'
+      fullPath: '/hub-settings'
+      preLoaderRoute: typeof HubSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects': {
+      id: '/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof ProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ar/$projectId': {
+      id: '/ar/$projectId'
+      path: '/ar/$projectId'
+      fullPath: '/ar/$projectId'
+      preLoaderRoute: typeof ArProjectIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/': {
@@ -281,13 +288,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
       parentRoute: typeof ProjectsRoute
     }
-    '/ar/$projectId': {
-      id: '/ar/$projectId'
-      path: '/ar/$projectId'
-      fullPath: '/ar/$projectId'
-      preLoaderRoute: typeof ArProjectIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/projects/$projectId/': {
       id: '/projects/$projectId/'
       path: '/'
@@ -295,39 +295,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdIndexRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
-    '/projects/$projectId/standard': {
-      id: '/projects/$projectId/standard'
-      path: '/standard'
-      fullPath: '/projects/$projectId/standard'
-      preLoaderRoute: typeof ProjectsProjectIdStandardRouteImport
-      parentRoute: typeof ProjectsProjectIdRoute
-    }
-    '/projects/$projectId/settings': {
-      id: '/projects/$projectId/settings'
-      path: '/settings'
-      fullPath: '/projects/$projectId/settings'
-      preLoaderRoute: typeof ProjectsProjectIdSettingsRouteImport
-      parentRoute: typeof ProjectsProjectIdRoute
-    }
-    '/projects/$projectId/powerbi': {
-      id: '/projects/$projectId/powerbi'
-      path: '/powerbi'
-      fullPath: '/projects/$projectId/powerbi'
-      preLoaderRoute: typeof ProjectsProjectIdPowerbiRouteImport
-      parentRoute: typeof ProjectsProjectIdRoute
-    }
-    '/projects/$projectId/model': {
-      id: '/projects/$projectId/model'
-      path: '/model'
-      fullPath: '/projects/$projectId/model'
-      preLoaderRoute: typeof ProjectsProjectIdModelRouteImport
-      parentRoute: typeof ProjectsProjectIdRoute
-    }
-    '/projects/$projectId/drawing': {
-      id: '/projects/$projectId/drawing'
-      path: '/drawing'
-      fullPath: '/projects/$projectId/drawing'
-      preLoaderRoute: typeof ProjectsProjectIdDrawingRouteImport
+    '/projects/$projectId/clashes': {
+      id: '/projects/$projectId/clashes'
+      path: '/clashes'
+      fullPath: '/projects/$projectId/clashes'
+      preLoaderRoute: typeof ProjectsProjectIdClashesRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
     '/projects/$projectId/documents': {
@@ -337,11 +309,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdDocumentsRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
-    '/projects/$projectId/clashes': {
-      id: '/projects/$projectId/clashes'
-      path: '/clashes'
-      fullPath: '/projects/$projectId/clashes'
-      preLoaderRoute: typeof ProjectsProjectIdClashesRouteImport
+    '/projects/$projectId/drawing': {
+      id: '/projects/$projectId/drawing'
+      path: '/drawing'
+      fullPath: '/projects/$projectId/drawing'
+      preLoaderRoute: typeof ProjectsProjectIdDrawingRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/model': {
+      id: '/projects/$projectId/model'
+      path: '/model'
+      fullPath: '/projects/$projectId/model'
+      preLoaderRoute: typeof ProjectsProjectIdModelRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/powerbi': {
+      id: '/projects/$projectId/powerbi'
+      path: '/powerbi'
+      fullPath: '/projects/$projectId/powerbi'
+      preLoaderRoute: typeof ProjectsProjectIdPowerbiRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/settings': {
+      id: '/projects/$projectId/settings'
+      path: '/settings'
+      fullPath: '/projects/$projectId/settings'
+      preLoaderRoute: typeof ProjectsProjectIdSettingsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/standard': {
+      id: '/projects/$projectId/standard'
+      path: '/standard'
+      fullPath: '/projects/$projectId/standard'
+      preLoaderRoute: typeof ProjectsProjectIdStandardRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
   }

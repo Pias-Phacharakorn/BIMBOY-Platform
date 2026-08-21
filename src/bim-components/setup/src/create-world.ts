@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as OBC from "@thatopen/components"
 import * as THREE from "three"
 import * as BUI from "@thatopen/ui"
@@ -30,6 +29,13 @@ export const createWorld = (components: OBC.Components) => {
   viewport.style.minHeight = "1px";
 
   world.renderer = new OBF.PostproductionRenderer(components, viewport);
+
+  // The vendor draws a "That Open Company" overlay in the bottom-left corner. It arrived with
+  // `@thatopen/components` 3.4.8 (upstream `71b3db46`) and is opt-out by design — `showLogo`
+  // lives on `SimpleRenderer`, which `PostproductionRenderer` extends. Off here because this
+  // viewport's own bottom-left is where the toolbar rail and panel handles sit.
+  // The element also carries `data-thatopen-logo`, so it can be restyled instead of hidden.
+  world.renderer.showLogo = false;
 
   world.camera = new OBC.OrthoPerspectiveCamera(components);
 

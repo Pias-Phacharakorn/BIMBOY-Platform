@@ -52,10 +52,12 @@ const nearestOf = <T extends { distance: number }>(
  * move/toggle or snap silently against stale planes. It also feeds tile-streaming culling.
  * A real option, deliberately not taken here.
  *
- * ⚠️ **One limit, deliberate:** `useFastModelPicking` still delegates to the base class.
- * Nothing in this app enables it (it defaults to `false`), and covering it would mean forking
- * another branch of vendored 3.4.x logic. Whoever first turns it on gets the old, clip-blind
- * behaviour back — for **selection and snapping alike** — and will need this override extended.
+ * ⚠️ **The `useFastModelPicking` opt-out is gone.** Up to 3.4.2 this guard also delegated to
+ * the base class whenever that flag was set; nothing here ever set it, so the term was always
+ * false. 3.4.8 deletes the flag outright and makes the GPU pick path unconditional for
+ * non-snap raycasts, so the term was removed rather than replaced. The clip-blind behaviour it
+ * used to describe is no longer opt-in — if the vendor's fast path now short-circuits the
+ * raycast data this override reads, selection into a cut regresses for every consumer at once.
  */
 export class ClipAwareRaycaster extends OBC.SimpleRaycaster {
   /** {@inheritDoc OBC.SimpleRaycaster.castRay} */
@@ -69,7 +71,7 @@ export class ClipAwareRaycaster extends OBC.SimpleRaycaster {
 
     // Fast path: with nothing clipped there is nothing to filter, so keep the vendor's
     // optimised call. This matters — Hoverer raycasts on every pointermove.
-    if (!renderer || !planes?.length || this.useFastModelPicking) {
+    if (!renderer || !planes?.length) {
       return super.castRay(data);
     }
 

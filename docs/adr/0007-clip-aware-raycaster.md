@@ -1,9 +1,14 @@
 # ADR-0007: Selection follows the cut by swapping the world's raycaster, not by reimplementing picking
 
-**Status:** Accepted
+**Status:** Accepted — the `useFastModelPicking` clause amended by [ADR-0018](0018-thatopen-3-4-8-patch-bump.md)
 **Date:** 2026-08-04 (decision made and shipped earlier, in `75da737` / PR #10; promoted from `CONTEXT.md` on this date)
 **Area:** `docs/feature/bim-viewer.md` § Picking (clip-aware raycasting)
 **Superseded in part by:** [ADR-0003](0003-worker-side-snapping-over-cpu-picking-meshes.md) — the snapping branch
+
+> The whole decision still stands: the raycaster swap, the fall-through-to-nearest-visible rule, the
+> fast path, filtering against `renderer.three.clippingPlanes`, and the install order are all in
+> force, and the cut-selection repro was re-tested on `@thatopen/components@3.4.8` and still behaves.
+> Only the final Consequences bullet changed — the vendor deleted the flag it describes.
 
 ## Context
 
@@ -47,5 +52,5 @@ Consequence: viewed from the cut side, removed geometry sits between the camera 
 - **Every `castRay` consumer inherits the fix** — selection, hover, all three measure cursors, `SpotCoordinate` and `ClipperPlacementManager` — without any of them knowing clipping exists.
 - ⚠️ **It is shared engine infrastructure, so a bug here is never section-only.** It sits on the hot path of hover, which fires per `pointermove`.
 - ⚠️ **Install order is load-bearing.** Replacing the instance without calling `Raycasters.get(world)` first skips the teardown registration and leaks the raycaster past world disposal.
-- **`useFastModelPicking` remains the one documented bail-out** — it defaults to `false` and nothing in `src/` sets it, so that branch is delegated rather than covered.
+- **`useFastModelPicking` remains the one documented bail-out** — it defaults to `false` and nothing in `src/` sets it, so that branch is delegated rather than covered. ⟵ **Amended by [ADR-0018](0018-thatopen-3-4-8-patch-bump.md):** `@thatopen/components@3.4.8` deletes this flag and makes the GPU pick path unconditional for non-snap raycasts, so the term was dropped from the guard. There is no bail-out left — the gap this bullet warned about is closed, not merely unentered.
 - **Sectioning is permanently render-only.** Any future feature wanting "hide everything past this plane" has to be a separate concept from a section plane, not a reimplementation of it.

@@ -47,6 +47,24 @@ This file holds the **rules**; these guides hold the **detail** — deep and pro
 | `docs/adr/` | Architecture decision records — *why* a decision was made, with the alternatives rejected. See `docs/adr/README.md` |
 | `docs/ThatOpen_docs/` | Vendored ThatOpen documentation snapshot (v3.4.x). Read-only reference — start at its `INDEX.md`, never hand-edit |
 
+**Upstream OBC source — outside this repo:**
+
+`../_vendor/engine_components/` is a git clone of `ThatOpen/engine_components`, checked out at branch **`pinned-core-3.4.2`** (commit `b16bcfe9`). Read-only — never edit it, never copy files out of it wholesale.
+
+⚠️ **That branch now lags what this app installs** (`@thatopen/components@3.4.8` — see [ADR-0018](docs/adr/0018-thatopen-3-4-8-patch-bump.md)). The clone's own `origin/main` is already exactly 3.4.8, so re-syncing is a branch move, not a fetch. Until it is re-pointed, treat the checked-out tree as **3.4.2** and diff forward when you need current behaviour.
+
+| Use it for | Where |
+|---|---|
+| Idiomatic minimal usage of a component | `packages/*/src/**/example.ts` (37 files, maintainer-written) |
+| Runnable demo of a component | `examples/<Name>/` — `yarn dev` in the clone serves the gallery |
+| How a component actually behaves | `packages/core/src/`, `packages/front/src/` |
+| What an upgrade would change | `git diff pinned-core-3.4.2..main -- packages/core/src` |
+
+Two caveats, both load-bearing:
+
+1. **Installed typings outrank this clone.** `node_modules/@thatopen/components/dist/index.d.ts` is the authority on what *your* version exposes — and right now the gap is a whole patch channel, not a rounding error: the checked-out branch is `core` 3.4.2 / `components-front` 3.4.2, against **3.4.8 / 3.4.4** installed. `git log pinned-core-3.4.2..origin/main -- packages/core/src packages/front/src` is 50 commits, several of them `feat:`. Never read a signature out of the clone and assume it is what you have installed.
+2. Reach for `docs/ThatOpen_docs/INDEX.md` first for signatures. Drop to this source only when the docs are silent, stale, or you need to read the implementation.
+
 ### 🧭 The code is the source of truth
 
 **No document outranks the code.** When a guide and the code disagree, **the guide is wrong** — fix the guide, never bend working code to match stale prose. Docs still matter, because they hold knowledge the code cannot:
