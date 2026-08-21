@@ -13,6 +13,19 @@ export const setupHoverer = (components: OBC.Components, world: OBC.World) => {
   // `false`. Available since `@thatopen/components-front` 3.4.4.
   hoverer.fade = false;
 
+  // ⚠️ **Pick on settle, not on every move.** 3.4.4 replaced the Hoverer's old `delay = 100`
+  // (a ~50 ms debounce before picking, plus 100 ms before the overlay) with `mode`, defaulting
+  // to `MOUSE_MOVE` — continuous back-to-back picks, on the reasoning that "picking is fast
+  // enough that there's no reason to wait for the cursor to settle". That holds for a demo
+  // scene and not for this app: with 60 models loaded, moving the mouse alone took the
+  // viewport from 50–60 fps to 25. Each pick is a GPU id pass plus a `readPixels` stall, and
+  // it does not go through the render coalescer because it never calls `renderer.update()`.
+  //
+  // `MOUSE_STOP` settles for a hardcoded, private 30 ms — so this is *snappier* than the
+  // pre-3.4.4 behaviour it restores, not a regression in feel. There is no dial between the
+  // two modes; the settle window is not configurable.
+  hoverer.mode = OBF.HovererMode.MOUSE_STOP;
+
   hoverer.material = new THREE.MeshBasicMaterial({
     color: 0xffffff,
     transparent: true,
