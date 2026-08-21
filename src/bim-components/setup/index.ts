@@ -4,8 +4,9 @@ import * as OBF from "@thatopen/components-front";
 import * as BUI from "@thatopen/ui";
 import * as CUI from "@thatopen/ui-obc";
 import { 
-  createWorld, 
-  setupFragmentsManager, 
+  createWorld,
+  setupRenderCoalescer,
+  setupFragmentsManager,
   setupIfcLoader, 
   setupHighlighter,
   setupHoverer,
@@ -35,6 +36,12 @@ export const setupComponents = async () => {
 
   const components = new OBC.Components();
   const { world, viewport } = createWorld(components)
+
+  // Before anything that renders: the renderer's mode defaults to AUTO, so every one of the
+  // many `update()` callers (the vendor rAF loop, five camera-controls listeners, six cursor
+  // components on pointermove) repaints the whole scene. Measured at 2.96 renders per frame
+  // on a 60-model scene. This merges them into one.
+  setupRenderCoalescer(world)
 
   // Before anything that picks: OBC's raycaster is not clipping-aware for model geometry,
   // so a section would otherwise let selection/hover/measure hit the geometry it cut away.
