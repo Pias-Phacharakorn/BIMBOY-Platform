@@ -7,6 +7,75 @@ alternatives rejected are worth preserving — into an ADR under `docs/adr/`
 (the record of **why**). Then clear it from here; this file is never the
 permanent record. See `docs/adr/README.md` for the promotion flow._
 
+## Staged: viewport render/hover cost after the 3.4.8 bump (branch `perf/coalesce-viewport-renders`)
+
+Two independent costs, found by live profiling a 60-model NTR1 scene. Both are **untested**
+beyond `tsc`/build so far — the fps numbers below are the developer's measurements of the
+*problem*, not of the fixes.
+
+**Decision 1 — hover picks on settle, not on every move.** `hoverer.mode =
+HovererMode.MOUSE_STOP`, unconditionally, in `setupHoverer`.
+
+The bump changed this out from under us. At 3.4.2 the Hoverer had `delay = 100`: a ~50 ms
+debounce before picking plus another 100 ms before the overlay. 3.4.4 deletes `delay`,
+introduces `mode`, and defaults it to `MOUSE_MOVE` — continuous back-to-back picks — on the
+stated reasoning that *"picking is fast enough that there's no reason to wait for the cursor to
+settle"*. True for a demo scene; with 60 models, moving the mouse alone measured **50–60 fps →
+25 fps**. Each pick is a GPU id pass plus a `readPixels` stall, and it bypasses the render
+coalescer entirely because it never calls `renderer.update()`.
+
+`MOUSE_STOP` settles for a **hardcoded, private 30 ms**, so this is *snappier* than the
+behaviour it restores. There is no dial between the two modes.
+
+- **Rejected — keep `MOUSE_MOVE`, throttle our side.** Gate the pick to one per frame or shrink
+  the picker's scissor. Rejected: it fights a vendor default with app-side machinery, and the
+  per-pick `readPixels` stall survives regardless.
+- **Rejected — expose hover cadence as a user setting.** `ToolbarSettings` already has a hover
+  **on/off** toggle (`handleToggleHoverer`), which is the escape hatch that matters; a second,
+  subtler cadence control needs store state and a persistence decision (per user? per project?)
+  to buy back 30 ms nobody can perceive.
+- **Rejected — adapt the mode to scene weight.** Flip on model/mesh/draw-call count. Rejected:
+  the threshold is unjustifiable, frame-time-driven switching needs hysteresis, and it makes
+  hover behave differently between two projects for no articulable reason.
+- **Safe because nothing consumes hover events.** Nothing in `src/` subscribes to the Hoverer's
+  events, so the cadence change has no downstream reader. `MeasureHoverManager` runs its own
+  `mousemove` raycast but only while a measure tool is active.
+
+**Decision 2 — renders are coalesced to one per animation frame.** `setupRenderCoalescer` wraps
+`renderer.update`, in `setup/index.ts` before anything that renders.
+
+`RendererMode` defaults to `AUTO`, and this app never sets it, so `needsUpdate` is never read
+and *every* `update()` call repaints. With the vendor rAF loop plus five camera-controls
+listeners plus six cursor components on `pointermove`, profiling measured **2.96 renders per
+frame** — the same framebuffer filled three times at ~3,558 draw calls each, 22.8 ms of a
+34.9 ms frame. A live patch to one render per frame measured **27 → 40 fps**.
+
+- **Deferred, not rejected — `RendererMode.MANUAL`.** The vendor's designed answer, one line,
+  and it would kill idle rendering too (a static scene currently repaints 60×/s, ~7.84 ms each,
+  ~half a core). Blocked on the fact that **nothing sets `needsUpdate`** — not this app, and not
+  the vendor's own viewport components: upstream sets it almost exclusively in
+  `TechnicalDrawings`, and `Hoverer` never does. MANUAL would therefore freeze vendor visuals
+  (hover, outliner, measurement previews) as well as our ~12 scene-mutating components until
+  something else happened to trigger a render. That is an audit, not a one-liner.
+- **Rejected — "render the first call each frame, drop the rest".** The obvious shape, and
+  wrong: it needs a per-frame flag reset, so correctness depends on whether our `rAF` callback
+  runs before or after the vendor's. Lose that race and a legitimate render is dropped, halving
+  the framerate. Deferring to a single scheduled render is order-independent — renders are
+  merged, never skipped.
+- **Also applied — `fragments.core.update()` no longer forced on camera move.** `force` means
+  "finish all pending requests", so awaiting it on `controls.update` pinned the render loop to
+  the worker queue draining on every camera event. 36 of the vendor's 37 examples wire that
+  event as a bare `update()`; **none** force it.
+
+**Known remaining ceiling (not addressed).** 60 models = 2,746 meshes, 1,188 unique materials,
+zero `InstancedMesh`, 7.3M triangles. 100% CPU-bound on draw-call submission (~3 µs each):
+rendering at 64×64 instead of 520×687 moved frame cost by 0.5 ms. Hiding half the models bought
+27 → 34 fps. Fixing that means material dedup, not auto-loading all 60, or upstream instancing.
+
+**Ruled out, so nobody re-chases them:** `dynamicAnchor` (existed at 3.4.2, defaults `false`,
+binds only `pointerdown`); postproduction (~1 ms); BVH raycasting (already on); resolution,
+shadows, textures; DOM size (507 nodes).
+
 ## Staged: guest demo mode is client-side only (branch `feat/guest-demo-mode`)
 
 **Decision.** A guest gets **no Supabase session at all**. `AuthContext` carries an `isGuest`
