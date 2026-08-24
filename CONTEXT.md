@@ -440,3 +440,94 @@ and lurches the camera (ADR-0006).
   reverse two ADRs, not a value to change — and it means accepting fly-through.
 - **Not established:** which of crais's four presets is its default mode, and its mouse-button
   mapping — that part of the bundle is string-table obfuscated.
+
+---
+
+## Staged: the Realistic tab (branch `feat/realistic-view`)
+
+**Nothing implemented — the grilled plan, recorded before code.** The ask was a "Realisti" tab
+rendering the project like three.js's `webgl_lightprobes_sponza` example. Label ships as
+**"Realistic"** (the typed spelling was a slip).
+
+**The example cannot run here, and this is the finding everything else follows from.** It imports
+`three/addons/lighting/LightProbeGrid.js` and `helpers/LightProbeGridHelper.js`; our
+`three@0.182.0` ships `examples/jsm/lighting/` containing only `TiledLighting.js`. Available at
+0.182: `LightProbe` (single SH probe), `LightProbeGenerator`, `PMREMGenerator`, `RoomEnvironment`,
+`Sky`, `FirstPersonControls`, ACES tone mapping.
+
+**Decision — reproduce the look with 0.182 primitives; no version bump.** Sky + `HemisphereLight`
+carrying sky/ground colour + a shadow-casting `DirectionalLight` sun + ACES tone mapping with
+exposure, and postproduction switched to `COLOR_SHADOWS` so the vendor's existing AO pass supplies
+contact shading while pen edges stay off.
+
+- **Rejected — bump three to get `LightProbeGrid`.** *Not* blocked by ThatOpen: installed peer deps
+  are `three: ">=0.182.0"` across `components@3.4.8`, `components-front@3.4.4` and
+  `fragments@3.4.7`, and crais runs r184. Rejected on two counts. First, it moves the version the
+  whole BIM stack was built against, including the vendored FRAGS worker ([ADR-0014](docs/adr/0014-frags-worker-from-node-modules.md))
+  and a `@types/three` already 26 versions stale at 0.156.0. Second and decisively, **the bake is
+  unaffordable regardless**: the demo's 10×7×7 grid is 490 probes × 6 faces = 2,940 scene renders
+  *per bounce*, and this scene is 2,746 meshes / 1,188 materials / 7.3M triangles, 100% CPU-bound
+  on draw-call submission at ~3 µs each — small cubemaps do not help, because rendering at 64×64
+  instead of 520×687 moved frame cost by 0.5 ms. That is ~30 s of blocked main thread per bake, and
+  the demo re-bakes on every slider change. Getting the feature would not make it usable.
+- **Rejected — a standalone `/realistic` route with its own renderer**, as AR did. Cleanest
+  isolation, but it still needs the version answer and would have to solve getting fragment
+  geometry into a second context — doubling VRAM for 7.3M triangles.
+
+**Decision — no material changes, which caps what "realistic" can mean.** Fragments builds mostly
+`MeshLambertMaterial`, and `WebGLRenderer` assigns `materialProperties.environment =
+material.isMeshStandardMaterial ? scene.environment : null` — so **image-based lighting never
+reaches this geometry**. Non-standard materials also resolve env maps through `cubemaps` rather than
+`cubeuvmaps`, so a PMREM texture is the wrong input for them. What Lambert *does* honour: ambient,
+hemisphere and directional lights, shadow maps, and renderer tone mapping. Hence the rig above.
+
+- **Rejected — swap the material pool to `MeshStandardMaterial` while the tab is active.** The only
+  route to a true PBR look. It mutates `fragments.core.models.materials.list` in place — the same
+  shared pool `ToolbarGhost` mutates, which [ADR-0017](docs/adr/0017-room-tab-owns-no-visibility-state.md)
+  exists because of — and ~1,188 new materials means ~1,188 shader program compiles, i.e. a
+  multi-second stall on tab entry.
+- **Rejected — `envMap` per Lambert material.** Cheaper, still mutates the shared pool, and reads as
+  a faint mirror rather than soft irradiance for the `cubemaps` reason above.
+
+**Decision — the state lives only while the tab is open.** `RealisticView` follows `RoomView`'s
+shape (`OBC.Component implements OBC.Disposable`, static uuid, activated/deactivated by a feature
+hook as `useRooms` does), snapshotting renderer + scene + light state on activate and restoring it
+on deactivate. This is a performance requirement, not taste: leaving a shadow pass enabled globally
+would slow every other tab on a scene already at 27–40 fps. Accepted cost: a second save/restore
+owner over shared globals, so it needs an explicit interlock with the PostRender preset and
+`ViewportRightToolbar`'s FX baseline.
+
+- **Rejected — become the app's look, as the PostRender preset does.** Simpler ownership, but it
+  leaves the shadow pass running everywhere, and postproduction's pen styles actively contradict
+  photorealism. **Also rejected — a full viewport takeover** (hide toolbars, disable selection):
+  clearest mental model, largest UI change, and it removes measure/section while previewing.
+
+**Decision — `shadowMap.autoUpdate = false`.** Shadow maps live in *light* space, so orbiting the
+camera cannot invalidate them; `needsUpdate` is set only when a model loads, tiles stream, or the
+sun moves. The demo pays for a full shadow render every frame for nothing — on this scene that is
+roughly a doubled frame cost, straight back into the range `setupRenderCoalescer` exists to rescue.
+Per-mesh `castShadow`/`receiveShadow` must be applied as LOD tiles appear: nothing in `src/` sets
+those today, and tiles are created and destroyed continuously. The hook is `model.tiles.onItemSet` /
+`onItemDeleted`, which is exactly what `Outliner.bindModelTileEvents` subscribes to — copy its
+per-model unsubscribe map so the listeners cannot leak.
+
+**Decision — the camera is untouched.** No `FirstPersonControls`, no walk mode. The tab changes
+lighting and rendering only, so the just-tuned damping and cursor-bounded zoom keep working and no
+second owner appears over `minDistance`/`infinityDolly`.
+
+- **Deferred — walk mode via `camera-controls` locked distance** (`minDistance === maxDistance`,
+  crais's own idiom). Attractive because it needs no second controls object, but `CursorZoom`
+  already writes both fields, so it is an interlock, not a setting.
+- **Rejected — `FirstPersonControls` as in the demo.** Would mean disabling camera-controls,
+  `CursorZoom` and `PivotMarker` for the tab's lifetime, and it has no collision and flies at
+  constant height, so you walk through walls.
+
+**Tone mapping does survive postproduction** — verified, not assumed: the vendor composes three's
+own `OutputPass`, which reads `renderer.toneMapping`/`toneMappingExposure` and recompiles on change.
+⚠️ One trap: `_outputPass` is composed for every style **except `PEN`**, where tone mapping silently
+does nothing.
+
+**Consequence — the row primitives get promoted to `components/ui/`.** `RealisticPanel` needs the
+sliders/toggles that currently live in `features/post-render/PostRenderControls.tsx`, and CLAUDE.md
+forbids a feature importing another feature. The second consumer we said would justify promotion has
+arrived.

@@ -4,7 +4,7 @@ import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
 import { PanelSection } from "@/react-components/components/layout";
 import { useBimStore } from "@/react-components/store/bimStore";
-import { ColorRow, SelectRow, SliderRow, ToggleRow } from "./PostRenderControls";
+import { ColorRow, SelectRow, SliderRow, ToggleRow } from "@/react-components/components/ui";
 
 /**
  * Live controls for the world's postproduction passes — the `PostproductionRenderer` tutorial's
