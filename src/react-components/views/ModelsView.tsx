@@ -8,6 +8,7 @@ import { RoomPanel } from "@/react-components/features/room-view/RoomPanel";
 import { PropertyTable } from "@/react-components/features/property-table/PropertyTable";
 import { ClashList, ClashPreview } from "@/react-components/features/clash-dashboard";
 import { DrawingEditorPanel, DrawingEditorBoard } from "@/react-components/features/drawing-editor";
+import { PostRenderPanel } from "@/react-components/features/post-render";
 // AR runs on a standalone full-screen /ar page (single WebGL context, no OBC engine).
 // Clicking the "AR" tab navigates there — see onTabChange below.
 // The custom ArSession/ArViewerPanel/useArSession approach is kept in the repo but
@@ -17,7 +18,7 @@ import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useAutoLoadCloudModels } from "@/react-components/features/cloud-models/useAutoLoadCloudModels";
 import { useGuestDemoModels } from "@/react-components/features/guest-demo/useGuestDemoModels";
 
-const workspaceTabs = ["Models", "Queries", "Room", "Smart Views", "GIS", "Viewpoint", "Drawing Editor", "AR"];
+const workspaceTabs = ["Models", "Queries", "Room", "Smart Views", "GIS", "Viewpoint", "Drawing Editor", "AR", "PostRender"];
 
 export function ModelsView() {
   const { projectId } = useParams({ strict: false });
@@ -36,8 +37,14 @@ export function ModelsView() {
   const isViewpointTab = activeTab === "Viewpoint";
   const isDrawingEditorTab = activeTab === "Drawing Editor";
   const isRoomTab = activeTab === "Room";
+  const isPostRenderTab = activeTab === "PostRender";
   const isFlexLayout =
-    activeTab === "Models" || isGisTab || isViewpointTab || isDrawingEditorTab || isRoomTab;
+    activeTab === "Models" ||
+    isGisTab ||
+    isViewpointTab ||
+    isDrawingEditorTab ||
+    isRoomTab ||
+    isPostRenderTab;
 
   // The "AR" tab escapes ModelsView entirely: it navigates to the standalone
   // full-screen /ar page instead of swapping panels here, so the WebXR session
@@ -206,6 +213,14 @@ export function ModelsView() {
                 <ClashPreview projectId={project.id} />
               </div>
             </PanelSection>
+          </RightPanel>
+        )}
+
+        {/* Mounted conditionally so the panel re-seeds from the live render passes every time the
+            tab is opened — the engine, not this panel, owns the values. */}
+        {isPostRenderTab && (
+          <RightPanel icon="COLORIZE" defaultOpen={true} defaultWidth={400}>
+            <PostRenderPanel />
           </RightPanel>
         )}
 

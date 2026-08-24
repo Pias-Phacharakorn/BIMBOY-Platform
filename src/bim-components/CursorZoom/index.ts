@@ -23,10 +23,19 @@ const NEAR_STANDOFF_FACTOR = 2.5;
 const CLAMP_CACHE_MS = 150;
 
 /**
- * How long after the last wheel event the damped dolly is assumed to still be running.
- * `smoothTime = 0.2` (set by `SimpleCamera.newCameraControls`) plus a frame of slack.
+ * How long after the last wheel event the damped dolly is assumed to still be running, as a
+ * multiple of the controls' own `smoothTime` — the damping constant the dolly actually decays on,
+ * plus half again for slack.
+ *
+ * ⚠️ **Read off the live controls, never hardcoded.** This used to be a flat `300 ms`, derived by
+ * hand from the `smoothTime = 0.2` that `SimpleCamera.newCameraControls` leaves in place.
+ * `setup/src/camera-response.ts` now sets `smoothTime = 0.15`, and a stale 300 ms would hold the
+ * pivot re-anchor back for a dolly that finished 75 ms ago. Deriving it means a future change to
+ * one cannot silently invalidate the other — and getting this window wrong is not cosmetic: the
+ * whole point of the gate is that a re-anchor landing mid-dolly sends `dollyToCursor`'s
+ * `lerpRatio` to ~9 and lurches the camera (see {@link CursorZoom._onRest} and ADR-0006).
  */
-const DOLLY_SETTLE_MS = 300;
+const DOLLY_SETTLE_FACTOR = 1.5;
 
 /** Never let `minDistance` reach `maxDistance` — `clamp(v, min, max)` returns `min` when they cross. */
 const MAX_DISTANCE_MARGIN = 0.99;
@@ -325,7 +334,8 @@ export class CursorZoom extends OBC.Component implements OBC.Disposable {
     // The vendor's "not during animations" caveat. A damped dolly is the one case that really
     // applies, so a pointerdown landing inside a wheel burst is skipped rather than deferred:
     // by the time it settled the hit would be stale anyway, and the next click re-pivots.
-    if (performance.now() - this._lastWheelAt < DOLLY_SETTLE_MS) return;
+    const settleMs = controls.smoothTime * 1000 * DOLLY_SETTLE_FACTOR;
+    if (performance.now() - this._lastWheelAt < settleMs) return;
 
     void this._pivotOnHoveredSurface(controls);
   };

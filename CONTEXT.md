@@ -266,3 +266,177 @@ event. A projection switch is a discrete state change — the same class as a mo
   instance other than the expected one. Low confidence, unrelated to this bug, build-config territory.
 - **Ortho → Perspective visibly jumps framing.** `ProjectionManager.matchOrthoDistanceEnabled` is the
   knob if that is not wanted; it defaults to `false` and nothing in `src/` sets it.
+
+---
+
+## Staged: the PostRender tab (branch `feat/post-render-tab`)
+
+**Nothing implemented yet — this is the grilled plan, recorded before code.** The ask was "a
+PostRender tab, exactly like the `PostproductionRenderer` tutorial". The first finding is that
+**the tutorial's setup half already shipped**: `create-world.ts` builds the world with
+`OBF.PostproductionRenderer`, a transparent background, an `OrthoPerspectiveCamera` and a grid,
+and `setupHighlighter` already sets `postproduction.enabled = true` and wires `OBF.Outliner` to
+the Highlighter's select events. What is actually new is **the control panel** — so "exactly like
+this" is read as *the tutorial's panel, driving the live viewer*, not as the tutorial's demo.
+
+**Decision — the tab is a runtime override surface over the real world, nothing more.** A right
+`RightPanel` (~400 px, as the GIS tab), mounted only while the tab is active, holding five
+`PanelSection`s: General, Edges, Selection outline, Gloss, Ambient Occlusion. Values live in
+local `useState` seeded from the live passes on mount — the `ToolbarSettings` idiom, engine as
+source of truth — so re-opening the tab re-seeds from reality and nothing persists across a
+reload. Row primitives (slider/toggle/colour/select) are pure props-only components local to
+`features/post-render/`, not promoted to `components/ui/` until a second consumer exists.
+
+- **Rejected — a faithful sandbox reproduction** (own world + renderer, `school_arq.frag` off the
+  ThatOpen CDN, stats.js, the green excluded cube). Verbatim fidelity, and it would stand up a
+  *second WebGL context* beside the main viewport — the exact cost the AR tab was moved to a
+  standalone `/ar` page to avoid — while touching none of the user's own model.
+- **Rejected — fold the controls into the `ToolbarSettings` dropdown** (which already owns grid,
+  projection, hover-highlight, auto-rotate). Right neighbourhood, wrong container: ~25 sliders do
+  not fit a 240 px dropdown.
+- **Rejected — `uiStore` + `localStorage`, and per-project settings in Supabase.** Both are more
+  useful than a per-session panel; both are wider than the ask. Persisting needs a
+  re-apply-on-bootstrap path and puts engine parameters in a store CLAUDE.md reserves for
+  UI/modal/layout state; per-project needs a migration, a service and Query wiring.
+
+**Decision — the "Manual mode" section is not ported.** The tutorial exposes `renderer.mode =
+RendererMode.MANUAL`, `manualModeDelay`, `turnOffOnManualMode` and `manualDefaultStyle`. MANUAL is
+recorded above as **deferred, not rejected**, and the blocker has not moved: *nothing* sets
+`needsUpdate` — not this app's scene-mutating components, and not the vendor's own (`Hoverer`
+never does). A checkbox there is a user-reachable path into frozen hover, outliner and measure
+previews, and MANUAL layered over `setupRenderCoalescer`'s deferred `update` is an untested
+combination on top. Manual mode is a render-loop *strategy*, not a look.
+
+**Consequence — `updateIfManualMode()` is dead code here and is not ported either.** In `AUTO`
+every `update()` repaints, and the coalescer already guarantees exactly one render per frame, so
+every control is visible on the next frame with no explicit render call. Two more tutorial lines
+are already-settled no-ops: `world.dynamicAnchor = false` (ruled out above — it defaults `false`
+at this version) and stats.js (`ToolbarSettings` → Performance already owns that, via
+`viewport-diagnostics/PerformanceOverlay`).
+
+**Decision — the Outline section is labelled "Selection outline" and carries a Reset.** Not
+cosmetic naming: the 3.4.4 typings document `Outliner.color/thickness/fillColor/fillOpacity` as
+delegates to `SimpleOutlinePass`'s **`"default"` group**, which is exactly what `setupHighlighter`
+configures (`#bcf124`, fill `0.3`) and binds to selection. Those four sliders therefore retune
+every selection in the app, on every tab, globally. Reset restores the `setupHighlighter` values
+so a fill-opacity-to-zero cannot silently kill the selection affordance. The tutorial's own
+`outliner.addItems({ wall1, wall2 })` demo call is dropped — it fakes a selection the user never
+made.
+
+**Decision — the master "Postproduction enabled" toggle is disabled while a viewport tool is
+active.** `postproduction.enabled` already has an owner: `ViewportRightToolbar` snapshots it into
+`fxBaselineRef` and forces it `false` for as long as `activeTool !== "select"`, restoring the
+snapshot on exit. The panel reading `activeTool` from `bimStore` and greying the toggle out (with
+a line of copy saying why) makes a write impossible exactly while the other owner holds the flag,
+so the arbiter's snapshot is always the user's own value. Without that gate the checkbox lies —
+open the tab mid-Measure and it reads "off", which is suppression, not a setting; turn it on and
+leaving Measure restores the stale snapshot over the top.
+
+- **Rejected — lift `fxBaselineRef` into `bimStore` so both write through one owner.** The clean
+  end state, and the same shape [ADR-0017](docs/adr/0017-room-tab-owns-no-visibility-state.md)
+  called "cleaner while there were two owners, and moot with one". Rejected for the same reason:
+  it edits shipped, working code as a side effect of an unrelated feature, and the gate removes
+  the conflict instead of refereeing it.
+- **Rejected — omit the master toggle.** No second owner at all, at the cost of the General
+  section's headline control.
+
+**Decision — no `bim-components/setup/` edits.** The tab is panel-only; bootstrap defaults are
+untouched. **Observation logged instead of fixed:** the tutorial does
+`postproduction.basePass.isolatedMaterials.push(grid.material)` and **nothing in `src/` touches
+`isolatedMaterials`**, so our grid runs through AO and edge detection. Latent today only because
+`create-world.ts` ships the grid hidden — turn it on in Viewport Settings and it is shaded as
+geometry. A one-line fix, deliberately left for its own change rather than riding along in a tab.
+
+**Also rejected — picking a house look now** (a default style preset plus tuned AO in
+`create-world.ts`, with the panel as the override). Changes how the app looks for every user on
+every tab; that is a design decision, not a tab.
+
+**No API gap.** Installed `@thatopen/components-front@3.4.4` exposes the whole surface the
+tutorial uses — `glossPass`/`glossEnabled`, `defaultAoParameters`, `excludedObjectsPass`,
+`smaaEnabled`, `style`, `PostproductionAspect`, `EdgeDetectionPassMode`, and `edgesPass`'s
+`width`/`color`/`mode`. One asymmetry: `aoPass.updatePdMaterial(pdParameters)` has **no
+read-back** — `GTAOPass` exposes no getter for the poisson-denoise params, which is why the
+tutorial keeps them in a plain local object. Those seven values must live in app state or they
+cannot be displayed at all; everything else seeds off the pass.
+
+**Decision — the "Excluded objects enabled" toggle is not ported either.** `ExcludedObjectsPass`
+renders only materials registered through `addExcludedMaterial`, and **nothing in `src/` ever
+calls it** — the tutorial's only registration is the demo cube's material, which is also dropped.
+A toggle that provably cannot change a pixel reads as a broken control and invites someone to
+"fix" it. General therefore ships four controls: Postproduction enabled, Outlines enabled, SMAA
+enabled, Style. Whoever first needs an object exempted from the effects starts at
+`postproduction.excludedObjectsPass.addExcludedMaterial(...)`.
+
+**Decision — the tab ships a preset, applied once per world, not per mount.** `PRESET` in
+`PostRenderPanel` is the developer's reference look: `COLOR_PEN_SHADOWS`, outlines + SMAA on,
+gloss off, edges `1.1` at `#1a1a1a` in `DEFAULT` mode, AO screen-space with blend `0.7` /
+radius `0.3` / **distanceExponent `2`** / thickness `1.5`, and the selection outline at
+**fill `0.85`** / thickness `3`. Two values fight the vendor deliberately: `distanceExponent 2`
+against `5.7`, which collapses AO into a hairline contact seam instead of the broad soft shading
+in window reveals and under balcony slabs; and fill `0.85` against `setupHighlighter`'s `0.3`,
+which reads as a pale wash over light surfaces rather than the solid green of the reference.
+
+Applied through a `WeakSet` keyed on the `Postproduction` instance, so it lands the **first time
+the view opens on a given world** and never again: tune a slider, leave the tab, come back, and
+your tweaks survive. A reload builds a new world and starts from the preset. A `Restore preset`
+button in General is the way back, and it is the only reset for the Edges / Gloss / AO sections.
+
+- **`enabled` is not in the preset.** It is co-owned by `ViewportRightToolbar` during tool
+  suppression, and a mount-time write could land inside that window and fight the arbiter's
+  snapshot. `setupHighlighter` already turns postproduction on.
+- **AO parameters are written before the style.** The vendor's style setter itself pushes
+  `defaultAoParameters` into the material when the style leaves `PEN_SHADOWS`; explicit
+  `updateGtaoMaterial`/`updatePdMaterial` calls after it cover every other transition.
+- **Rejected (for now) — the preset as a `create-world.ts` bootstrap default.** That is what makes
+  the look appear app-wide on first paint instead of after one visit to the tab, and it is the
+  natural promotion once the numbers are confirmed against a real model. Held back because it
+  changes the app's appearance for every user on every tab, and because the numbers are still
+  eyeball estimates from a screenshot.
+- **Known consequence:** the world is shared, so opening the PostRender tab changes the look on
+  every other tab too, and leaving does not restore anything. That is the intent ("set this as
+  the default"), but it means the Models tab renders differently before and after a visit here.
+
+---
+
+## Staged: camera response tuned against crais (branch `feat/post-render-tab`)
+
+**Untested beyond `tsc`, eslint and a production build.** Rode along on the PostRender branch
+because the developer asked for it mid-review; it is an independent change and could be split.
+
+**Where the numbers came from.** https://viewer.crais.io — three r184 + `camera-controls`, no
+`@thatopen` anywhere in its bundle (no `OrthoPerspectiveCamera`, no postproduction), so its camera
+layer is the *same library* OBC wraps and its config is directly portable. Read out of the minified
+bundle: shared base `smoothTime: 0.15`, `draggingSmoothTime: 0.05`, `restThreshold: 0.0025`,
+`dollyToCursor: true`, `dollyDragInverted: false`, `boundaryFriction: 0`; four per-mode presets
+(`orbit` / `fly` / `screenpan` / `pan`) carrying their own `minDistance`, `maxDistance`,
+`dollySpeed`, `truckSpeed` and rotate speeds, two of which set `minDistance === maxDistance` — the
+`camera-controls` idiom for look-around modes, where the pivot is pinned a fixed distance ahead so
+rotate becomes "look" and truck becomes "walk". Empirically 10 wheel ticks barely moved their
+camera, matching the orbit preset's `dollySpeed: 0.5`.
+
+**Decision — port the three that are pure response, in a new `setup/src/camera-response.ts`.**
+`smoothTime 0.2 → 0.15`, `draggingSmoothTime 0.125 → 0.05` (the library default OBC never
+changes; this is the one that makes an orbit *follow* the cursor instead of catching up with it),
+`dollySpeed 1 → 0.5`. Applied per camera and re-applied on `world.onCameraChanged`, for exactly
+the reason `applyCameraDepthRange` already documents: every `OBC.View` builds its own
+`OrthoPerspectiveCamera`, hence its own `CameraControls`. `dollyToCursor` needed nothing — it is
+already `true` via the OBC default.
+
+**`CursorZoom`'s `DOLLY_SETTLE_MS` became `DOLLY_SETTLE_FACTOR`.** It was a flat `300 ms`,
+hand-derived from `smoothTime = 0.2` plus slack, and its doc comment said so. With `smoothTime`
+now `0.15` that constant would hold the pivot re-anchor back for a dolly that finished 75 ms
+earlier, so it now reads `controls.smoothTime * 1000 * 1.5` off the live controls. Not cosmetic:
+the gate exists because a re-anchor landing mid-dolly sends `dollyToCursor`'s `lerpRatio` to ~9
+and lurches the camera (ADR-0006).
+
+- **Deferred — the navigation-mode system.** A mode switcher with per-mode presets, per-mode
+  mouse-button mappings and locked-distance walk/look modes. This is where most of "it feels like
+  a different app" actually lives, and it is a feature, not a tuning pass.
+- **Rejected — `infinityDolly: true` with `minDistance: 1`,** which is how crais's camera dollies
+  forever by pushing the target ahead of itself. That is the exact flag `CursorZoom` turns *off* on
+  purpose: with it on, `minDistance` is dead config and cursor-bounded navigation cannot exist at
+  all ([ADR-0004](docs/adr/0004-cursor-bounded-navigation.md), with the five-attempt bug history in
+  [ADR-0006](docs/adr/0006-zoom-pivot-reanchor.md)). Copying that half of the feel is a decision to
+  reverse two ADRs, not a value to change — and it means accepting fly-through.
+- **Not established:** which of crais's four presets is its default mode, and its mouse-button
+  mapping — that part of the bundle is string-table obfuscated.

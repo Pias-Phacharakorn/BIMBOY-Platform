@@ -3,6 +3,7 @@ import * as THREE from "three"
 import * as BUI from "@thatopen/ui"
 import * as OBF from "@thatopen/components-front"
 import { applyCameraDepthRange } from "./camera-depth-range"
+import { applyCameraResponse } from "./camera-response"
 
 export const createWorld = (components: OBC.Components) => {
   const worlds = components.get(OBC.Worlds);
@@ -44,6 +45,11 @@ export const createWorld = (components: OBC.Components) => {
   // see camera-depth-range.ts.
   applyCameraDepthRange(world.camera);
   world.onCameraChanged.add(applyCameraDepthRange);
+
+  // Damping and wheel stride. Re-applied on camera change for the same reason as the depth
+  // range: each OBC.View brings its own camera, and therefore its own CameraControls.
+  applyCameraResponse(world.camera);
+  world.onCameraChanged.add(applyCameraResponse);
 
   const resizeWorld = () => {
     try {
