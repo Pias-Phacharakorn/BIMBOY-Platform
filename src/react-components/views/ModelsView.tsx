@@ -9,6 +9,7 @@ import { PropertyTable } from "@/react-components/features/property-table/Proper
 import { ClashList, ClashPreview } from "@/react-components/features/clash-dashboard";
 import { DrawingEditorPanel, DrawingEditorBoard } from "@/react-components/features/drawing-editor";
 import { PostRenderPanel } from "@/react-components/features/post-render";
+import { RealisticPanel } from "@/react-components/features/realistic-view";
 // AR runs on a standalone full-screen /ar page (single WebGL context, no OBC engine).
 // Clicking the "AR" tab navigates there — see onTabChange below.
 // The custom ArSession/ArViewerPanel/useArSession approach is kept in the repo but
@@ -18,7 +19,7 @@ import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useAutoLoadCloudModels } from "@/react-components/features/cloud-models/useAutoLoadCloudModels";
 import { useGuestDemoModels } from "@/react-components/features/guest-demo/useGuestDemoModels";
 
-const workspaceTabs = ["Models", "Queries", "Room", "Smart Views", "GIS", "Viewpoint", "Drawing Editor", "AR", "PostRender"];
+const workspaceTabs = ["Models", "Queries", "Room", "Smart Views", "GIS", "Viewpoint", "Drawing Editor", "AR", "PostRender", "Realistic"];
 
 export function ModelsView() {
   const { projectId } = useParams({ strict: false });
@@ -38,13 +39,15 @@ export function ModelsView() {
   const isDrawingEditorTab = activeTab === "Drawing Editor";
   const isRoomTab = activeTab === "Room";
   const isPostRenderTab = activeTab === "PostRender";
+  const isRealisticTab = activeTab === "Realistic";
   const isFlexLayout =
     activeTab === "Models" ||
     isGisTab ||
     isViewpointTab ||
     isDrawingEditorTab ||
     isRoomTab ||
-    isPostRenderTab;
+    isPostRenderTab ||
+    isRealisticTab;
 
   // The "AR" tab escapes ModelsView entirely: it navigates to the standalone
   // full-screen /ar page instead of swapping panels here, so the WebXR session
@@ -221,6 +224,16 @@ export function ModelsView() {
         {isPostRenderTab && (
           <RightPanel icon="COLORIZE" defaultOpen={true} defaultWidth={400}>
             <PostRenderPanel />
+          </RightPanel>
+        )}
+
+        {/* Mounted conditionally for the same reason RoomPanel is, only more so: mounting
+            RealisticPanel installs the daylight rig on the shared world (shadows, tone mapping,
+            sky, a different light rig) and unmounting restores it. A hidden-but-mounted panel
+            would leave every other tab paying for a shadow pass. */}
+        {isRealisticTab && (
+          <RightPanel icon="CAMERA" defaultOpen={true} defaultWidth={360}>
+            <RealisticPanel />
           </RightPanel>
         )}
 

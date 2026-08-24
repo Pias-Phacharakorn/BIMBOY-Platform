@@ -1,11 +1,11 @@
 /**
- * Props-only rows for the PostRender panel.
+ * Props-only control rows — label left, control right — shared by the render-settings panels.
  *
- * Deliberately local to this feature rather than promoted to `components/ui/`: the app has no
- * slider / colour / toggle primitives yet, and claiming that shared vocabulary off the back of
- * one consumer would drag `ToolbarSettings`, `ClashFilter` and `ProjectSettingsForm` into a
- * design-system refactor. The visual idiom here is copied from `ToolbarSettings` (label left at
- * `text-xs text-muted`, control right, native inputs) so the two read as the same app.
+ * Promoted here from `features/post-render/` once a second consumer arrived (`features/realistic-view`):
+ * a feature may not import another feature, so the rows had to become shared vocabulary. The app still
+ * has no slider/colour/toggle primitives beyond these; `ToolbarSettings`, `ClashFilter` and
+ * `ProjectSettingsForm` keep their own inline inputs rather than being refactored onto these as a
+ * side effect. The visual idiom is copied from `ToolbarSettings` so they read as the same app.
  */
 
 const ROW = "flex items-center justify-between gap-3 text-xs text-fg";

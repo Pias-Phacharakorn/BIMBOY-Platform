@@ -10,3 +10,4 @@ export * from "./RoomView";
 export * from "./CursorSurface";
 export * from "./SpotCoordinate";
 export * from "./ArSession";
+export * from "./RealisticView";
