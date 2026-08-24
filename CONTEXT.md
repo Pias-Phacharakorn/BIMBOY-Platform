@@ -440,3 +440,61 @@ and lurches the camera (ADR-0006).
   reverse two ADRs, not a value to change — and it means accepting fly-through.
 - **Not established:** which of crais's four presets is its default mode, and its mouse-button
   mapping — that part of the bundle is string-table obfuscated.
+
+---
+
+## Staged: the Chrome ⇄ terminal testing workflow (branch `feat/post-render-tab`)
+
+**Decision — Claude in Chrome is a diagnosis tool, on demand, and nothing else.** Encoded as the
+`chrome-diagnose` skill (mirrored into `.agents/skills/`) with one pointer added to CLAUDE.md
+§ Workflow → *Hand over for testing*. The developer stays tester and final approver; a Chrome
+screenshot is explicitly not grounds for reporting "it works".
+
+**How the two sides connect: attach to the developer's own tab.** They drag their localhost tab
+into the Claude group, and `tabs_context_mcp` then yields both the tab and — critically — the port.
+`vite.config.ts` sets no `server.port`, so `npm run dev` takes 5173 and silently increments; the
+session that prompted this landed on **5174** because 5173 was already held. The tab's URL is the
+only reliable source of truth, and the skill says never to assume 5173.
+
+Attaching rather than opening a fresh tab is the whole point: in-page state *is* the bug report —
+models loaded, camera parked, app tab active. Rebuilding that costs minutes and often cannot be
+done at all. Accepted cost: it is one shared tab, so Claude's clicks move the developer's view.
+
+- **Rejected — Chrome as a pre-flight before handover.** Tempting (it would shorten the 3⟷4 loop by
+  catching "this button throws on click" before the developer ever sees it) but it quietly moves the
+  role boundary CLAUDE.md writes down, and it invites exactly the "it works, I saw a screenshot"
+  claim the hard constraints forbid.
+- **Rejected — Chrome replaces manual testing**, and **rejected — ask which target every time**
+  (a round-trip per bug report).
+- **Rejected — a `docs/feature/testing.md` guide.** A skill is what actually fires at the right
+  moment; a guide would be read only if someone already knew to look.
+
+**Decision — a bug that reproduces headlessly and deterministically earns an `e2e/*.spec.ts`.**
+Modelled on `model-teardown.spec.ts`, which matches **specific** crash signatures rather than
+asserting a clean console — this app logs unrelated warnings, so a blanket assertion would be
+permanently red. Visual, timing-dependent and feel-based bugs get **no spec and an explicit
+statement that they are uncovered**; an assertion that cannot fail when the bug returns reports
+safety that is not there.
+
+**Two `playwright.config.ts` defects found by actually running the suite, both fixed:**
+
+1. **The suite could go green against the wrong code.** `PORT` was `5173` with
+   `reuseExistingServer: !CI`, so `npm run test:e2e` attached to whatever dev server happened to
+   hold that port — possibly one built from another branch. Now a dedicated `5199`, with the port
+   passed through to Vite (`npm run dev -- --port 5199 --strictPort`); the bare `npm run dev` would
+   have bound 5173 and left the suite waiting on 5199 until it timed out.
+2. **The suite could not run at all on this machine.** Playwright's pinned browser was never
+   downloaded (`browserType.launch: Executable doesn't exist at ...chrome-headless-shell`), so the
+   "bug earns a spec" half of the workflow was theoretical. Now `channel: 'chrome'` — the developer's
+   installed Chrome, no ~400 MB download, and specs run in the same engine the bug was seen in.
+   ⚠️ **CI has no Chrome**: running there needs `npx playwright install chromium` and dropping that
+   line. Recorded here because nothing else in the repo says it.
+
+**Verified:** `npm run test:e2e` → 3 passed in 18.9 s, on 5199, against installed Chrome, with a
+stray dev server still holding 5174.
+
+**Safety notes carried into the skill, not derivable from the code:** dev and production share one
+Supabase project with no staging, so any click that writes lands in production data — prefer
+read-only interaction, and use `/demo` (guest mode, zero backend, eight static `.frag` files) when a
+clean reproduction is enough. And `renderer.postproduction` *throws* rather than returning undefined,
+so live engine probes need `try/catch` or they look like bugs of their own.

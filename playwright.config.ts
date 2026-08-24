@@ -10,7 +10,14 @@ import { dirname } from 'node:path'
 const rootDir = dirname(fileURLToPath(import.meta.url))
 process.env = { ...loadEnv('development', rootDir, ''), ...process.env }
 
-const PORT = 5173
+// ─── A dedicated port, deliberately not Vite's 5173 ───────────────────────────
+// `vite.config.ts` sets no `server.port`, so `npm run dev` takes 5173 and silently increments
+// when it is busy — a second branch's server lands on 5174, a third on 5175. Combined with
+// `reuseExistingServer` below, pointing this at 5173 meant `npm run test:e2e` could attach to
+// whatever server happened to be sitting there, including a stale one built from other code, and
+// report green against it. Nothing else listens on 5199, so the suite always starts its own
+// server from the current working tree.
+const PORT = 5199
 const baseURL = `http://localhost:${PORT}`
 
 export default defineConfig({
@@ -28,13 +35,24 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      // `channel: 'chrome'` runs the Chrome already installed on this machine instead of
+      // Playwright's own pinned build, which was never downloaded here (`browserType.launch:
+      // Executable doesn't exist at ...chrome-headless-shell`). Two reasons beyond avoiding a
+      // ~400 MB download: specs run in the same engine the developer tests in, so a Chrome-specific
+      // WebGL or OBC quirk found live is reproducible by a spec; and there is one browser to reason
+      // about rather than two.
+      // ⚠️ CI has no Chrome. Running there needs either `npx playwright install chromium` plus
+      // dropping this line, or a Chrome setup step.
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
   ],
   // Start the Vite dev server automatically before tests, and reuse it if one
   // is already running locally.
   webServer: {
-    command: 'npm run dev',
+    // `--port` must be passed explicitly: `npm run dev` is a bare `vite`, which would bind 5173
+    // and leave this suite waiting on 5199 until it timed out. `--strictPort` makes a collision
+    // fail loudly instead of drifting to the next free port and stranding us again.
+    command: `npm run dev -- --port ${PORT} --strictPort`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

@@ -255,6 +255,7 @@ Steps run in order. Cite them **by name**, not number, anywhere outside this fil
 - Name the specific things only a running app can confirm — visual result, feel of an interaction, whether the fix actually fixes the reported bug.
 - Then **stop and wait**. The developer tests in the real app. Suggest `/run` if it helps.
 - Fix what testing surfaces, and hand back. Loop 3 ⟷ 4 until the developer says it works.
+- **When testing surfaces a bug in the browser, use the `chrome-diagnose` skill** — Claude in Chrome attaches to the localhost tab the developer is already testing in (they drag it into the Claude group; the tab's URL is the only reliable source of the dev port). Diagnosis **on demand only**: never a pre-flight for your own work, and never grounds for reporting "it works". A bug that reproduces headlessly and deterministically also earns an `e2e/*.spec.ts`; a visual or feel-based one earns an explicit "no spec, and here is why".
 
 **5. Refine — review & simplify** _(non-trivial changes only)_
 - Skip both passes for genuinely trivial edits (typo, rename, import fix, single-line tweak, config bump) — no need to ask, just say so in one line so it's visible.
