@@ -211,3 +211,58 @@ before clearing: `_onPointerDown`, `_pivotOnHoveredSurface`, `DOLLY_SETTLE_MS` a
 `setOrbitPoint` yanks via `dollyTo` and leaks a focal offset — survive in ADR-0006, which
 records the whole five-attempt history of that bug. The rest was a rejected proposal and is
 gone with this file.
+
+---
+
+## Staged: Fragments rebind on projection change (branch `fix/fragments-rebind-on-projection-change`)
+
+**Untested beyond `tsc`, eslint and a production build.** The measurements below are the
+developer's instrumentation of the *bug* (draw calls / indices per frame, sampled off the
+viewport's WebGL context on the live deployment), not of the fix.
+
+**The bug.** Switching Camera Projection to Orthographic froze the Fragments LOD/streaming
+engine outright: draw counts stayed bit-for-bit constant across a 10-tick zoom
+(491 calls / 573,088 indices → 491 / 573,334), where Perspective at the same framings went
+491/573k → 229/129k. Entering Ortho from a far-away Perspective view left the building a
+hollow grey shell at any zoom (197 / 83,719 — the far-away LOD, forever).
+
+**Decision — subscribe to `camera.projection.onChanged` in `fragments-manager.ts`, and re-point
+that subscription whenever `world.camera` is replaced.**
+
+`world.onCameraChanged` fires only from `World.set camera(...)`. `ProjectionManager.set()` swaps
+`camera.three` and triggers its *own* `onChanged` — so `model.useCamera()` was never re-called and
+Fragments kept evaluating the perspective camera parked where it stood at switch time. `controls`'
+`"update"` still fired, so `core.update()` ran every frame against a camera that never moved; hence
+the perfectly constant counts.
+
+- **Rejected — the single line `camera.projection.onChanged.add(rebindCamera)` at setup.** This is
+  what the bug report proposed, and it fixes the toolbar toggle only. `projection` belongs to the
+  *camera*: `OBC.Views.open()` assigns a brand-new `OrthoPerspectiveCamera` to the world, and
+  `Views2DList.applyPerspectivePlanCamera` then calls `projection.set("Perspective")` on *that*
+  camera. A bootstrap-time subscription is left listening to a `ProjectionManager` nobody drives.
+  Hence `watchProjection()`, called from `onCameraChange` as well as at setup.
+- **Rejected — call the rebind from the callers.** `ToolbarSettings.handleProjectionSelect` and
+  `applyPerspectivePlanCamera` both already know they changed projection, so each could notify
+  Fragments directly. Rejected: it makes correctness depend on every future `projection.set()`
+  caller remembering, and it would put BIM-engine wiring in a React component. The fix belongs on
+  the listening side, in the one file that owns the fragments↔camera relationship.
+- **Rejected — read `world.camera.three` inside the handler** instead of taking the event payload.
+  It happens to work, because `OrthoPerspectiveCamera` assigns `three` from its own listener on the
+  same event, registered in its constructor and therefore ahead of ours. Nothing guarantees that
+  ordering, and the payload is right there.
+
+**`update(true)` is forced here on purpose**, and does not contradict the ⚠️ never-force note on
+`onControlsUpdate` directly below it: that warning is about the continuous `controls "update"`
+event. A projection switch is a discrete state change — the same class as a model load.
+
+**Not fixed, deliberately, and not recorded anywhere else yet:**
+
+- **`controls "update"` is bound to the bootstrap camera's controls only.** Every `OBC.View` owns
+  its own `CameraControls`, so inside a 2D view that listener is attached to an inactive camera.
+  The vendor partly covers it — `Views.open()` adds its own `"rest"` handler — so plan views update
+  on settle rather than continuously.
+- **The production bundle appears to contain `@thatopen/components` twice** (two `ProjectionManager`
+  and two `World` class identities). Duplicate identities can make `components.get(...)` hand back an
+  instance other than the expected one. Low confidence, unrelated to this bug, build-config territory.
+- **Ortho → Perspective visibly jumps framing.** `ProjectionManager.matchOrthoDistanceEnabled` is the
+  knob if that is not wanted; it defaults to `false` and nothing in `src/` sets it.
