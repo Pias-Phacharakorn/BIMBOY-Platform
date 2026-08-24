@@ -2,6 +2,7 @@
 export * from "./create-world"
 export * from "./render-coalescer"
 export * from "./camera-depth-range"
+export * from "./camera-response"
 export * from "./clip-aware-raycaster"
 export * from "./ifc-loader"
 export * from "./fragments-manager"
