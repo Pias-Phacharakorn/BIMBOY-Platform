@@ -53,11 +53,54 @@ export const setupFragmentsManager = (components: OBC.Components, world: OBC.Sim
     await fragments.core.update(true);
   })
 
-  const onCameraChange = async (camera: any) => {
+  /**
+   * Points every loaded model at a three.js camera and forces a full re-evaluation.
+   *
+   * Takes the camera as an argument instead of reading `world.camera.three`: `useCamera` captures
+   * that exact instance, and `projection.onChanged` hands us the new one directly. Reading it back
+   * off the component would work only because `OrthoPerspectiveCamera` assigns `three` from its
+   * *own* listener on that same event — registered in its constructor, so ahead of ours. Nothing
+   * guarantees that ordering, so we don't lean on it.
+   */
+  const rebindCamera = async (three: any) => {
     for (const [, model] of fragments.list) {
-      model.useCamera(camera.three);
+      model.useCamera(three);
     }
+    // Forced here, unlike `onControlsUpdate` below: a camera swap is a discrete state change,
+    // the same class of event as a load — which is exactly where the vendor forces too.
     await fragments.core.update(true);
+  };
+
+  const onProjectionChanged = (three: any) => {
+    void rebindCamera(three);
+  };
+
+  // ⚠️ **`projection` belongs to the camera, not the world**, so this subscription has to follow
+  // `world.camera` rather than being taken once at bootstrap. `OBC.Views.open()` assigns a
+  // brand-new `OrthoPerspectiveCamera` to the world, and `Views2DList.applyPerspectivePlanCamera`
+  // then calls `projection.set("Perspective")` on *that* camera — a bootstrap-time subscription
+  // would be listening to a `ProjectionManager` nobody drives any more.
+  let watchedCamera: any = null;
+  const watchProjection = (camera: any) => {
+    if (watchedCamera === camera) return;
+    try {
+      watchedCamera?.projection?.onChanged.remove(onProjectionChanged);
+    } catch {
+      // Previous camera already disposed — its events went with it.
+    }
+    watchedCamera = camera?.projection ? camera : null;
+    watchedCamera?.projection.onChanged.add(onProjectionChanged);
+  };
+
+  // ⚠️ `world.onCameraChanged` fires **only** from `World.set camera(...)`, i.e. when the whole
+  // camera component is replaced. `camera.projection.set("Orthographic")` swaps `camera.three`
+  // and fires `projection.onChanged` instead — which is why both are wired below. Without the
+  // second one, Fragments keeps evaluating LOD and streaming against the perspective camera
+  // parked where it stood at switch time: the counts freeze, and a model entered from far away
+  // stays a hollow shell however far you zoom in.
+  const onCameraChange = async (camera: any) => {
+    watchProjection(camera);
+    await rebindCamera(camera.three);
   };
 
   // ⚠️ **Never pass `force` here.** `update(force)` means "finish all the models' pending
@@ -73,11 +116,14 @@ export const setupFragmentsManager = (components: OBC.Components, world: OBC.Sim
   };
 
   world.onCameraChanged.add(onCameraChange);
+  watchProjection(world.camera);
   world.camera.controls.addEventListener("update", onControlsUpdate);
 
   fragments.onDisposed.add(() => {
     try {
       world.onCameraChanged.remove(onCameraChange);
+      watchedCamera?.projection?.onChanged.remove(onProjectionChanged);
+      watchedCamera = null;
       world.camera.controls.removeEventListener("update", onControlsUpdate);
     } catch (e) {
       // Ignore: camera/world was already disposed
