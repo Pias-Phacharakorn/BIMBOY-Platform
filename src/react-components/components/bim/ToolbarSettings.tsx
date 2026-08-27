@@ -353,19 +353,6 @@ export function ToolbarSettings() {
 
           <div className="h-[1px] bg-border/60 my-0.5" />
 
-          {/* Hover Highlight */}
-          <div className="flex items-center justify-between text-xs text-fg">
-            <span className="font-medium text-muted">Hover Highlight</span>
-            <input
-              type="checkbox"
-              checked={hoverHighlight}
-              onChange={handleToggleHoverer}
-              className="w-4.5 h-4.5 rounded border-border text-accent bg-transparent accent-accent cursor-pointer"
-            />
-          </div>
-
-          <div className="h-[1px] bg-border/60 my-0.5" />
-
           {/* Performance — live stats.js frame meter. Opens on FPS; tap the widget to cycle
               FPS -> MS -> MB. */}
           <div className="flex items-center justify-between text-xs text-fg">
@@ -386,6 +373,19 @@ export function ToolbarSettings() {
               type="checkbox"
               checked={showSceneDiagnostics}
               onChange={(e) => setShowSceneDiagnostics(e.target.checked)}
+              className="w-4.5 h-4.5 rounded border-border text-accent bg-transparent accent-accent cursor-pointer"
+            />
+          </div>
+
+          <div className="h-[1px] bg-border/60 my-0.5" />
+
+          {/* Hover Highlight */}
+          <div className="flex items-center justify-between text-xs text-fg">
+            <span className="font-medium text-muted">Hover Highlight</span>
+            <input
+              type="checkbox"
+              checked={hoverHighlight}
+              onChange={handleToggleHoverer}
               className="w-4.5 h-4.5 rounded border-border text-accent bg-transparent accent-accent cursor-pointer"
             />
           </div>
