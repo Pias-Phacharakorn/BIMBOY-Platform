@@ -24,13 +24,16 @@ export function useRealisticView() {
     if (!realistic || !world) return;
 
     // `activate` is async (it fits the sun to the model bounds off the fragments worker), so a
-    // fast unmount can land before it resolves. Deactivating unconditionally on cleanup is safe —
-    // it no-ops when there is no baseline — but the pending activate would then install a rig
-    // nobody owns, so the guard flag is what actually prevents the leak.
+    // fast unmount can land before it resolves — which is every mount under StrictMode, not a rare
+    // race. What makes that safe is `RealisticView`'s own generation token: a `deactivate` cancels
+    // any activate still in flight, so the late one never installs a rig. This flag only avoids
+    // pushing settings into a component that has already been unmounted.
     let mounted = true;
     void realistic.activate(world).then(() => {
-      if (!mounted) realistic.deactivate();
-      else setSettings(realistic.settings);
+      // Never deactivate from here. Under StrictMode this callback belongs to a *cancelled*
+      // activate while a live one is already in flight, and deactivating would cancel that one
+      // too — leaving the tab with no rig at all. Cleanup below is the only thing that tears down.
+      if (mounted) setSettings(realistic.settings);
     });
 
     return () => {

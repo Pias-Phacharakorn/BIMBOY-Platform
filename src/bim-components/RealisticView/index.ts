@@ -78,6 +78,15 @@ export class RealisticView extends OBC.Component implements OBC.Disposable {
 
   private _world: OBC.World | null = null;
   private _baseline: Baseline | null = null;
+  /**
+   * Bumped by every `activate` and every `deactivate`, so an async activate can tell whether it
+   * still owns the component after it resumes. Without it, a `deactivate` landing during the
+   * bounds measurement tears down a rig that does not exist yet and clears `_baseline`; the
+   * pending activate then installs a rig nobody owns, and every later `deactivate` early-returns
+   * on the null baseline and leaves it in the scene. React StrictMode's mount/cleanup/mount makes
+   * that the *normal* path in dev, not a rare race.
+   */
+  private _generation = 0;
   private _settings: RealisticSettings = { ...REALISTIC_DEFAULTS };
 
   private _sky: Sky | null = null;
@@ -111,6 +120,7 @@ export class RealisticView extends OBC.Component implements OBC.Disposable {
   async activate(world: OBC.World) {
     if (this.active) return;
 
+    const generation = ++this._generation;
     const renderer = world.renderer;
     const scene = world.scene;
     if (!renderer || !scene) return;
@@ -131,6 +141,11 @@ export class RealisticView extends OBC.Component implements OBC.Disposable {
     };
 
     await this._measureModels();
+    // Someone else took over while the bounds were being measured (a deactivate, or a second
+    // activate after one). Return before touching the scene: this call's baseline has already been
+    // consumed, so anything built here would outlive every teardown.
+    if (this._generation !== generation) return;
+
     this._buildRig(scene.three);
     this._applySettings();
 
@@ -150,6 +165,10 @@ export class RealisticView extends OBC.Component implements OBC.Disposable {
 
   /** Puts everything back exactly as it was. Safe to call when not active. */
   deactivate() {
+    // Before the early return below, so a still-pending activate is cancelled even when there is
+    // nothing yet to tear down.
+    this._generation++;
+
     const baseline = this._baseline;
     const world = this._world;
     if (!baseline || !world) return;
@@ -194,7 +213,10 @@ export class RealisticView extends OBC.Component implements OBC.Disposable {
   /** Re-fits the sun to the models and refreshes the shadow. Call after a model loads. */
   async refit() {
     if (!this.active) return;
+    const generation = this._generation;
     await this._measureModels();
+    // Same hazard as `activate`: the rig can be torn down while the bounds are measured.
+    if (this._generation !== generation) return;
     this._applySettings();
     this._setTileShadows(this._settings.shadows);
     this._requestShadowUpdate();

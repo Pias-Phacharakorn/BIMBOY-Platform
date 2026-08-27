@@ -600,3 +600,106 @@ chose `GLOBAL` deliberately — it skips LOD geometry, which is both fewer lines
 and the faster path on a heavy scene. `DEFAULT` is now what every tab pays on a 60-model project.
 The screenshot it came from is the developer's own live tuning, so it stands until measured
 otherwise.
+
+## Staged: a configurable viewport background (branch `feat/viewport-background`)
+
+A Navisworks-style Background dialog behind a row in Viewport Settings, with two styles —
+Graduated (top/bottom) and Plain. **Planned, not tested.**
+
+**Decision 1 — it is painted in CSS, not in three.js.** The store never touches
+`world.scene.three.background`, which stays `null`. `.viewport-container` already paints the
+viewport's backdrop (`linear-gradient(135deg, …)` + a radial highlight) through the transparent
+canvas, so this feature drives a CSS custom property on that existing mechanism rather than
+introducing a second one.
+
+- **Rejected — `scene.three.background`.** The "correct" 3D answer, and it buys nothing here: a
+  graduated backdrop needs a generated `CanvasTexture` rebuilt and disposed on every colour
+  change, it renders through the base pass every frame, and it puts a new full-screen surface in
+  front of AO and edge detection that nothing has tested. The one argument for it — appearing in a
+  canvas screenshot — is moot: `src/` has no `toDataURL`, no `preserveDrawingBuffer`, and the clash
+  thumbnails come from BCF images.
+- **Not a concern — the Realistic tab.** `RealisticView` adds a `Sky` *mesh* to the scene rather
+  than setting `scene.background`, so it hides the backdrop entirely regardless of mechanism.
+- **Scope is automatic.** `.viewport-container` has exactly one user, `ViewportWrapper`, so the
+  setting reaches every ModelsView tab and nothing else.
+
+**Decision 2 — no override is a real state, and it is the default.** `viewportBackground` starts
+`null`, `.viewport-container` reads `background: var(--viewport-bg, <the two existing layers>)`,
+and the branded look is the `var()` fallback — untouched, glow included, until the user picks
+something. "Reset to defaults" removes the property rather than writing a colour.
+
+- **Rejected — make Graduated-with-sampled-colours the new default.** A two-state model instead of
+  three, but the app would boot subtly different from today: vertical instead of 135°, and the blue
+  radial highlight gone for good.
+- **Rejected — keep the glow layered over every choice.** A "Plain" background with a blue glow in
+  the corner is not plain, and the preview pane would have to either lie or replicate it.
+
+**Decision 3 — live apply, with Cancel restoring an open-time snapshot.** The real viewport is the
+preview; the modal's pane is a convenience. Buttons are Reset to defaults / Cancel / Done.
+
+- **Rejected — faithful OK/Cancel/Apply.** Three buttons with three meanings, and it makes a small
+  preview square stand in for a full viewport.
+- **Rejected — live apply with no Cancel.** Consistent with every other viewport setting, but a
+  background is a look you experiment with, and there is no undo once the old hex is gone.
+
+**Decision 4 — three colour fields, Plain reuses the top colour.** `{ style, topColor, bottomColor }`.
+Plain shows one row labelled Color bound to `topColor`, so Graduated → Plain → Graduated is
+lossless. Rejected: a separate `plainColor`, which lets two unrelated looks coexist at the cost of
+switching to Plain showing a colour unrelated to the gradient just on screen.
+
+**Decision 5 — state in `uiStore`, session-only, no persist.** Both the values and
+`backgroundModalOpen`. The rule in CLAUDE.md's state table points here, and there is a concrete
+reason beyond the rule: the CSS variable lives on `documentElement` and survives a `ToolbarSettings`
+remount, so local component state could reset and leave the settings row's swatch disagreeing with
+what the viewport is showing. One owner, no drift.
+
+- **Rejected — local `useState` in `ToolbarSettings`.** What `ToolbarLoadModel` does for
+  `CloudModelModal`, and what this file already does for `hoverColor` and `gridVisible`, so it would
+  read as consistent — but it carries the desync above.
+- **Rejected — per-user localStorage / per-project Supabase.** Persistence was considered and
+  declined: the background behaves like every other viewport setting for now. Supabase would also
+  need a migration and a mutation before a single pixel changed.
+
+**Decision 6 — the dialog copies `CloudModelModal`'s chrome**, not `components/ui/Modal`, and lives
+beside it in `components/bim/`. That shared primitive is a bare box with an unstyled "Close" text
+button, no header and no footer; matching the reference through it would mean rebuilding the chrome
+inside it anyway. Improving the shared primitive first was rejected as scope: it turns a viewport
+feature into a refactor of a component used by other screens.
+
+## Staged: an async `activate` needs an ownership token (same branch)
+
+Found while testing the background: opening the Realistic tab turned the viewport **white**, and it
+stayed white after switching away. Not a background bug — a lifecycle one, and StrictMode makes it
+the normal path rather than a rare race.
+
+`RealisticView.activate` published `_baseline` *before* `await this._measureModels()` and built the
+rig *after* it. Under `<React.StrictMode>` (see `main.tsx`) every effect runs mount → cleanup →
+mount, so: cleanup's `deactivate` tore down a rig that did not exist yet and nulled `_baseline`; the
+pending `activate` then resumed and installed a rig nobody owned; and every later `deactivate` hit
+`if (!baseline || !world) return` and left it in the scene.
+
+The colour was the confirmation. The orphaned `activate` ran `_applySettings`, which reads
+`this._world` — null by then — and returned early, so the leaked `Sky` kept three's default uniforms
+(`sunPosition (0,0,0)`, turbidity 2) and renders as a washed near-white dome rather than a sky. It
+covers the frame on every tab, which is why leaving Realistic did not clear it.
+
+**Fix — a `_generation` counter**, bumped by both `activate` and `deactivate` (the latter *before*
+its early return, so a pending activate is cancelled even when there is nothing to tear down).
+After the await, `activate` compares and returns if it no longer owns the component. `refit` carries
+the same guard: identical shape, identical hazard.
+
+**And the hook's `.then` stops calling `deactivate`.** `useRealisticView` deactivated from the
+stale callback, which the token turns from useless into harmful: under StrictMode that callback
+belongs to a *cancelled* activate while a live one is already in flight, so deactivating there
+cancels the live one too and the tab ends up with no rig at all. Cleanup is now the only teardown
+path; the `mounted` flag only gates `setSettings`.
+
+- **Rejected — build the rig before the await.** Makes this one ordering safe and leaves the class
+  of bug open: any future await in `activate` reintroduces it.
+- **Rejected — have `deactivate` await the in-flight `activate`.** Makes a synchronous teardown
+  asynchronous, which every caller (including `dispose`) would have to learn about.
+- **Rejected — drop StrictMode.** It found a real leak that a slow fragments worker would hit in
+  production too.
+
+⚠️ **Expected after the fix, not a regression:** the Realistic tab shows a proper blue `Sky` dome,
+so the chosen viewport background is not visible there — the sky covers it, by design.
