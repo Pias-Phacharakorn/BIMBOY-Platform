@@ -1,7 +1,6 @@
 // @ts-nocheck
 import * as OBC from "@thatopen/components"
 import * as OBF from "@thatopen/components-front"
-import * as THREE from "three";
 
 export const setupHighlighter = (components: OBC.Components, world: OBC.World) => {
   const highlighter = components.get(OBF.Highlighter)
@@ -18,15 +17,10 @@ export const setupHighlighter = (components: OBC.Components, world: OBC.World) =
     postproduction.enabled = true;
   }
 
-  // Set up the Outliner
+  // Set up the Outliner. Wiring only — its colours, fill opacity and thickness are part of the
+  // app's default render look and are written by setupPostproduction, which runs next.
   const outliner = components.get(OBF.Outliner);
   outliner.world = world;
-  // green: #bcf124
-  // blue: #24a6f1
-
-  outliner.color = new THREE.Color("#bcf124");
-  outliner.fillColor = new THREE.Color("#bcf124");
-  outliner.fillOpacity = 0.3;
   outliner.enabled = true;
 
   // Link highlighter selection events directly to the outliner

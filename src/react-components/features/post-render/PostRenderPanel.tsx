@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 import * as THREE from "three";
-import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
 import { PanelSection } from "@/react-components/components/layout";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { ColorRow, SelectRow, SliderRow, ToggleRow } from "@/react-components/components/ui";
+import {
+  POSTPRODUCTION_PRESET,
+  PD_DEFAULTS,
+  applyPostproductionPreset,
+  aoPassOf,
+  getPostproduction,
+  type AoParameters,
+  type PdParameters,
+  type Postproduction,
+} from "@/bim-components";
 
 /**
  * Live controls for the world's postproduction passes — the `PostproductionRenderer` tutorial's
@@ -23,8 +32,6 @@ import { ColorRow, SelectRow, SliderRow, ToggleRow } from "@/react-components/co
  * `needsUpdate` (see `render-coalescer.ts` and CONTEXT.md).
  */
 
-type Postproduction = OBF.PostproductionRenderer["postproduction"];
-type AoParameters = Postproduction["defaultAoParameters"];
 type AoNumberKey =
   | "radius"
   | "distanceExponent"
@@ -39,93 +46,6 @@ type GlossKey =
   | "fresnelExponent"
   | "glossFactor"
   | "fresnelFactor";
-
-interface PdParameters {
-  lumaPhi: number;
-  depthPhi: number;
-  normalPhi: number;
-  radius: number;
-  radiusExponent: number;
-  rings: number;
-  samples: number;
-}
-
-/**
- * The poisson-denoise pass is **write-only**: `GTAOPass` exposes `updatePdMaterial` but no getter
- * for what it applied, so these seven values cannot be read back off the engine. They seed from
- * the tutorial's constants and live in React state — the one place in this panel where the UI,
- * not the renderer, is the source of truth.
- */
-const PD_DEFAULTS: PdParameters = {
-  lumaPhi: 10,
-  depthPhi: 2,
-  normalPhi: 3,
-  radius: 4,
-  radiusExponent: 1,
-  rings: 2,
-  samples: 16,
-};
-
-/**
- * The house look for this view: model colours preserved, near-black edge lines on every element,
- * and ambient occlusion doing the soft shading in reveals and under slabs — the reference the
- * developer asked for. Applied when the PostRender view first opens (see `PRESET_APPLIED`).
- *
- * Tuned for **building scale**, which a first pass got wrong. Edge detection works in screen
- * pixels, not world units, so a line that reads as a fine pencil edge on a 2 m facade close-up
- * becomes ink hatching on a 50 m whole-building view — every plank, pile and railing member gets
- * the same line. Hence a mid-grey edge (`#6b6b6b`) at the width floor, and `GLOBAL` mode, which
- * skips LOD geometry (fewer lines, and the faster of the two paths on a heavy scene).
- *
- * Three values are deliberately off the vendor's defaults:
- * - `distanceExponent: 1` against the vendor's `5.7`, which collapses AO to a hairline contact
- *   seam. Low exponent + `radius: 0.5` is what produces broad soft shading.
- * - `aoBlend: 1` — anything less is invisible against this scene's ambient light (see below).
- * - `fillOpacity: 0.85` against `setupHighlighter`'s `0.3`, which reads as pale green wash over
- *   light surfaces instead of the solid green in the reference.
- *
- * ⚠️ **AO cannot carry the whole look.** `create-world.ts` sets `ambientLight.intensity = 1.5`
- * against `directionalLight.intensity = 1.0`; ambient that high flattens form, so surfaces read
- * uniformly bright no matter what this pass does. The grey-side/white-front modelling in the
- * reference is lighting, and lighting lives in `setup/`.
- *
- * `enabled` is **not** part of the preset: `setupHighlighter` already turns postproduction on,
- * and that flag is co-owned by `ViewportRightToolbar` during tool suppression — writing it from a
- * mount-time preset could land inside that window and fight the arbiter's snapshot.
- */
-const PRESET = {
-  style: OBF.PostproductionAspect.COLOR_PEN_SHADOWS,
-  outlines: true,
-  smaa: true,
-  glossEnabled: false,
-  edgeWidth: 1,
-  edgeColor: "#6b6b6b",
-  edgeMode: OBF.EdgeDetectionPassMode.GLOBAL,
-  ao: {
-    screenSpaceRadius: true,
-    radius: 0.5,
-    distanceExponent: 1,
-    thickness: 1.5,
-    scale: 2,
-    samples: 16,
-    distanceFallOff: 1,
-  } satisfies AoParameters,
-  aoBlend: 1,
-  selection: {
-    color: "#bcf124",
-    fillColor: "#bcf124",
-    fillOpacity: 0.85,
-    thickness: 3,
-  },
-};
-
-/**
- * Worlds whose passes have already been given the preset. Keyed on the `Postproduction` instance
- * so the preset lands **once per world**, not once per mount: opening the tab, tuning a slider,
- * leaving and coming back keeps your tweaks. A page reload builds a new world and starts from the
- * preset again, and "Restore preset" re-applies it on demand.
- */
-const PRESET_APPLIED = new WeakSet<object>();
 
 const STYLE_OPTIONS = [
   { label: "Basic", value: OBF.PostproductionAspect.COLOR },
@@ -157,69 +77,7 @@ interface PanelState {
   pd: PdParameters;
 }
 
-/**
- * `OBF.AOPass extends GTAOPass` from `three/examples/jsm`, but this repo pins
- * `@types/three@0.156.0` — which predates `GTAOPass` entirely, and `three@0.182` ships no
- * typings for `examples/jsm` — so every inherited member is invisible to `tsc`. Declaring the
- * three we actually use keeps the call sites checked instead of widening the pass to `any`.
- * Verified against `node_modules/three/examples/jsm/postprocessing/GTAOPass.js`.
- */
-interface AoPassApi {
-  blendIntensity: number;
-  updateGtaoMaterial: (parameters: Partial<AoParameters>) => void;
-  updatePdMaterial: (parameters: Partial<PdParameters>) => void;
-}
-
-const aoPassOf = (postproduction: Postproduction) =>
-  postproduction.aoPass as unknown as AoPassApi;
-
 const hex = (color: THREE.Color) => `#${color.getHexString()}`;
-
-/**
- * Writes the whole preset onto the live passes.
- *
- * Order is load-bearing: the AO parameters go in **before** the style, because the vendor's style
- * setter pushes `defaultAoParameters` into the material itself when the style leaves
- * `PEN_SHADOWS`. Applying GTAO/PD explicitly afterwards covers every other transition — the
- * object is otherwise aspirational (the shader ships `distanceExponent: 1` / `thickness: 1`).
- */
-const applyPreset = (postproduction: Postproduction, outliner: OBF.Outliner) => {
-  Object.assign(postproduction.defaultAoParameters, PRESET.ao);
-
-  postproduction.style = PRESET.style;
-  postproduction.outlinesEnabled = PRESET.outlines;
-  postproduction.smaaEnabled = PRESET.smaa;
-  postproduction.glossEnabled = PRESET.glossEnabled;
-
-  postproduction.edgesPass.width = PRESET.edgeWidth;
-  postproduction.edgesPass.color = new THREE.Color(PRESET.edgeColor);
-  postproduction.edgesPass.mode = PRESET.edgeMode;
-
-  aoPassOf(postproduction).blendIntensity = PRESET.aoBlend;
-  aoPassOf(postproduction).updateGtaoMaterial(postproduction.defaultAoParameters);
-  aoPassOf(postproduction).updatePdMaterial(PD_DEFAULTS);
-
-  outliner.color = new THREE.Color(PRESET.selection.color);
-  outliner.fillColor = new THREE.Color(PRESET.selection.fillColor);
-  outliner.fillOpacity = PRESET.selection.fillOpacity;
-  outliner.thickness = PRESET.selection.thickness;
-};
-
-/**
- * The vendor's `get postproduction()` **throws** ("Renderer not initialized yet with a world!")
- * rather than returning undefined, and each pass getter throws until `initialize()` has run —
- * which only happens once something sets `enabled = true` (`setupHighlighter` does). So every
- * read and write goes through a try/catch and a missing engine is treated as "not ready yet".
- */
-const getPostproduction = (world: OBC.World | null): Postproduction | null => {
-  const renderer = world?.renderer as OBF.PostproductionRenderer | undefined;
-  if (!renderer) return null;
-  try {
-    return renderer.postproduction;
-  } catch {
-    return null;
-  }
-};
 
 const readState = (postproduction: Postproduction, outliner: OBF.Outliner): PanelState => {
   const { edgesPass, glossPass } = postproduction;
@@ -269,13 +127,10 @@ export function PostRenderPanel() {
       return;
     }
     try {
+      // Read-only: the preset is installed on the world at bootstrap by `setupPostproduction`,
+      // so this only mirrors whatever the passes currently hold — a tab round-trip never
+      // overwrites what the user tuned here.
       const outliner = components.get(OBF.Outliner);
-      // First open of this view on this world: install the house look. Afterwards the panel only
-      // reads, so a tab round-trip never overwrites what the user tuned.
-      if (!PRESET_APPLIED.has(postproduction)) {
-        applyPreset(postproduction, outliner);
-        PRESET_APPLIED.add(postproduction);
-      }
       setUi(readState(postproduction, outliner));
     } catch (error) {
       console.warn("PostRenderPanel: postproduction passes are not ready yet.", error);
@@ -388,18 +243,18 @@ export function PostRenderPanel() {
           <button
             type="button"
             onClick={() =>
-              apply(applyPreset, {
-                style: PRESET.style,
-                outlines: PRESET.outlines,
-                smaa: PRESET.smaa,
-                glossEnabled: PRESET.glossEnabled,
-                edgeWidth: PRESET.edgeWidth,
-                edgeColor: PRESET.edgeColor,
-                edgeMode: PRESET.edgeMode,
-                ao: { ...PRESET.ao },
-                aoBlend: PRESET.aoBlend,
+              apply(applyPostproductionPreset, {
+                style: POSTPRODUCTION_PRESET.style,
+                outlines: POSTPRODUCTION_PRESET.outlines,
+                smaa: POSTPRODUCTION_PRESET.smaa,
+                glossEnabled: POSTPRODUCTION_PRESET.glossEnabled,
+                edgeWidth: POSTPRODUCTION_PRESET.edgeWidth,
+                edgeColor: POSTPRODUCTION_PRESET.edgeColor,
+                edgeMode: POSTPRODUCTION_PRESET.edgeMode,
+                ao: { ...POSTPRODUCTION_PRESET.ao },
+                aoBlend: POSTPRODUCTION_PRESET.aoBlend,
                 pd: { ...PD_DEFAULTS },
-                selection: { ...PRESET.selection },
+                selection: { ...POSTPRODUCTION_PRESET.selection },
               })
             }
             className="self-start inline-flex items-center gap-2 px-2.5 py-1 border border-border rounded-radius bg-surface-alt text-xs font-semibold text-muted hover:border-accent hover:text-fg transition-colors duration-120"
@@ -504,12 +359,12 @@ export function PostRenderPanel() {
             onClick={() =>
               apply(
                 (_, outliner) => {
-                  outliner.color = new THREE.Color(PRESET.selection.color);
-                  outliner.fillColor = new THREE.Color(PRESET.selection.fillColor);
-                  outliner.fillOpacity = PRESET.selection.fillOpacity;
-                  outliner.thickness = PRESET.selection.thickness;
+                  outliner.color = new THREE.Color(POSTPRODUCTION_PRESET.selection.color);
+                  outliner.fillColor = new THREE.Color(POSTPRODUCTION_PRESET.selection.fillColor);
+                  outliner.fillOpacity = POSTPRODUCTION_PRESET.selection.fillOpacity;
+                  outliner.thickness = POSTPRODUCTION_PRESET.selection.thickness;
                 },
-                { selection: { ...PRESET.selection } },
+                { selection: { ...POSTPRODUCTION_PRESET.selection } },
               )
             }
             className="self-start inline-flex items-center gap-2 px-2.5 py-1 border border-border rounded-radius bg-surface-alt text-xs font-semibold text-muted hover:border-accent hover:text-fg transition-colors duration-120"

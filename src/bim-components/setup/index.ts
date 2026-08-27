@@ -9,6 +9,7 @@ import {
   setupFragmentsManager,
   setupIfcLoader, 
   setupHighlighter,
+  setupPostproduction,
   setupHoverer,
   setupItemsFinder,
   setupMinimap,
@@ -29,6 +30,10 @@ import { CursorZoom } from "../CursorZoom";
 import { GisLayers } from "../GisLayers";
 import { DrawingEditorSetup } from "../DrawingEditorSetup";
 import { RoomView } from "../RoomView";
+
+// The app's default render look, re-exported so React features can read the same constants the
+// world booted with (PostRenderPanel's "Restore preset", useGisRenderMode's opt-out).
+export * from "./src/postproduction";
 
 export const setupComponents = async () => {
   BUI.Manager.init();
@@ -53,6 +58,11 @@ export const setupComponents = async () => {
   setupFragmentsManager(components, world)
 
   setupHighlighter(components, world)
+
+  // Right after setupHighlighter, and only there: its `postproduction.enabled = true` is what
+  // runs the renderer's `initialize()`, and every pass this writes to throws until it has.
+  setupPostproduction(components, world)
+
   setupHoverer(components, world)
   setupItemsFinder(components)
   setupMinimap(components, world)
