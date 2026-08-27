@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { ViewportBackground } from '@/lib/viewportBackground'
 
 interface UIState {
   sidebarCollapsed: boolean
@@ -15,6 +16,18 @@ interface UIState {
   /** stats.js FPS meter. Unlike the panel above this genuinely is live state. */
   showPerformance: boolean
   setShowPerformance: (show: boolean) => void
+  isBackgroundModalOpen: boolean
+  setBackgroundModalOpen: (open: boolean) => void
+  /**
+   * Viewport backdrop. `null` means "no override" — the branded gradient in `style.css` — and is
+   * both the initial value and what Reset returns to; see `lib/viewportBackground.ts`.
+   *
+   * Here rather than in `ToolbarSettings` state because the CSS variable lives on `documentElement`
+   * and outlives a React remount: component state could reset and leave the settings row's swatch
+   * disagreeing with the viewport.
+   */
+  viewportBackground: ViewportBackground | null
+  setViewportBackground: (background: ViewportBackground | null) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -33,4 +46,8 @@ export const useUIStore = create<UIState>((set) => ({
   setShowSceneDiagnostics: (show) => set({ showSceneDiagnostics: show }),
   showPerformance: false,
   setShowPerformance: (show) => set({ showPerformance: show }),
+  isBackgroundModalOpen: false,
+  setBackgroundModalOpen: (open) => set({ isBackgroundModalOpen: open }),
+  viewportBackground: null,
+  setViewportBackground: (background) => set({ viewportBackground: background }),
 }))

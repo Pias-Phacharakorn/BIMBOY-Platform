@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { useUIStore } from "@/react-components/store/uiStore";
 import { Icon } from "@/react-components/components/ui";
+import { BackgroundSettingsModal } from "./BackgroundSettingsModal";
+import { VIEWPORT_BACKGROUND_CURRENT_CSS } from "@/lib/viewportBackground";
 import * as THREE from "three";
 import * as OBC from "@thatopen/components";
 import * as OBF from "@thatopen/components-front";
@@ -15,6 +17,9 @@ export function ToolbarSettings() {
     setShowSceneDiagnostics,
     showPerformance,
     setShowPerformance,
+    viewportBackground,
+    isBackgroundModalOpen,
+    setBackgroundModalOpen,
   } = useUIStore();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -404,8 +409,39 @@ export function ToolbarSettings() {
               />
             </label>
           </div>
+
+          <div className="h-[1px] bg-border/60 my-0.5" />
+
+          {/* Background — opens the dialog and closes this dropdown on the way, so it is not left
+              hanging open behind the modal's overlay. The swatch paints itself from the CSS
+              variable, so it shows the branded default without knowing what that default is. */}
+          <div className="flex items-center justify-between text-xs text-fg">
+            <span className="font-medium text-muted">Background</span>
+            <button
+              type="button"
+              onClick={() => {
+                setBackgroundModalOpen(true);
+                setIsSettingsOpen(false);
+              }}
+              className="flex items-center gap-2 bg-surface-alt border border-border px-2 py-1 rounded cursor-pointer hover:border-accent transition-colors"
+            >
+              <span
+                className="w-3.5 h-3.5 rounded-sm border border-border/40"
+                style={{ background: VIEWPORT_BACKGROUND_CURRENT_CSS }}
+              />
+              <span className="text-[11px] font-semibold text-fg">
+                {viewportBackground
+                  ? viewportBackground.style === "plain"
+                    ? "Plain"
+                    : "Graduated"
+                  : "Default"}
+              </span>
+            </button>
+          </div>
         </div>
       )}
+
+      {isBackgroundModalOpen && <BackgroundSettingsModal />}
     </div>
   );
 }
