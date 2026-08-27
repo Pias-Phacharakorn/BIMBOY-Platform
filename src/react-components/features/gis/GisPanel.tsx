@@ -8,6 +8,7 @@ import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useProjectStore } from "@/react-components/store/projectStore";
 import { Icon } from "@/react-components/components/ui";
 import { useBimStore } from "@/react-components/store/bimStore";
+import { useGisRenderMode } from "@/react-components/features/gis/useGisRenderMode";
 import { cn } from "@/lib/utils";
 
 const TOKEN_STORAGE_KEY = "PIAS-cesium-token-input";
@@ -39,6 +40,11 @@ const initialState: GisState = {
 
 export function GisPanel() {
   const { components } = useBimStore();
+
+  // Photogrammetry tiles share the model's render passes, so the app's default pen edges are
+  // suppressed for as long as this panel is on screen. See useGisRenderMode.
+  useGisRenderMode();
+
   const { isGuest } = useAuth();
   const { activeProjectId } = useProjectStore();
   const updateProjectMutation = useUpdateProject();

@@ -531,3 +531,72 @@ does nothing.
 sliders/toggles that currently live in `features/post-render/PostRenderControls.tsx`, and CLAUDE.md
 forbids a feature importing another feature. The second consumer we said would justify promotion has
 arrived.
+
+## Staged: the house look is the app default, not a PostRender-tab side effect (branch `feat/default-render-preset`)
+
+The PostRender preset became the world's boot state. Everything below is **planned, not tested** —
+`applyPreset`'s values are the shipped ones with two edge changes the developer made live in the
+panel (`#6b6b6b` → `#323232`, `GLOBAL` → `DEFAULT (with LODs)`).
+
+**Decision 1 — the preset lives in `setup/src/postproduction.ts`, applied right after
+`setupHighlighter`.** Not in `create-world.ts`, which was the first instinct and is the right
+folder but the wrong moment: `PostproductionRenderer._postproduction` only exists once the
+renderer has a `currentWorld`, and every pass getter throws (`"Edge detection pass not
+initialized"`) until `initialize()` runs — which happens from exactly one place, the
+`set enabled` setter, on the first `true`. In this app that first `true` is `setupHighlighter`.
+`initialize()` also reads `currentWorld.camera.three`, and `create-world.ts` assigns the camera
+*after* the renderer.
+
+- **Rejected — bottom of `create-world.ts`.** Would need to force `enabled = true` ourselves to
+  trigger `initialize()`, pre-empting `setupHighlighter` on a flag `ViewportRightToolbar` also
+  snapshots during tool suppression (the ADR-0017 hazard). And the outliner half of the preset
+  would still have to live elsewhere, since the `Outliner` is created in `setupHighlighter`.
+- **Rejected — fold it into `highlighter.ts`.** Both halves in one existing file, no new bootstrap
+  line, but that file's job is selection wiring and `PostRenderPanel` importing the render look
+  from `highlighter.ts` reads wrong.
+- **Rejected — apply it from `ModelsView` per tab.** Engine state driven by a view; the look would
+  exist only inside `ModelsView` and would fight `RealisticView`'s own snapshot/restore on tab
+  flips.
+
+**Decision 2 — `setupHighlighter` stops setting the outliner's appearance.** It keeps
+`outliner.world`, `outliner.enabled` and the `onHighlight`/`onClear` bindings; the four appearance
+lines go, because the preset writes the same four properties moments later. One writer, one
+constant, and the panel's "Reset outline to preset" now resets to what the app actually booted
+with. The values themselves are unchanged from what `setupHighlighter` had (`#bcf124`,
+`fillOpacity 0.30`); `0.85` was tried in the preset and reverted — a near-solid fill reads as a
+flat green blob over the element instead of tinting it.
+
+**Decision 3 — GIS opts out by style, for as long as `GisPanel` is mounted.** `useGisRenderMode`
+in `features/gis/` snapshots `postproduction.style`, sets `COLOR`, restores on cleanup. `GisPanel`
+renders only on the GIS tab, so mount/unmount *is* the tab boundary. The conflict is real, not
+theoretical: `GisLayer3d` adds its Google/OSM tile groups straight into `world.scene.three`, so
+streamed photogrammetry goes through the same edge-detection pass as the model.
+
+- **Rejected — `ExcludedObjectsPass`.** The surgical answer on paper, and unusable here: it
+  excludes by *material* (`addExcludedMaterial`) and `3d-tiles-renderer` mints a new material per
+  streamed tile, so there is no stable list to register.
+- **Rejected — force `postproduction.enabled = false` on GIS.** Kills edges, AO and SMAA in one
+  move, but makes the GIS hook a second owner of the flag `ViewportRightToolbar` suppresses tools
+  with, and drops the selection outliner, which needs postproduction on.
+- **Rejected — drive it off `GisLayer3d.enabled` instead of the tab.** Truer to intent (the BIM
+  model would keep its edges until tiles are switched on) but needs a change event `GisLayers`
+  does not have, and moves the transition to a mid-session moment with no visible boundary.
+- **Rejected — an `activate`/`deactivate` API on `GisLayers`.** The `RealisticView` shape, but
+  that component exists because its rig is large; a two-field snapshot does not earn a public
+  engine API used by one panel.
+
+**Decision 4 — `RealisticView` is left alone.** Its `activate` already swaps `style` to
+`COLOR_SHADOWS`, which removes the visible half of the preset (pen edges). It now inherits the
+preset's AO (`radius 0.5`, `distanceExponent 1`, `blendIntensity 1`) instead of the vendor
+defaults, which is a normal render combination — sun shadows plus contact AO. Deferred, not
+rejected: widening `_baseline` with the AO block, if testing shows the AO reads too heavy against
+real daylight shadows. Not written blind.
+
+**AR needed nothing.** `/ar/$projectId` renders `ArModelViewer` and never calls
+`setupComponents`, so there is no OBC world and no `PostproductionRenderer` on that page.
+
+**⚠️ Untested, and the one thing to watch: `EdgeDetectionPassMode.DEFAULT`.** The shipped preset
+chose `GLOBAL` deliberately — it skips LOD geometry, which is both fewer lines at building scale
+and the faster path on a heavy scene. `DEFAULT` is now what every tab pays on a 60-model project.
+The screenshot it came from is the developer's own live tuning, so it stands until measured
+otherwise.
