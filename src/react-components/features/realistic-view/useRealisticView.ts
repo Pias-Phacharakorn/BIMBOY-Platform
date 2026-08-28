@@ -1,15 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RealisticView, REALISTIC_DEFAULTS, type RealisticSettings } from "@/bim-components/RealisticView";
+import {
+  RealisticView,
+  REALISTIC_DEFAULTS,
+  type AoParameters,
+  type DaylightSettings,
+  type GlossParameters,
+  type RealisticSettings,
+} from "@/bim-components";
 import { useBimStore } from "@/react-components/store/bimStore";
 
 /**
  * Activates the daylight rig for as long as the Realistic tab is mounted, and mirrors its settings
  * into React state for the panel.
  *
- * The lifecycle is the point: `RealisticView` snapshots the renderer, scene lights and
- * postproduction style on activate and restores them on deactivate, so *mounting* this hook is
- * what turns the viewport into a render and unmounting is what gives the working viewer back.
- * `useRooms` drives `RoomView` the same way.
+ * The lifecycle is the point: `RealisticView` snapshots the renderer, scene lights, postproduction
+ * style **and this tab's own gloss / AO** on activate and restores them on deactivate, so *mounting*
+ * this hook is what turns the viewport into a render and unmounting is what gives the working viewer
+ * back. `useRooms` drives `RoomView` the same way.
+ *
+ * There are three writers rather than one because `RealisticSettings` holds two nested blocks and a
+ * shallow merge would wipe their siblings — see `RealisticView.update`'s note.
  */
 export function useRealisticView() {
   const { components, world } = useBimStore();
@@ -42,16 +52,42 @@ export function useRealisticView() {
     };
   }, [realistic, world]);
 
-  const update = useCallback(
-    (next: Partial<RealisticSettings>) => {
+  /** Every writer is engine-first, then mirror — the panel never holds a value the rig rejected. */
+  const run = useCallback(
+    (action: (view: RealisticView) => void) => {
       if (!realistic) return;
-      realistic.update(next);
+      action(realistic);
       setSettings(realistic.settings);
     },
     [realistic],
   );
 
-  const reset = useCallback(() => update({ ...REALISTIC_DEFAULTS }), [update]);
+  const update = useCallback(
+    (next: Partial<DaylightSettings>) => run((view) => view.update(next)),
+    [run],
+  );
 
-  return { settings, update, reset, ready: !!realistic && !!world };
+  const updateAo = useCallback(
+    (next: Partial<AoParameters & { blend: number }>) => run((view) => view.updateAo(next)),
+    [run],
+  );
+
+  const updateGloss = useCallback(
+    (next: Partial<GlossParameters & { enabled: boolean }>) =>
+      run((view) => view.updateGloss(next)),
+    [run],
+  );
+
+  const resetDaylight = useCallback(() => run((view) => view.resetDaylight()), [run]);
+  const resetRender = useCallback(() => run((view) => view.resetRender()), [run]);
+
+  return {
+    settings,
+    update,
+    updateAo,
+    updateGloss,
+    resetDaylight,
+    resetRender,
+    ready: !!realistic && !!world,
+  };
 }

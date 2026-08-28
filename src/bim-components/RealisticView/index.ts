@@ -5,6 +5,32 @@ import * as THREE from "three";
 // does not rewrite aliases inside this folder. Repo-wide convention here.
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { applySun, sunDirection, type SunAngles } from "./src/sun";
+// The module, not the `../setup` barrel: that barrel pulls in ClipperCursor, the measure cursors
+// and the rest of bootstrap as *values*. `postproduction.ts` imports nothing but three/OBC/OBF, so
+// reaching it directly keeps this component's dependency edge a leaf.
+import {
+  POSTPRODUCTION_PRESET,
+  aoPassOf,
+  type AoParameters,
+  type Postproduction,
+} from "../setup/src/postproduction";
+
+/**
+ * The gloss pass's six tunables.
+ *
+ * Derived from the key list rather than hand-written, because the same list drives the copy loop in
+ * {@link applyPostproduction} — one place to edit if the vendor ever adds a seventh.
+ */
+const GLOSS_KEYS = [
+  "minGloss",
+  "maxGloss",
+  "glossExponent",
+  "fresnelExponent",
+  "glossFactor",
+  "fresnelFactor",
+] as const;
+
+export type GlossParameters = Record<(typeof GLOSS_KEYS)[number], number>;
 
 export interface RealisticSettings extends SunAngles {
   /**
@@ -20,15 +46,74 @@ export interface RealisticSettings extends SunAngles {
   shadows: boolean;
   /** `Sky`'s haze. Low is a hard blue sky; high is a milky one. */
   turbidity: number;
+
+  /**
+   * ⚠️ Costs a **full extra scene render every frame** — `GlossPass.render` does its own
+   * `renderer.render(scene, camera)` with an override material. Unlike the shadow map, which
+   * {@link RealisticView._applySettings} pins to `autoUpdate = false` so orbiting is free, there is
+   * no on-demand escape. Hence off by default: nobody pays for a pass they did not ask for.
+   */
+  glossEnabled: boolean;
+  gloss: GlossParameters;
+  ao: AoParameters;
+  /** `aoPass.blendIntensity`. Not part of `AoParameters` — the vendor keeps it on the pass. */
+  aoBlend: number;
 }
 
-export const REALISTIC_DEFAULTS: RealisticSettings = {
+/** The sun/sky half — the only keys {@link RealisticView.update} accepts. */
+export type DaylightSettings = Omit<
+  RealisticSettings,
+  "glossEnabled" | "gloss" | "ao" | "aoBlend"
+>;
+
+const DAYLIGHT_DEFAULTS = {
   azimuth: -45,
   elevation: 55,
   intensity: 2.5,
   exposure: 1,
   shadows: true,
   turbidity: 10,
+} satisfies DaylightSettings;
+
+/**
+ * The daylight look's render half — the house look with two deliberate corrections.
+ *
+ * `POSTPRODUCTION_PRESET` is the starting point on purpose, so every difference below is one that
+ * can be justified *before* rendering anything. Both come out of
+ * [ADR-0025](../../../docs/adr/0025-house-look-is-the-boot-preset.md).
+ *
+ * - **`aoBlend` `1 → 0.5`.** The preset chose `1` because "anything less is invisible against this
+ *   scene's ambient light", and `create-world.ts` runs ambient at `1.5`. {@link
+ *   RealisticView.activate} drops it to `0.15` and adds real shadow maps, so blend `1` is AO
+ *   doubling up on the sun.
+ * - ⚠️ **`minGloss` `-0.12 → 0`** against the vendor default. `minGloss` is **not** a gloss floor —
+ *   it is a *global darkening offset applied wherever gloss is absent*. The fragment shader clamps
+ *   `gloss = max(gloss, 0.001)`, so a zero-gloss pixel resolves to `normalize(vec3(0.001)) *
+ *   minGloss` ≈ `0.577 * minGloss` added to the scene colour. At `-0.12` that is a flat −0.069 per
+ *   channel across every low-gloss surface **and the whole sky**, which contributes nothing to the
+ *   gloss buffer at all (see {@link RealisticView._buildRig}).
+ *
+ * The remaining five gloss values are the vendor's shader defaults, read out of
+ * `projected-normal-material.ts`. Every number here is a starting point for live tuning, not a
+ * measured result.
+ */
+const RENDER_DEFAULTS = {
+  glossEnabled: false,
+  gloss: {
+    minGloss: 0,
+    maxGloss: 0.8,
+    glossExponent: 10,
+    fresnelExponent: 6,
+    glossFactor: 0.2,
+    fresnelFactor: 1,
+  },
+  ao: { ...POSTPRODUCTION_PRESET.ao },
+  aoBlend: 0.5,
+};
+
+export const REALISTIC_DEFAULTS: RealisticSettings = {
+  ...DAYLIGHT_DEFAULTS,
+  ...RENDER_DEFAULTS,
 };
 
 /**
@@ -40,6 +125,21 @@ export const REALISTIC_DEFAULTS: RealisticSettings = {
  */
 type FragmentsModel = NonNullable<ReturnType<OBC.FragmentsManager["list"]["get"]>>;
 
+/**
+ * Every postproduction value this component owns while it is active.
+ *
+ * Used in both directions: `activate` snapshots one of these off the live passes and writes another
+ * built from {@link RealisticSettings}; `deactivate` writes the snapshot back. Same shape, same
+ * function, so there is no way for the restore to cover fewer fields than the write.
+ */
+interface PostproductionState {
+  style: OBF.PostproductionAspect;
+  glossEnabled: boolean;
+  gloss: GlossParameters;
+  ao: AoParameters;
+  aoBlend: number;
+}
+
 /** Everything this component overwrites, so `deactivate` can put it all back. */
 interface Baseline {
   toneMapping: THREE.ToneMapping;
@@ -48,8 +148,73 @@ interface Baseline {
   shadowAutoUpdate: boolean;
   ambientIntensity: number;
   directionalIntensity: number;
-  style: OBF.PostproductionAspect | null;
+  /** `null` when the passes were not readable — see {@link readPostproduction}. */
+  postproduction: PostproductionState | null;
 }
+
+/**
+ * Snapshots the live passes, or `null` if they are not readable yet.
+ *
+ * Every pass getter (`glossPass`, `aoPass`, …) **throws** until `initialize()` has run — the same
+ * hazard `getPostproduction` and `PostRenderPanel.readState` guard against. A `null` here is what
+ * makes {@link RealisticView} refuse to write: with no snapshot there is no way back, and a
+ * one-way write to a shared singleton is exactly what this component exists to avoid.
+ */
+const readPostproduction = (
+  postproduction: Postproduction | null,
+): PostproductionState | null => {
+  if (!postproduction) return null;
+  try {
+    const { glossPass } = postproduction;
+    const gloss = {} as GlossParameters;
+    for (const key of GLOSS_KEYS) gloss[key] = glossPass[key];
+    return {
+      style: postproduction.style,
+      glossEnabled: postproduction.glossEnabled,
+      gloss,
+      // ⚠️ A copy, not a reference. `defaultAoParameters` is mutated **in place** by both this
+      // component and `PostRenderPanel`, so a stored reference would drift with the very edits it
+      // was taken to undo — and "restore" to whatever the user last set.
+      ao: { ...postproduction.defaultAoParameters },
+      aoBlend: aoPassOf(postproduction).blendIntensity,
+    };
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Writes a whole {@link PostproductionState} onto the live passes.
+ *
+ * ⚠️ **The order is load-bearing, and not obvious from the vendor's API.** `set glossEnabled` ends
+ * with `this.style = this._style` — it re-runs the *style* setter — and the style setter pushes
+ * `defaultAoParameters` into the AO material whenever the style leaves `PEN_SHADOWS`. So the AO
+ * block has to be in `defaultAoParameters` **before** gloss or style is touched, or toggling gloss
+ * publishes the values being replaced.
+ *
+ * `blendIntensity` and the explicit `updateGtaoMaterial` are **not** redundant with that re-push:
+ * the pass keeps `blendIntensity` outside `defaultAoParameters`, and the setter's re-push only
+ * fires when leaving `PEN_SHADOWS` — which this component never does, since it sits at
+ * `COLOR_SHADOWS`. Same rule `applyPostproductionPreset` follows.
+ */
+const applyPostproduction = (postproduction: Postproduction, state: PostproductionState) => {
+  Object.assign(postproduction.defaultAoParameters, state.ao);
+  for (const key of GLOSS_KEYS) postproduction.glossPass[key] = state.gloss[key];
+
+  postproduction.glossEnabled = state.glossEnabled;
+  postproduction.style = state.style;
+
+  const aoPass = aoPassOf(postproduction);
+  aoPass.blendIntensity = state.aoBlend;
+  aoPass.updateGtaoMaterial(postproduction.defaultAoParameters);
+};
+
+/** Deep enough to cut the two nested blocks loose — nothing below them is an object. */
+const cloneSettings = (settings: RealisticSettings): RealisticSettings => ({
+  ...settings,
+  gloss: { ...settings.gloss },
+  ao: { ...settings.ao },
+});
 
 /**
  * Daylight rendering for the viewport: sky, a shadow-casting sun, and filmic tone mapping.
@@ -87,7 +252,7 @@ export class RealisticView extends OBC.Component implements OBC.Disposable {
    * that the *normal* path in dev, not a rare race.
    */
   private _generation = 0;
-  private _settings: RealisticSettings = { ...REALISTIC_DEFAULTS };
+  private _settings: RealisticSettings = cloneSettings(REALISTIC_DEFAULTS);
 
   private _sky: Sky | null = null;
   private _hemisphere: THREE.HemisphereLight | null = null;
@@ -108,7 +273,7 @@ export class RealisticView extends OBC.Component implements OBC.Disposable {
   }
 
   get settings(): RealisticSettings {
-    return { ...this._settings };
+    return cloneSettings(this._settings);
   }
 
   /**
@@ -137,7 +302,7 @@ export class RealisticView extends OBC.Component implements OBC.Disposable {
       shadowAutoUpdate: three.shadowMap.autoUpdate,
       ambientIntensity: sceneConfig.ambientLight.intensity,
       directionalIntensity: sceneConfig.directionalLight.intensity,
-      style: postproduction ? postproduction.style : null,
+      postproduction: readPostproduction(postproduction),
     };
 
     await this._measureModels();
@@ -155,9 +320,10 @@ export class RealisticView extends OBC.Component implements OBC.Disposable {
     sceneConfig.ambientLight.intensity = 0.15;
     sceneConfig.directionalLight.intensity = 0.1;
 
-    // AO without pen edges. The vendor's own occlusion pass supplies contact shading, so this
-    // component never needs an occlusion solution of its own.
-    if (postproduction) postproduction.style = OBF.PostproductionAspect.COLOR_SHADOWS;
+    // AO without pen edges, plus this tab's own gloss and AO. The vendor's occlusion pass supplies
+    // contact shading, so this component never needs an occlusion solution of its own — it only
+    // needs the pass tuned for daylight rather than for the flat house look.
+    this._applyPostproduction();
 
     this._bindFragments();
     this._requestShadowUpdate();
@@ -196,18 +362,75 @@ export class RealisticView extends OBC.Component implements OBC.Disposable {
     }
 
     const postproduction = this._postproduction(world);
-    if (postproduction && baseline.style !== null) postproduction.style = baseline.style;
+    if (postproduction && baseline.postproduction) {
+      try {
+        // Style, gloss and AO all go back in one call, in the same order they were written — see
+        // `applyPostproduction` for why that order is not interchangeable.
+        applyPostproduction(postproduction, baseline.postproduction);
+      } catch (error) {
+        console.warn("RealisticView: could not restore the render settings.", error);
+      }
+    }
 
     this._baseline = null;
     this._world = null;
   }
 
-  /** Applies a partial settings change to the live rig. */
-  update(next: Partial<RealisticSettings>) {
+  /**
+   * Applies a partial sun/sky change to the live rig.
+   *
+   * ⚠️ Typed to {@link DaylightSettings}, not `RealisticSettings`, and that narrowing is the point:
+   * the spread below is **shallow**, so `update({ ao: { radius: 0.3 } })` would type-check while
+   * silently wiping every sibling AO field at runtime. The type makes that call impossible —
+   * {@link updateAo} and {@link updateGloss} are the way in for the nested blocks.
+   */
+  update(next: Partial<DaylightSettings>) {
     this._settings = { ...this._settings, ...next };
     if (!this.active) return;
     this._applySettings();
     this._requestShadowUpdate();
+  }
+
+  /**
+   * Applies a partial AO change to the live pass. `blend` is `aoPass.blendIntensity`, which the
+   * vendor keeps off `AoParameters`.
+   */
+  updateAo(next: Partial<AoParameters & { blend: number }>) {
+    const { blend, ...params } = next;
+    this._settings = {
+      ...this._settings,
+      ao: { ...this._settings.ao, ...params },
+      aoBlend: blend ?? this._settings.aoBlend,
+    };
+    this._applyPostproduction();
+  }
+
+  /** Applies a partial gloss change to the live pass. `enabled` is `postproduction.glossEnabled`. */
+  updateGloss(next: Partial<GlossParameters & { enabled: boolean }>) {
+    const { enabled, ...params } = next;
+    this._settings = {
+      ...this._settings,
+      gloss: { ...this._settings.gloss, ...params },
+      glossEnabled: enabled ?? this._settings.glossEnabled,
+    };
+    this._applyPostproduction();
+  }
+
+  /** Restores the sun and sky, leaving gloss and AO exactly as tuned. */
+  resetDaylight() {
+    this.update({ ...DAYLIGHT_DEFAULTS });
+  }
+
+  /** Restores gloss and AO, leaving the sun exactly where it is. */
+  resetRender() {
+    this._settings = {
+      ...this._settings,
+      glossEnabled: RENDER_DEFAULTS.glossEnabled,
+      gloss: { ...RENDER_DEFAULTS.gloss },
+      ao: { ...RENDER_DEFAULTS.ao },
+      aoBlend: RENDER_DEFAULTS.aoBlend,
+    };
+    this._applyPostproduction();
   }
 
   /** Re-fits the sun to the models and refreshes the shadow. Call after a model loads. */
@@ -238,6 +461,38 @@ export class RealisticView extends OBC.Component implements OBC.Disposable {
       return renderer.postproduction;
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Pushes this tab's gloss and AO onto the shared passes.
+   *
+   * Deliberately **not** folded into `_applySettings`: that runs on every azimuth drag, and this
+   * writes fourteen pass values plus a GTAO material rebuild. Sun changes go through one, render
+   * changes through the other, and `activate` calls both once.
+   *
+   * Refuses to write when the baseline holds no postproduction snapshot. That is the whole
+   * ownership contract in one line — a write we cannot undo would leave the house look permanently
+   * carrying the daylight tuning, which is the bug this component exists to prevent.
+   */
+  private _applyPostproduction() {
+    const world = this._world;
+    if (!world || !this._baseline?.postproduction) return;
+
+    const postproduction = this._postproduction(world);
+    if (!postproduction) return;
+
+    const settings = this._settings;
+    try {
+      applyPostproduction(postproduction, {
+        style: OBF.PostproductionAspect.COLOR_SHADOWS,
+        glossEnabled: settings.glossEnabled,
+        gloss: { ...settings.gloss },
+        ao: { ...settings.ao },
+        aoBlend: settings.aoBlend,
+      });
+    } catch (error) {
+      console.warn("RealisticView: could not apply the render settings.", error);
     }
   }
 
@@ -283,6 +538,14 @@ export class RealisticView extends OBC.Component implements OBC.Disposable {
       // Isolated materials render in the base pass and are hidden from every later pass — read
       // off `BasePass.render`, which restores `visible` before the draw and clears it after. So
       // the sky reaches the beauty image without collecting edge outlines or occlusion.
+      //
+      // ⚠️ This does **not** cover the gloss pass, and nothing can: `isolatedMaterials` is a
+      // `BasePass` concept that `GlossPass` never consults. It renders the whole scene with
+      // `scene.overrideMaterial`, and `getProjectedNormalMaterial()` declares no `side`, so it
+      // defaults to `FrontSide` — while `Sky` is `BackSide` with the camera inside a 450 km
+      // sphere. The sky's faces are therefore culled and it contributes *nothing* to the gloss
+      // buffer, which is what makes `minGloss` visible on it as a flat darkening. See
+      // `RENDER_DEFAULTS`.
       postproduction.basePass.isolatedMaterials.push(sky.material);
     }
   }
