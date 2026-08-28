@@ -18,6 +18,7 @@ import { useProject, useIsProjectAdmin } from "@/react-components/features/proje
 import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useAutoLoadCloudModels } from "@/react-components/features/cloud-models/useAutoLoadCloudModels";
 import { useGuestDemoModels } from "@/react-components/features/guest-demo/useGuestDemoModels";
+import { useIfcSpaceVisibility } from "@/react-components/features/ifc-space-visibility/useIfcSpaceVisibility";
 
 const workspaceTabs = ["Models", "Queries", "Room", "Smart Views", "GIS", "Viewpoint", "Drawing Editor", "AR", "PostRender", "Realistic"];
 
@@ -48,6 +49,10 @@ export function ModelsView() {
     isRoomTab ||
     isPostRenderTab ||
     isRealisticTab;
+
+  // IFCSPACE geometry is hidden in the viewport unless the user ticks it in Settings — except on
+  // the Room tab, which is a list of spaces and so forces them visible for as long as it is open.
+  useIfcSpaceVisibility(isRoomTab);
 
   // The "AR" tab escapes ModelsView entirely: it navigates to the standalone
   // full-screen /ar page instead of swapping panels here, so the WebXR session
@@ -123,9 +128,10 @@ export function ModelsView() {
         </LeftPanel>
 
         {/*
-          Mounted conditionally, not hidden with a class like the Models panels above: RoomPanel
-          ghosts the model for as long as it is mounted, so a hidden-but-mounted one would leave
-          every other tab translucent.
+          Mounted conditionally, not hidden with a class like the Models panels above: mount is
+          RoomView's activation signal, and an active RoomView anchors floating CSS2D room-name
+          chips — which cannot be occluded — so a hidden-but-mounted panel would leave them over
+          every other tab.
         */}
         {isRoomTab && (
           <LeftPanel icon="ROOM" defaultOpen={true}>

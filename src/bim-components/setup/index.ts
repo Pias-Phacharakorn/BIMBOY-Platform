@@ -105,8 +105,10 @@ export const setupComponents = async () => {
   new GisLayers(components);
   new DrawingEditorSetup(components);
 
-  // Idle until the Room tab opens it: it ghosts the model and paints IFCSPACE volumes only while
-  // that panel is mounted, and restores everything on the way out.
+  // Idle until the Room tab opens it. It owns the IFCSPACE query, the floating CSS2D name chips
+  // and a Highlighter subscription — and deliberately no visibility state at all (ADR-0017): it
+  // never ghosts, hides or isolates anything. Spaces being visible on that tab is handled outside
+  // the engine, by the derived rule in features/ifc-space-visibility.
   const roomView = new RoomView(components);
   roomView.world = world;
 

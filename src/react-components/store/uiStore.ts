@@ -19,6 +19,34 @@ interface UIState {
   isBackgroundModalOpen: boolean
   setBackgroundModalOpen: (open: boolean) => void
   /**
+   * The user's IFCSpace preference — what the Settings checkbox writes, and the *only* thing that
+   * writes it. Never read on its own: the value actually applied to `OBC.Hider` is
+   * `showIfcSpaces || ifcSpacesForced`, derived at each reader. See
+   * `features/ifc-space-visibility/useIfcSpaceVisibility.ts`.
+   *
+   * Deliberately not persisted (this store has no `persist` middleware), so every reload starts
+   * with spaces hidden.
+   */
+  showIfcSpaces: boolean
+  setShowIfcSpaces: (show: boolean) => void
+  /**
+   * "Some tab requires IFCSPACE visible" — currently only the Room tab, whose whole content is a
+   * list of spaces. Written by `useIfcSpaceVisibility`, never by the checkbox.
+   *
+   * A flag rather than the tab name so a second tab needing spaces sets the same boolean instead
+   * of growing an `||`, and so nothing outside `ModelsView` has to know a tab is called "Room".
+   */
+  ifcSpacesForced: boolean
+  setIfcSpacesForced: (forced: boolean) => void
+  /**
+   * Bumped whenever something resets viewport visibility wholesale — today only Show All
+   * (`ToolbarVisibility`). Anything holding a standing visibility filter watches this and
+   * re-asserts itself; without it, one Show All silently defeats the IFCSpace checkbox and the
+   * checkbox is left describing a state that is no longer true.
+   */
+  visibilityEpoch: number
+  bumpVisibilityEpoch: () => void
+  /**
    * Viewport backdrop. `null` means "no override" — the branded gradient in `style.css` — and is
    * both the initial value and what Reset returns to; see `lib/viewportBackground.ts`.
    *
@@ -48,6 +76,12 @@ export const useUIStore = create<UIState>((set) => ({
   setShowPerformance: (show) => set({ showPerformance: show }),
   isBackgroundModalOpen: false,
   setBackgroundModalOpen: (open) => set({ isBackgroundModalOpen: open }),
+  showIfcSpaces: false,
+  setShowIfcSpaces: (show) => set({ showIfcSpaces: show }),
+  ifcSpacesForced: false,
+  setIfcSpacesForced: (forced) => set({ ifcSpacesForced: forced }),
+  visibilityEpoch: 0,
+  bumpVisibilityEpoch: () => set((state) => ({ visibilityEpoch: state.visibilityEpoch + 1 })),
   viewportBackground: null,
   setViewportBackground: (background) => set({ viewportBackground: background }),
 }))
