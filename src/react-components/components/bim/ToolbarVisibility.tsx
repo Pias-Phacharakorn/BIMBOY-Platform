@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useBimStore } from "@/react-components/store/bimStore";
+import { useUIStore } from "@/react-components/store/uiStore";
 import { Icon } from "@/react-components/components/ui";
 import type { AppIconName } from "@/react-components/components/ui";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,7 @@ function MenuRow({
 
 export function ToolbarVisibility() {
   const { components, selectedElementIds } = useBimStore();
+  const bumpVisibilityEpoch = useUIStore((state) => state.bumpVisibilityEpoch);
   const [isOpen, setIsOpen] = useState(false);
   const [busy, setBusy] = useState<ActionKey | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -89,10 +91,16 @@ export function ToolbarVisibility() {
     }
   };
 
+  // `hider.set(true)` is indiscriminate: it also un-hides anything a standing visibility filter
+  // was holding down — today the IFCSpace checkbox in Viewport Settings. Bumping the epoch tells
+  // those filters to re-assert, so Show All means "un-hide what I hid by hand", not "override my
+  // settings". Without it the first Show All silently defeats the checkbox and leaves it
+  // describing a state that is no longer true.
   const handleShowAll = () =>
     runAction("showAll", async () => {
       const hider = components.get(OBC.Hider);
       await hider.set(true);
+      bumpVisibilityEpoch();
     });
 
   // Actions read the live selection off the Highlighter rather than the store's

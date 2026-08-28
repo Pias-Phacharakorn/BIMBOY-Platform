@@ -197,3 +197,116 @@ remain open investigations:
   - The probe and its production-preview Playwright config are **not committed** (Phase 0 was specified
     as instrumentation only). They are kept at `/tmp/bimboy-phase0/` with both run logs, and are worth
     promoting to a real load-error regression spec if VW-02 ever reproduces.
+
+---
+
+## Staged: IFCSpace visibility checkbox in Viewport Settings (grilled 2026-08-28, not yet implemented)
+
+⚠️ **Nothing written yet.** Design only, settled in a `/grill-with-docs` session. No code, no
+guide edits, no ADR file until the developer has tested it.
+
+**Requirement.** A checkbox labelled **IFCSpace** in the viewport Settings dropdown. Ticked shows
+`IFCSPACE` geometry, unticked hides it. Default unticked on every ModelsView tab — *except* the
+Room tab, where spaces must be visible.
+
+### The rule
+
+`uiStore` holds two booleans and nothing else:
+
+| Field | Meaning |
+|---|---|
+| `showIfcSpaces` | the **user's preference**. Default `false`. Only the checkbox writes it |
+| `ifcSpacesForced` | "some tab requires spaces visible". Written by the hook from `isRoomTab` |
+
+Effective value is **derived**, never stored: `effective = showIfcSpaces || ifcSpacesForced`.
+Leaving the Room tab therefore needs no restore step — the derivation just re-evaluates. On the
+Room tab the checkbox renders **checked and disabled** with a hint; the preference underneath is
+untouched, so leaving returns to whatever the user had.
+
+### ⚠️ The rule only ever hides. It never shows.
+
+This asymmetry is the load-bearing part.
+
+- **Standing rule** — runs on mount and on model load. If `effective === false`, `hider.set(false,
+  spacesMap)`. If `effective === true`, **it does nothing at all.**
+- **Transitions** — apply once, both directions. `false → true` (tick the box, or enter the Room
+  tab) does `hider.set(true, spacesMap)`; `true → false` does `hider.set(false, spacesMap)`.
+
+A symmetric rule is the obvious implementation and it destroys `Isolate`: on the Room tab
+(`effective === true`) the user isolates one room, the rule next fires and re-shows every space.
+Same for `Hide`. Hide-only lets the checkbox coexist with the visibility toolbar instead of
+refereeing it.
+
+**Show All re-asserts.** `ToolbarVisibility.handleShowAll` calls the hook's re-assert after
+`hider.set(true)`, so with the box unticked Show All shows everything *except* spaces. Without
+this, "hidden by default" dies on the first Show All. Accepted cost: a user who has forgotten the
+setting gets no clue but the checkbox.
+
+`SmartViews` also calls `hider.set(true)` in `reset()`/`apply()`, but it has **no React consumer** —
+the "Smart Views" tab renders a bare viewport — so it is not a live conflict. It becomes one the
+day that tab is built.
+
+### Placement
+
+- **Logic:** `features/ifc-space-visibility/useIfcSpaceVisibility.ts`, called once from
+  `ModelsView` as `useIfcSpaceVisibility(isRoomTab)` — the hook writes `ifcSpacesForced` itself, so
+  `ModelsView` gains one line. It owns a per-model cache of space ids and an ownership token
+  (the query is async per model; a tab switch or second load mid-flight can land a stale result —
+  [ADR-0026](docs/adr/0026-async-activate-needs-an-ownership-token.md)). Re-query debounced 400 ms
+  on `fragments.list.onItemSet`/`onItemDeleted`, the `Views2DList`/`RoomView` value.
+- **Not** a `bim-components/` class: it owns a `Map` and a counter, both fine in refs, and an OBC
+  component may not read React state — the store would have to be pushed in, giving a component
+  *plus* a hook to drive it for no gain.
+- **Not** inside `ToolbarSettings.tsx`: `components/` is props-and-Tailwind-only. That file already
+  breaks the rule comprehensively, but consistency with a violation is not a reason to extend it.
+- **UI:** `ToolbarSettings` reads both flags — `checked = showIfcSpaces || ifcSpacesForced`,
+  `disabled = ifcSpacesForced` — and knows nothing about `Hider`.
+
+### Scope
+
+- **Category = `IFCSPACE` only.** `IFCZONE` is an `IfcGroup` with no geometry to hide;
+  `IFCSPATIALZONE` is vanishingly rare here. Keeping it to `IFCSPACE` makes the hidden set exactly
+  the set `RoomView.listRooms` enumerates.
+- ⚠️ **Viewport-only — the Drawing Editor is deliberately not filtered.** `DrawingEditorSetup`
+  builds projections from `model.getItemsIdsWithGeometry()`, which ignores visibility, so a plan
+  drawn with spaces hidden still contains every space outline. Known gap, not a bug: the control
+  lives in *Viewport* Settings and `Hider` **is** viewport visibility. Filtering the projection
+  would put a `uiStore` read inside `bim-components/` (forbidden) and would silently answer a
+  separate product question — architects often *want* room boundaries on a plan.
+- `uiStore` has no `persist` middleware, so the preference resets to `false` on every reload. That
+  is the requirement, for free.
+- `hider.set()` already calls `fragments.core.update(true)` internally. No manual update.
+
+### Alternatives rejected
+
+- **Symmetric show/hide standing rule** — see above; destroys `Isolate`/`Hide`.
+- **Auto-toggle the preference on entering the Room tab** — needs a saved "what it was before"
+  value that must survive tab thrash, model loads and unmount. That is the exact hazard shape
+  [ADR-0017](docs/adr/0017-room-tab-owns-no-visibility-state.md) and
+  [ADR-0026](docs/adr/0026-async-activate-needs-an-ownership-token.md) were both written about. It
+  also leaves the checkbox writable on the Room tab, so a user can hide the very rooms the panel is
+  listing.
+- **One-shot toggle, no re-assertion** — the checkbox becomes a button pretending to be a state,
+  and "default hidden" is defeated by the first model load or Show All.
+- **Lift `activeTab` into `uiStore`** — the general fix, and arguably what CLAUDE.md's state table
+  wants, but a real refactor (`ModelsView`, `WorkspaceHeader`) for this feature, and it invites
+  every future component to couple to literal tab names. `ifcSpacesForced` keeps the coupling
+  semantic: a second tab needing spaces sets the same flag rather than growing an `||`.
+- **Model-wide filter reaching the Drawing Editor** — see Scope.
+
+### Docs plan (only after the developer confirms it works)
+
+1. **New ADR-0028** — *IFCSpace visibility is a hide-only derived rule.* Carries the four
+   rejections above.
+2. **ADR-0017 amended, not superseded** — status `Accepted — § "The tab does not touch visibility"
+   amended by ADR-0028`, a note that the core decision stands in full (no ghost, no isolation, the
+   user still presses Ghost), and a forward pointer on that passage. `RoomView` needs no code
+   change: the tab contributes one boolean to a rule owned elsewhere.
+3. `bim-viewport-toolbars.md` § Settings — the checkbox, the hide-only asymmetry, the Show All
+   interaction.
+4. `bim-viewer.md` § Room browser — forced-visible on the tab, and the Drawing Editor gap.
+
+### Incidental fix in the same branch
+
+`setup/index.ts:108` and `ModelsView.tsx:125` both still claim `RoomView` ghosts the model.
+ADR-0017 removed the ghost. They mislead about precisely the thing being changed here.

@@ -20,6 +20,9 @@ export function ToolbarSettings() {
     viewportBackground,
     isBackgroundModalOpen,
     setBackgroundModalOpen,
+    showIfcSpaces,
+    setShowIfcSpaces,
+    ifcSpacesForced,
   } = useUIStore();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -298,6 +301,26 @@ export function ToolbarSettings() {
               checked={gridVisible}
               onChange={handleToggleGrid}
               className="w-4.5 h-4.5 rounded border-border text-accent bg-transparent accent-accent cursor-pointer"
+            />
+          </div>
+
+          {/* IFCSpace — hidden by default everywhere, and forced on for the Room tab, whose whole
+              content is a list of spaces. `ifcSpacesForced` is the derived half of the rule: the
+              row shows checked-and-disabled without this file knowing a tab called "Room" exists,
+              and the user's own preference underneath is left untouched, so leaving the tab
+              returns to whatever they had. The rule itself lives in
+              features/ifc-space-visibility — this row only writes the store. */}
+          <div
+            className={`flex items-center justify-between text-xs text-fg ${ifcSpacesForced ? "opacity-60" : ""}`}
+            title={ifcSpacesForced ? "Always on in the Room tab" : undefined}
+          >
+            <span className="font-medium text-muted">IFCSpace</span>
+            <input
+              type="checkbox"
+              checked={showIfcSpaces || ifcSpacesForced}
+              disabled={ifcSpacesForced}
+              onChange={(e) => setShowIfcSpaces(e.target.checked)}
+              className="w-4.5 h-4.5 rounded border-border text-accent bg-transparent accent-accent cursor-pointer disabled:cursor-not-allowed"
             />
           </div>
 
