@@ -17,8 +17,38 @@ const GIZMO_DIAMOND_SIZE = 0.6;
  * parameter, the same role `grabColor` plays for the arrow's `highlighted`.
  */
 export const GIZMO_DIAMOND_COLOR = 0xffffff;
-/** Radius of the invisible grab cylinder around the grabbable axis, in gizmo units. */
-const GIZMO_PICK_RADIUS = 0.35;
+/**
+ * Radius of the invisible grab cylinder around the grabbable axis, in gizmo units.
+ *
+ * ⚠️ **This is a pointerdown sink, so it is a navigation hazard when it is too big.**
+ * `AxisDragManager._pickHandle` consumes the event on any hit, and a cut plane's gizmo sits at
+ * the plane's centre — usually near the middle of the viewport. One gizmo unit is ~33 px on a
+ * 690 px-tall viewport (`GIZMO_VIEW_FRACTION / GIZMO_LENGTH × height`), and all figures below are
+ * **radii** at that size:
+ *
+ * | | gizmo units | ~px | drawn? |
+ * |---|---|---|---|
+ * | old pick cylinder | 0.525 | 17.5 | no |
+ * | new pick cylinder | 0.240 | 8 | no |
+ * | arrowhead cone | 0.120 | 4 | yes |
+ * | arrow shaft | — | 0.5 | yes |
+ *
+ * At 0.35 the invisible cylinder was more than four times the widest thing it wrapped, so an
+ * ordinary orbit drag started anywhere near the plane centre moved the cut instead of the camera.
+ * Reported as the section plane stealing navigation. 0.16 puts the grab radius at twice the
+ * arrowhead's — still a comfortable 16 px-wide target, and close enough to the drawn arrow that
+ * what you grab is what you see, which is what {@link GRAB_AXIS_EMPHASIS} claims below and did
+ * not previously deliver.
+ *
+ * ⚠️ **Two things this shrink invalidates, both checked:**
+ * - The `"plane"` form's centre diamond (corners at `0.424` units) is **no longer contained** by
+ *   this cylinder. `ClipperCursor`'s `pickTargets` documents what that costs — nothing, because
+ *   `_pickHandle`'s per-id `"inPlane"` priority ignores distance — but the containment is gone.
+ * - Shared with the `"arrow"` form, i.e. `SectionBox`'s six face handles. Their opposing-handle
+ *   separation on a thin box comes from the axial picker *offset* below, not from this radius, so
+ *   a smaller value can only reduce overlap — but they do get harder to hit. Retune together.
+ */
+const GIZMO_PICK_RADIUS = 0.16;
 /** Draw after everything else in the overlay pass. */
 const GIZMO_RENDER_ORDER = 999;
 /**
