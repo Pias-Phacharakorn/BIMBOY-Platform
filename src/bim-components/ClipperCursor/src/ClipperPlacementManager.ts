@@ -1,6 +1,10 @@
 import * as OBC from "@thatopen/components";
 import * as THREE from "three";
 import { CursorSurface } from "../../CursorSurface";
+// Type-only, and from the module rather than `../../setup`: that barrel imports `../ClipperCursor`,
+// so a value import would close a cycle. `import type` is erased at build time, so this one cannot
+// — but the narrow path keeps that true even if someone later drops the `type`.
+import type { ClipAwareRaycaster } from "../../setup/src/clip-aware-raycaster";
 
 /** Delay before arming the click listener, so the click that opened placement can't place. */
 const ARM_DELAY = 50;
@@ -45,8 +49,16 @@ export class ClipperPlacementManager {
     return this._options.world.renderer?.three?.domElement ?? null;
   }
 
+  /**
+   * Typed to the subclass, not to what `Raycasters.get()` declares: both picks here pass
+   * `requireNormal`, which only `ClipAwareRaycaster` understands. `setupClipAwareRaycaster` has
+   * already swapped the instance in `Raycasters.list` by the time any world is usable, so this is
+   * the real type — the base signature is what is inaccurate.
+   */
   private get _raycaster() {
-    return this._options.components.get(OBC.Raycasters).get(this._options.world);
+    return this._options.components
+      .get(OBC.Raycasters)
+      .get(this._options.world) as ClipAwareRaycaster;
   }
 
   enter() {
@@ -69,7 +81,10 @@ export class ClipperPlacementManager {
       raycastInProgress = true;
 
       this._raycaster
-        .castRay()
+        // The marker is oriented to the surface, so it needs the normal as much as the click
+        // does — and it is the cue you aim with, so letting it flicker off would just move the
+        // bug rather than fix it.
+        .castRay({ requireNormal: true })
         .then((result) => {
           const surface = this._surfaceOf(result);
           if (surface) cursorSurface.update(surface.point, surface.normal);
@@ -88,7 +103,11 @@ export class ClipperPlacementManager {
       e.stopPropagation();
 
       this._raycaster
-        .castRay()
+        // ⚠️ Without this the vendor's GPU pick returns a hit whose `normal` is null whenever a
+        // tile streamed in between its id and normal passes, `_surfaceOf` rejects it, and the
+        // plane is silently never created. It bit the *first* plane only: from one plane onward
+        // `clippingPlanes` is non-empty, so `ClipAwareRaycaster` already took this same path.
+        .castRay({ requireNormal: true })
         .then((result) => {
           const surface = this._surfaceOf(result);
           if (surface) this._options.onPlace(surface.normal, surface.point);
@@ -131,6 +150,15 @@ export class ClipperPlacementManager {
    * World-space normal and point of a raycast hit, or null if it missed or carries no usable
    * orientation. Fragment hits report a `normal` directly; plain three.js hits only carry a
    * face normal in object space, which has to be taken through the object's world matrix.
+   *
+   * ⚠️ **The `face` branch is not a safety net for fragment hits, and never was.**
+   * `FRAGS.RaycastResult` has no `face` field at all, so a fragment hit that arrives without a
+   * `normal` falls straight through to `null` — which the caller cannot distinguish from a miss,
+   * and reports as nothing at all. Reading this as "there is a fallback" is what made the silent
+   * first-plane failure so hard to see; the fix is upstream, in `requireNormal`, which stops such
+   * hits being produced. The branch stays because it is genuinely live for the plain-three
+   * `items` path (`castRayToObjects` returns a `THREE.Intersection`), even though `world.meshes`
+   * is empty in this app today.
    */
   private _surfaceOf(
     result: Awaited<ReturnType<OBC.SimpleRaycaster["castRay"]>>,

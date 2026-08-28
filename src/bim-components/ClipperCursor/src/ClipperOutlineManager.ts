@@ -50,8 +50,16 @@ const FALLBACK_PLANE_SIZE = 10;
  * proportion and the plane looks the same, only bigger.
  *
  * A tightly fitted plane reads as part of the model rather than as a surface through it, and at
- * 1× the band ring lands *on* the geometry it cuts. At 3× the ring sits clear of the model
- * entirely, so it tints nothing and is easier to click for switching plane.
+ * 1× the band ring lands *on* the geometry it cuts. Anything above 1× lifts the ring clear of the
+ * model, so it tints nothing and is easier to click for switching plane.
+ *
+ * ⚠️ **3× was too much, and the reason is `depthTest: false`.** A plane extending a full building
+ * width past the model in every direction is mostly sky, and because the band and outline draw in
+ * the overlay pass they paint *over* that sky rather than being lost in it. Seen edge-on — which
+ * is most of the time for a horizontal cut, and always for a selected one at `OUTLINE_OPACITY`
+ * `0.85` — the far overhang collapses to a 1px coloured line running the full width of the
+ * viewport, floating well above the building. It reads as a render artefact, not as UI; it was
+ * reported as one. 1.5× keeps the ring off the geometry while halving the overhang.
  *
  * ⚠️ **Applied here, never inside {@link fitBoxToFrame}.** `scripts/check-gizmo-frames.mjs`
  * Group D2 imports that function directly to assert its slide-invariance — the one assertion
@@ -62,7 +70,7 @@ const FALLBACK_PLANE_SIZE = 10;
  * bigger rectangle does not cut more of the model, and `ClipperFillManager`'s `ClipStyler` fills
  * stay bounded by real geometry either way.
  */
-const PLANE_FIT_SCALE = 3;
+const PLANE_FIT_SCALE = 1.5;
 /** Collapses the burst of onItemSet events a batch load fires into a single refit. */
 const SIZE_REFRESH_DEBOUNCE = 150;
 
@@ -103,7 +111,7 @@ interface OutlineEntry {
  * bounding box projected into the plane's frame (→ {@link fitBoxToFrame}) — then enlarged by
  * {@link PLANE_FIT_SCALE}, so a plane extends well past the geometry it cuts instead of vanishing
  * into it. Only the extent is scaled: the rectangle stays centred on the footprint, so for a cut
- * square to the grid it is still the matching `SectionBox` face, concentric and three times wider.
+ * square to the grid it is still the matching `SectionBox` face, concentric and half again as wide.
  *
  * ## Why these live in the overlay pass
  *

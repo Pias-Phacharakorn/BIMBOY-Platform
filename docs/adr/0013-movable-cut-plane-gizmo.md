@@ -1,8 +1,18 @@
 # ADR-0013: The cut-plane gizmo spawns where you clicked, and slides inside the cut
 
-**Status:** Accepted
+**Status:** Accepted — § Context *"the centre diamond is entirely inside the arrow's grab cylinder"*
+amended by [ADR-0019](0019-grab-volume-tracks-the-drawn-arrow.md)
 **Date:** 2026-08-05
 **Area:** `docs/feature/bim-viewport-righttoolbars.md` § Section tool, § GizmoAxis
+
+> **Everything else here still stands.** The click-point anchor, the owned per-plane offset, the
+> `"axis"`/`"inPlane"` mode split, the per-id priority pass, the split clamp, the `gizmoMoved` dirty
+> bit and every rejected alternative are all in force. ADR-0019 shrank `GIZMO_PICK_RADIUS` (0.35 →
+> 0.16) to stop the arrow's grab cylinder swallowing orbit drags, which **inverts the containment**
+> one measurement below is built on — the diamond now reaches past the cylinder. The per-id priority
+> pass is unchanged and still resolves the centre handle correctly; it is simply no longer a
+> tie-break inside a containment. The *"~37px region at the arrow's middle"* consequence is
+> untouched: that region is the diamond, and its size did not change.
 
 ## Context
 
@@ -31,6 +41,11 @@ marked ⚠️ below.
   (`GIZMO_PICK_RADIUS 0.35 × GRAB_AXIS_EMPHASIS 1.5`); the diamond's corners reach `0.424`
   (`GIZMO_DIAMOND_SIZE 0.6 × √2 / 2`). `_pickHandle` sorts by distance, so a centre handle could
   **never** win a raycast unaided.
+  > ⚠️ **No longer true — amended by [ADR-0019](0019-grab-volume-tracks-the-drawn-arrow.md).** The
+  > pick radius is now `0.24` (`0.16 × 1.5`), below the diamond's `0.424`, so the containment is
+  > inverted and this measurement no longer describes the code. It is left as written because it is
+  > what the mode split was designed against; ADR-0019 records why the priority pass survives the
+  > change and what it now does instead.
 - **Rebuilding the fill after an in-plane drag would be redundant, not wrong.** `ClipStyler.create()`
   holds the *live* `THREE.Plane`, so it would recompute a cut that never moved — a full
   `ClipEdges.update()` per reposition.

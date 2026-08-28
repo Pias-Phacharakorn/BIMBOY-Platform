@@ -7,699 +7,193 @@ alternatives rejected are worth preserving — into an ADR under `docs/adr/`
 (the record of **why**). Then clear it from here; this file is never the
 permanent record. See `docs/adr/README.md` for the promotion flow._
 
-## Staged: viewport render/hover cost after the 3.4.8 bump (branch `perf/coalesce-viewport-renders`)
-
-Two independent costs, found by live profiling a 60-model NTR1 scene. Both are **untested**
-beyond `tsc`/build so far — the fps numbers below are the developer's measurements of the
-*problem*, not of the fixes.
-
-**Decision 1 — hover picks on settle, not on every move.** `hoverer.mode =
-HovererMode.MOUSE_STOP`, unconditionally, in `setupHoverer`.
-
-The bump changed this out from under us. At 3.4.2 the Hoverer had `delay = 100`: a ~50 ms
-debounce before picking plus another 100 ms before the overlay. 3.4.4 deletes `delay`,
-introduces `mode`, and defaults it to `MOUSE_MOVE` — continuous back-to-back picks — on the
-stated reasoning that *"picking is fast enough that there's no reason to wait for the cursor to
-settle"*. True for a demo scene; with 60 models, moving the mouse alone measured **50–60 fps →
-25 fps**. Each pick is a GPU id pass plus a `readPixels` stall, and it bypasses the render
-coalescer entirely because it never calls `renderer.update()`.
-
-`MOUSE_STOP` settles for a **hardcoded, private 30 ms**, so this is *snappier* than the
-behaviour it restores. There is no dial between the two modes.
-
-- **Rejected — keep `MOUSE_MOVE`, throttle our side.** Gate the pick to one per frame or shrink
-  the picker's scissor. Rejected: it fights a vendor default with app-side machinery, and the
-  per-pick `readPixels` stall survives regardless.
-- **Rejected — expose hover cadence as a user setting.** `ToolbarSettings` already has a hover
-  **on/off** toggle (`handleToggleHoverer`), which is the escape hatch that matters; a second,
-  subtler cadence control needs store state and a persistence decision (per user? per project?)
-  to buy back 30 ms nobody can perceive.
-- **Rejected — adapt the mode to scene weight.** Flip on model/mesh/draw-call count. Rejected:
-  the threshold is unjustifiable, frame-time-driven switching needs hysteresis, and it makes
-  hover behave differently between two projects for no articulable reason.
-- **Safe because nothing consumes hover events.** Nothing in `src/` subscribes to the Hoverer's
-  events, so the cadence change has no downstream reader. `MeasureHoverManager` runs its own
-  `mousemove` raycast but only while a measure tool is active.
-
-**Decision 2 — renders are coalesced to one per animation frame.** `setupRenderCoalescer` wraps
-`renderer.update`, in `setup/index.ts` before anything that renders.
-
-`RendererMode` defaults to `AUTO`, and this app never sets it, so `needsUpdate` is never read
-and *every* `update()` call repaints. With the vendor rAF loop plus five camera-controls
-listeners plus six cursor components on `pointermove`, profiling measured **2.96 renders per
-frame** — the same framebuffer filled three times at ~3,558 draw calls each, 22.8 ms of a
-34.9 ms frame. A live patch to one render per frame measured **27 → 40 fps**.
-
-- **Deferred, not rejected — `RendererMode.MANUAL`.** The vendor's designed answer, one line,
-  and it would kill idle rendering too (a static scene currently repaints 60×/s, ~7.84 ms each,
-  ~half a core). Blocked on the fact that **nothing sets `needsUpdate`** — not this app, and not
-  the vendor's own viewport components: upstream sets it almost exclusively in
-  `TechnicalDrawings`, and `Hoverer` never does. MANUAL would therefore freeze vendor visuals
-  (hover, outliner, measurement previews) as well as our ~12 scene-mutating components until
-  something else happened to trigger a render. That is an audit, not a one-liner.
-- **Rejected — "render the first call each frame, drop the rest".** The obvious shape, and
-  wrong: it needs a per-frame flag reset, so correctness depends on whether our `rAF` callback
-  runs before or after the vendor's. Lose that race and a legitimate render is dropped, halving
-  the framerate. Deferring to a single scheduled render is order-independent — renders are
-  merged, never skipped.
-- **Also applied — `fragments.core.update()` no longer forced on camera move.** `force` means
-  "finish all pending requests", so awaiting it on `controls.update` pinned the render loop to
-  the worker queue draining on every camera event. 36 of the vendor's 37 examples wire that
-  event as a bare `update()`; **none** force it.
-
-**Known remaining ceiling (not addressed).** 60 models = 2,746 meshes, 1,188 unique materials,
-zero `InstancedMesh`, 7.3M triangles. 100% CPU-bound on draw-call submission (~3 µs each):
-rendering at 64×64 instead of 520×687 moved frame cost by 0.5 ms. Hiding half the models bought
-27 → 34 fps. Fixing that means material dedup, not auto-loading all 60, or upstream instancing.
-
-**Ruled out, so nobody re-chases them:** `dynamicAnchor` (existed at 3.4.2, defaults `false`,
-binds only `pointerdown`); postproduction (~1 ms); BVH raycasting (already on); resolution,
-shadows, textures; DOM size (507 nodes).
-
-## Staged: guest demo mode is client-side only (branch `feat/guest-demo-mode`)
-
-**Decision.** A guest gets **no Supabase session at all**. `AuthContext` carries an `isGuest`
-flag in `sessionStorage`; `useProjects`/`useProject`/`useProjectMembers` short-circuit to a
-hard-coded `DEMO_PROJECT_ROW` before any network call; the viewer loads `.frag` files from
-`public/resources/demo/` as static assets. `/demo` is the single entry point, and its
-`beforeLoad` guard performs the navigation, so the one-redirect-mechanism rule holds.
-
-**Rejected — Supabase anonymous sign-in + `projects.is_demo` + RLS.** Fully planned and the
-migration was written before being deleted. Three findings killed it, and they are worth
-keeping because they are *pre-existing* risks that will resurface the day anyone enables
-anonymous sign-ins:
-
-1. **Anonymous users hold the `authenticated` Postgres role.** Any policy checking only the
-   role (`auth.role() = 'authenticated'`, or `to authenticated` with no predicate) starts
-   admitting guests the instant the dashboard switch is flipped — no policy edit, no error,
-   nothing in the logs. This is why enabling the switch and shipping guest policies would have
-   had to be one atomic change.
-2. **`create_dummy_user` is a SECURITY DEFINER function in `public`**, called straight from the
-   browser (`projectsService.addProjectMember`, `hubSettingsService`). Postgres grants EXECUTE
-   to PUBLIC by default, so RPCs are not RLS-gated at all: today any registered user can mint
-   `auth.users` rows; with anonymous sign-in on it becomes an unauthenticated endpoint.
-3. **Possible self-promotion chain:** if `profiles` UPDATE lets a caller set their own
-   `hub_role`, a guest becomes `hub_admin` and `is_hub_admin()` opens every policy in the
-   database. Never verified — the Supabase MCP was unauthorised for that whole session.
-
-None were confirmed against the database. `supabase/audits/guest_mode_preflight.sql` held the
-read-only queries and was deleted with the migration; the queries survive in git history on
-this branch and in the scrutiny above.
-
-**Also worth knowing:** dev and production share one Supabase project
-(`tbrnwnghjfkwnzsldfit` in both `.env.local` and the Cloudflare build variables), so there is
-no staging database — a reason the zero-backend design won on risk alone.
-
-**Verified in a production preview (2026-08-12):** `/demo` → guest session → model route,
-8 demo `.frag` files auto-download (all HTTP 200) and render. Two bugs found and fixed by that
-testing — see below. Open: the MODELS LIST panel shows 7 of the 8 on first paint and *which*
-one is absent varies per run; all 8 fetch cleanly and no load error surfaces, so it looks like
-a list-subscription race rather than a dropped model, but that is **not proven**.
-
-**Bug found by testing: guest mode did not survive a page refresh.** A hard load of any
-`/projects/*` URL bounced guests to `/login` even with the flag in `sessionStorage`. On a hard
-load the router evaluates `beforeLoad` before `RouterProvider`'s context is wired
-(`router.tsx` starts with `auth: undefined!`). A signed-in user self-heals because
-`login.tsx`'s guard bounces them to `?redirect=`; a guest has nothing to bounce them back, so
-they were stranded. Fix: `src/lib/guestSession.ts` owns the flag and the guards read it
-**synchronously**, not only off `context.auth`. It lives in `lib/` because both `AuthContext`
-and the route guards need it and features may not import one another.
-
-## Staged: the viewport grid is off by default (same branch)
-
-`create-world.ts` now sets `grid.config.visible = false`. Through `config`, not
-`three.visible`: the config setter also drives the component's own setter, which
-adds/removes the grid from the scene. `ToolbarSettings`' `useState` seed changed `true` →
-`false` to match — the effect re-syncs from the live grid, but a mismatched seed makes the
-checkbox read "on" for the first paint. `SimpleGrid.visible` reads `this.three.visible`, so
-the toggle and the AR path share one flag; verified the checkbox reflects the new default and
-still turns the grid on.
-
-**Landmine fixed in passing:** `ArSession` hid the grid and restored it with
-`visible = true` **unconditionally**. Harmless while the grid was always visible; with it off
-by default, leaving AR would have switched on a grid the user never had. It now only takes
-ownership of a grid that was actually showing.
-
-**Rejected:** grid off for the guest demo only — it would push an `isGuest` check into
-`bim-components/setup`, the OBC singleton layer CLAUDE.md keeps free of app state. **Also
-rejected:** persisting the toggle to `localStorage` (as `AppShell` does for
-`sidebarCollapsed`) — more useful, but wider than the ask; the choice still resets per reload.
-
-**Promotion note:** this belongs in `docs/feature/bim-viewer.md` (a line under the world-setup
-defaults), not an ADR — the rationale is thin and the rejected alternatives are recorded here.
-Awaiting the developer's own test before promoting.
-
 ---
 
-Last cleared 2026-08-08. Everything previously staged has been promoted:
+**Cleared 2026-08-28.** Everything staged from PRs #21/22 through #36 has been promoted. All of it
+was merged to `main` before promotion, per the "implemented **+ merged**" rule in
+`docs/adr/README.md`.
 
 | Was staged | How it works | Why |
 |------------|--------------|-----|
-| Clicking into a cut selects invisible geometry | `bim-viewer.md` § Picking (clip-aware raycasting) | [ADR-0007](docs/adr/0007-clip-aware-raycaster.md) |
-| Measure cursors become their own components | `bim-viewport-righttoolbars.md` § Measure tools, § Cursor-family constructor typing | — (no lasting rejected alternative) |
-| Measure lag: snapping moves to the FRAGS worker | `bim-viewport-righttoolbars.md` § Measure tools → Vertex snapping | [ADR-0003](docs/adr/0003-worker-side-snapping-over-cpu-picking-meshes.md) |
-| Cursor-bounded navigation + the pivot dot | `bim-viewer.md` § Camera navigation, § The pivot dot | [ADR-0004](docs/adr/0004-cursor-bounded-navigation.md) |
-| Section box | `bim-viewport-righttoolbars.md` § Section box, § GizmoAxis · § Sectionbox (button) | [ADR-0005](docs/adr/0005-section-box-outside-clipper.md) |
-| Zoom dies once the camera parks | `bim-viewer.md` § Camera navigation | [ADR-0006](docs/adr/0006-zoom-pivot-reanchor.md) |
-| Surface measure rebuilt on worker geometry | `bim-viewport-righttoolbars.md` § Surface: coplanar faces from worker geometry | [ADR-0008](docs/adr/0008-surface-measure-on-worker-geometry.md) |
-| The section-plane gizmo moves to the plane's own frame | `bim-viewport-righttoolbars.md` § Section tool, § GizmoAxis | [ADR-0009](docs/adr/0009-section-plane-gizmo-local-frame.md) |
-| Box and cut planes can't both crop; plane outlines fit the model | `bim-viewport-righttoolbars.md` § Sectioning interlock, § Section tool | [ADR-0010](docs/adr/0010-sectioning-arbiter-and-fitted-plane-outlines.md) |
-| A cut plane is a clickable border band in the overlay | `bim-viewport-righttoolbars.md` § Section tool | [ADR-0011](docs/adr/0011-clickable-border-band-cut-planes.md) — supersedes ADR-0002 |
-| Solid fills at the cut face | `bim-viewport-righttoolbars.md` § Fills at the cut | [ADR-0012](docs/adr/0012-section-fills-via-clipstyler.md) |
-| The cut-plane gizmo spawns where you clicked and slides in-plane | `bim-viewport-righttoolbars.md` § Section tool, § GizmoAxis | [ADR-0013](docs/adr/0013-movable-cut-plane-gizmo.md) |
-| A stale vendored FRAGS worker (⚠️ real, but **not** the cause of the displaced fills) | `bim-viewer.md` § Gotchas (version lock) · `bim-viewport-righttoolbars.md` § Fills → Vendor traps · `ar-webxr.md` | [ADR-0014](docs/adr/0014-frags-worker-from-node-modules.md) |
-| Cut fills drawn detached from the model — FRAGS and OBC disagreeing on the base model | `bim-viewer.md` § Patterns & conventions (first load is serialised) | [ADR-0015](docs/adr/0015-one-base-model-for-coordination.md) |
-| Performance + Scene Diagnostics rows in Viewport Settings | `bim-viewport-toolbars.md` § Settings → The two diagnostic rows | — (the probe that found ADR-0015, made permanent) |
+| Hover picked on every mouse move; the same frame rendered ~3× | `bim-viewer.md` § Render loop and hover cadence | [ADR-0020](docs/adr/0020-one-render-per-frame-and-hover-on-settle.md) |
+| A public demo with no account | `backend.md` § Guest demo mode (+ the anonymous-sign-in warning) | [ADR-0021](docs/adr/0021-guest-demo-mode-is-client-side-only.md) |
+| Orthographic froze the Fragments LOD/streaming engine | `bim-viewer.md` § Fragments and the camera | [ADR-0022](docs/adr/0022-fragments-rebind-on-projection-change.md) |
+| Camera damping and wheel stride retuned against a reference viewer | `bim-viewer.md` § Camera navigation | [ADR-0023](docs/adr/0023-camera-response-ported-from-crais.md) |
+| The Realistic tab, and why it cannot be the three.js light-probe demo | `bim-viewer.md` § Realistic tab | [ADR-0024](docs/adr/0024-realistic-view-on-three-0182-primitives.md) |
+| The house look became boot state; GIS opts out by style | `bim-viewer.md` § Postproduction and the house look | [ADR-0025](docs/adr/0025-house-look-is-the-boot-preset.md) |
+| The Realistic tab leaked a white sky under StrictMode | `bim-viewer.md` § Gotchas (async activate) | [ADR-0026](docs/adr/0026-async-activate-needs-an-ownership-token.md) |
+| A configurable viewport background | `bim-viewport-toolbars.md` § Settings → Background | [ADR-0027](docs/adr/0027-viewport-background-painted-in-css.md) |
+| The PostRender tab — a runtime override surface, not a sandbox | `bim-viewer.md` § PostRender tab | — (its rejections live in ADR-0020 and ADR-0025) |
+| The viewport grid is off by default | `bim-viewer.md` § Patterns & conventions | — (rationale thin; the `ArSession` landmine is recorded at the guide) |
+| VW-01 — the model goes black-wireframe as the camera pulls back | `bim-viewer.md` § Gotchas — **not a defect**, `LodMode.DEFAULT` by design | — |
 
-**Cleared 2026-08-14** — the Room tab (`feat/room-view`), promoted to:
-
-| Was staged | How it works | Why |
-|------------|--------------|-----|
-| The dead "Viewer" tab becomes a "Room" IFCSPACE browser | `bim-viewer.md` § Room browser (IFCSPACE) | — (the two decisions below carry the *why*) |
-| A room is selected through the app's own select style, not a private one | `bim-viewer.md` § Room browser → Selection is the app's selection | [ADR-0016](docs/adr/0016-rooms-select-through-the-app-select-style.md) |
-| The Room tab owns no visibility state — no hide, no ghost | `bim-viewer.md` § Room browser → The tab does not touch visibility | [ADR-0017](docs/adr/0017-room-tab-owns-no-visibility-state.md) |
-
-⚠️ **Promoted one step early, deliberately.** The tab itself was tested against a real model on
-2026-08-14 and works — list, storey grouping, selection, chips. Six later changes were **not**
-retested before this promotion: no-zoom-on-row-click, the per-row zoom control, ctrl/cmd
-multi-select, the `number  name` chip text, the ghost removal, and the panel following viewport
-picks. The guide and both ADRs describe the code as it stands; if testing moves any of it, they
-are what needs correcting.
-
-**Still open, and not recorded anywhere else:** whether any *other* model in this project contains
-`IFCSPACE` at all. Spaces are normally exported only by architectural models, so the structural,
-MEP and eight demo `.frag` files may have none — which is why the empty state distinguishes "no
-model loaded" from "no spaces in this model".
-
-**Two things that were staged here are open questions, not decisions, and now live where they belong:**
-
-- **A cut plane's band is fitted to *every* loaded model** — `boxer.addFromModels()` unions all of
-  them, so a plane placed on one building spans the whole scene. Recorded as an open consequence in
-  [ADR-0010](docs/adr/0010-sectioning-arbiter-and-fitted-plane-outlines.md) § Consequences, and
-  flagged at the code in `bim-viewport-righttoolbars.md` § Section tool.
-- **Two reproduction runs ADR-0014's mechanism does not explain** — moved into
-  [ADR-0014](docs/adr/0014-frags-worker-from-node-modules.md) § Consequences as a table, together
-  with the `?debugFills=1` probe's git location, so the next person to see a displaced fill starts
-  from the evidence rather than the conclusion.
-
-⚠️ **One block was deliberately *not* promoted.** The former navigation entry carried a
-"Correction" section (items 18–23) proposing that the click-pivot be deleted and the clamp
-released on `rest`. It was **never implemented** — verified against `CursorZoom/index.ts`
-before clearing: `_onPointerDown`, `_pivotOnHoveredSurface`, `DOLLY_SETTLE_MS` and the
-`setOrbitPoint` call were all still live, and `smoothTime` was never changed from the vendor's
-`0.2`. Its two genuine vendor findings — that `setLookAt` is never clamped, and that
-`setOrbitPoint` yanks via `dollyTo` and leaks a focal offset — survive in ADR-0006, which
-records the whole five-attempt history of that bug. The rest was a rejected proposal and is
-gone with this file.
+⚠️ **One correction made during promotion.** Several staged entries above were written before their
+branch was tested and still said "planned, not tested" or "nothing implemented yet". All were
+verified against the merged code before being promoted, and the guides describe the code as it
+stands rather than as the plan predicted.
 
 ---
 
-## Staged: Fragments rebind on projection change (branch `fix/fragments-rebind-on-projection-change`)
+## Staged: first section plane silently fails to place (branch `fix/viewer-defects-phase-1`)
 
-**Untested beyond `tsc`, eslint and a production build.** The measurements below are the
-developer's instrumentation of the *bug* (draw calls / indices per frame, sampled off the
-viewport's WebGL context on the live deployment), not of the fix.
+⚠️ **Untested — `tsc` and a production build pass, nothing more.** This is the only reason it is
+still here rather than in a guide. Do not promote until the developer confirms it in the app.
 
-**The bug.** Switching Camera Projection to Orthographic froze the Fragments LOD/streaming
-engine outright: draw counts stayed bit-for-bit constant across a 10-tick zoom
-(491 calls / 573,088 indices → 491 / 573,334), where Perspective at the same framings went
-491/573k → 229/129k. Entering Ortho from a far-away Perspective view left the building a
-hollow grey shell at any zoom (197 / 83,719 — the far-away LOD, forever).
+**Symptom.** Right after a model load, "Add plane" arms, you click the model, the panel closes —
+and no plane is created. No console output, nothing shown. Retrying the same spot two or three
+times eventually works. Ordinary click-to-select is unaffected throughout. Confirmed by the
+developer: **only the first plane misfires**; once one plane exists, adding more is reliable.
 
-**Decision — subscribe to `camera.projection.onChanged` in `fragments-manager.ts`, and re-point
-that subscription whenever `world.camera` is replaced.**
+**Root cause — a 3.4.8 behaviour change our code never caught up with.**
+`OBC.SimpleRaycaster.castRay` is no longer a worker raycast. It is now a **GPU pick**:
+`FastModelPickers.get(world).getFullPick(position)`, three render+readback passes (id, depth,
+normal). It composes them like this:
 
-`world.onCameraChanged` fires only from `World.set camera(...)`. `ProjectionManager.set()` swaps
-`camera.three` and triggers its *own* `onChanged` — so `model.useCamera()` was never re-called and
-Fragments kept evaluating the perspective camera parked where it stood at switch time. `controls`'
-`"update"` still fired, so `core.update()` ran every frame against a camera that never moved; hence
-the perfectly constant counts.
+```js
+const item   = await this.getItemAt(position);    // id pass, then AWAITS a worker round-trip
+const point  = await this.getPointAt(position);   // re-renders the scene, reads depth
+const normal = await this.getNormalAt(position);  // re-renders the scene, reads the normal
+return { ...item, point, normal, distance };      // normal may be null — the pick still "succeeds"
+```
 
-- **Rejected — the single line `camera.projection.onChanged.add(rebindCamera)` at setup.** This is
-  what the bug report proposed, and it fixes the toolbar toggle only. `projection` belongs to the
-  *camera*: `OBC.Views.open()` assigns a brand-new `OrthoPerspectiveCamera` to the world, and
-  `Views2DList.applyPerspectivePlanCamera` then calls `projection.set("Perspective")` on *that*
-  camera. A bootstrap-time subscription is left listening to a `ProjectionManager` nobody drives.
-  Hence `watchProjection()`, called from `onCameraChange` as well as at setup.
-- **Rejected — call the rebind from the callers.** `ToolbarSettings.handleProjectionSelect` and
-  `applyPerspectivePlanCamera` both already know they changed projection, so each could notify
-  Fragments directly. Rejected: it makes correctness depend on every future `projection.set()`
-  caller remembering, and it would put BIM-engine wiring in a React component. The fix belongs on
-  the listening side, in the one file that owns the fragments↔camera relationship.
-- **Rejected — read `world.camera.three` inside the handler** instead of taking the event payload.
-  It happens to work, because `OrthoPerspectiveCamera` assigns `three` from its own listener on the
-  same event, registered in its constructor and therefore ahead of ours. Nothing guarantees that
-  ordering, and the payload is right there.
+Across that worker await the scene keeps streaming: tiles arrive, LODs swap. If the pixel under
+the cursor changes in that window, `getNormalAt` returns `null` — and `getFullPick` **returns the
+hit anyway, with no normal**. (`getPointAt` returning null is the second failure mode: then
+`getFullPick` returns null outright.) Right after a load is when tile churn peaks, which is why
+the bug clusters there and why a retry is a coin flip.
 
-**`update(true)` is forced here on purpose**, and does not contradict the ⚠️ never-force note on
-`onControlsUpdate` directly below it: that warning is about the continuous `controls "update"`
-event. A projection switch is a discrete state change — the same class as a model load.
+`ClipperPlacementManager._surfaceOf` then discards the hit: it accepts `result.normal`, else falls
+back to `result.face && result.object` — but **`FRAGS.RaycastResult` has no `face` field at all**,
+so that branch is dead code for every fragment hit. Null surface → `exit()` → no plane, no message.
+Selection survives because `Highlighter` only consumes the id pass.
 
-**Not fixed, deliberately, and not recorded anywhere else yet:**
+Why *only the first* plane: `ClipAwareRaycaster` takes the vendor fast path only while
+`renderer.clippingPlanes` is empty. From the first plane onward it runs its own
+`_nearestVisibleFragment` → `model.raycastAll` → a real face normal, every time.
 
-- **`controls "update"` is bound to the bootstrap camera's controls only.** Every `OBC.View` owns
-  its own `CameraControls`, so inside a 2D view that listener is attached to an inactive camera.
-  The vendor partly covers it — `Views.open()` adds its own `"rest"` handler — so plan views update
-  on settle rather than continuously.
-- **The production bundle appears to contain `@thatopen/components` twice** (two `ProjectionManager`
-  and two `World` class identities). Duplicate identities can make `components.get(...)` hand back an
-  instance other than the expected one. Low confidence, unrelated to this bug, build-config territory.
-- **Ortho → Perspective visibly jumps framing.** `ProjectionManager.matchOrthoDistanceEnabled` is the
-  knob if that is not wanted; it defaults to `false` and nothing in `src/` sets it.
+⚠️ **`_vendor/engine_components` (3.4.2) is actively misleading here** — it still shows the old
+`fragments.raycast(...)` shape. `clip-aware-raycaster.ts`'s own ⚠️ note predicted this exact
+hazard; this is it landing.
 
----
+**Decision 1 — `requireNormal` opts out of the vendor fast path, in `ClipAwareRaycaster`.**
+`castRay({ requireNormal: true })` changes only the early-return guard, so the pick goes down
+`_nearestVisibleFragment`, which already exists, already clip-filters, and already yields real
+face normals. `ClipperPlacementManager` passes it on both its hover and click raycasts.
 
-## Staged: the PostRender tab (branch `feat/post-render-tab`)
+- **Why not a surgical fallback on the fast path** (keep the GPU pick, re-pick that one model
+  through the worker to borrow a normal): new code, covers only the missing-normal case and not
+  the null-`getPointAt` one, and it mixes a GPU depth point with a worker face normal — which can
+  disagree across an LOD swap, the very event that caused the miss.
+- **Why not guarantee a normal on every `castRay`:** `Hoverer` picks on every settle, and
+  [ADR-0020](docs/adr/0020-one-render-per-frame-and-hover-on-settle.md) exists precisely because
+  that cost matters. An opt-in flag keeps hover-only consumers at zero cost.
+- **Why not raycast the worker directly from `ClipperCursor`:** it would bypass clip filtering,
+  and `clip-aware-raycaster.ts` names plane placement by name as a consumer that would otherwise
+  place planes on geometry a cut has already removed.
+- **Why not drop the GPU fast path entirely:** one code path and no flag, but it surrenders the
+  hover optimisation the fast path exists for.
+- **Accepted cost:** placement's hover pass gets heavier at zero planes. This is exactly the cost
+  it already pays from the first plane onward, so it is proven acceptable rather than speculative.
 
-**Nothing implemented yet — this is the grilled plan, recorded before code.** The ask was "a
-PostRender tab, exactly like the `PostproductionRenderer` tutorial". The first finding is that
-**the tutorial's setup half already shipped**: `create-world.ts` builds the world with
-`OBF.PostproductionRenderer`, a transparent background, an `OrthoPerspectiveCamera` and a grid,
-and `setupHighlighter` already sets `postproduction.enabled = true` and wires `OBF.Outliner` to
-the Highlighter's select events. What is actually new is **the control panel** — so "exactly like
-this" is read as *the tutorial's panel, driving the live viewer*, not as the tutorial's demo.
+**Decision 2 — the UX defects around it are filed, not fixed.** Deliberately out of scope, on the
+developer's call, to keep the diff to the actual bug:
 
-**Decision — the tab is a runtime override surface over the real world, nothing more.** A right
-`RightPanel` (~400 px, as the GIS tab), mounted only while the tab is active, holding five
-`PanelSection`s: General, Edges, Selection outline, Gloss, Ambient Occlusion. Values live in
-local `useState` seeded from the live passes on mount — the `ToolbarSettings` idiom, engine as
-source of truth — so re-opening the tab re-seeds from reality and nothing persists across a
-reload. Row primitives (slider/toggle/colour/select) are pure props-only components local to
-`features/post-render/`, not promoted to `components/ui/` until a second consumer exists.
+- A genuine miss still exits placement silently (`.finally(() => this.exit())` fires on every
+  outcome, and the click chain has no `.catch`, so a throw inside `onPlace` exits the same way).
+- `ToolbarClip`'s `document`-level `mousedown` click-outside handler closes the panel on the very
+  click that places, so every plane needs the panel reopened. These two are coupled: "stay armed
+  on a miss" is incoherent while the only *Placing (ESC to cancel)* affordance is inside a panel
+  that just closed.
 
-- **Rejected — a faithful sandbox reproduction** (own world + renderer, `school_arq.frag` off the
-  ThatOpen CDN, stats.js, the green excluded cube). Verbatim fidelity, and it would stand up a
-  *second WebGL context* beside the main viewport — the exact cost the AR tab was moved to a
-  standalone `/ar` page to avoid — while touching none of the user's own model.
-- **Rejected — fold the controls into the `ToolbarSettings` dropdown** (which already owns grid,
-  projection, hover-highlight, auto-rotate). Right neighbourhood, wrong container: ~25 sliders do
-  not fit a 240 px dropdown.
-- **Rejected — `uiStore` + `localStorage`, and per-project settings in Supabase.** Both are more
-  useful than a per-session panel; both are wider than the ask. Persisting needs a
-  re-apply-on-bootstrap path and puts engine parameters in a store CLAUDE.md reserves for
-  UI/modal/layout state; per-project needs a migration, a service and Query wiring.
+**Decision 3 — `ClipperPlacementManager` imports the `ClipAwareRaycaster` type from the module,
+not the barrel.** `Raycasters.get()` is typed to the base `SimpleRaycaster`, whose `castRay` does
+not carry the new flag, so the getter has to be typed to the subclass. ⚠️ **`setup/index.ts`
+imports `../ClipperCursor`, so a value import through `../../setup` would close a cycle.** The
+import is therefore `import type … from "../../setup/src/clip-aware-raycaster"` — type-only, so it
+is erased at build and cannot form a runtime cycle, and narrow, so that stays true if someone later
+drops the `type`.
 
-**Decision — the "Manual mode" section is not ported.** The tutorial exposes `renderer.mode =
-RendererMode.MANUAL`, `manualModeDelay`, `turnOffOnManualMode` and `manualDefaultStyle`. MANUAL is
-recorded above as **deferred, not rejected**, and the blocker has not moved: *nothing* sets
-`needsUpdate` — not this app's scene-mutating components, and not the vendor's own (`Hoverer`
-never does). A checkbox there is a user-reachable path into frozen hover, outliner and measure
-previews, and MANUAL layered over `setupRenderCoalescer`'s deferred `update` is an untested
-combination on top. Manual mode is a render-loop *strategy*, not a look.
+- **Rejected — a local structural type.** Redeclaring the widened `castRay` shape inside
+  `ClipperPlacementManager` avoids the import, but duplicates a contract with nothing to catch the
+  two drifting apart.
+- **Rejected — promote `ClipAwareRaycaster` to its own `bim-components/` folder.** Better layering
+  — the raycaster stops being bootstrap-private — but it is a refactor opened by a bug fix, and the
+  coupling it removes is one type import.
 
-**Consequence — `updateIfManualMode()` is dead code here and is not ported either.** In `AUTO`
-every `update()` repaints, and the coalescer already guarantees exactly one render per frame, so
-every control is visible on the next frame with no explicit render call. Two more tutorial lines
-are already-settled no-ops: `world.dynamicAnchor = false` (ruled out above — it defaults `false`
-at this version) and stats.js (`ToolbarSettings` → Performance already owns that, via
-`viewport-diagnostics/PerformanceOverlay`).
+**Known-latent, same root cause, not touched.** Four other components derive a normal from
+`castRay` and take the GPU fast path at zero planes, so all four can intermittently lose it:
+`MeasureHoverManager`, `SpotCoordinate`, `SurfaceMeasureEngine`, and `ViewportWrapper`'s align
+mode. Each is a one-line `requireNormal: true` once this shape is proven.
 
-**Decision — the Outline section is labelled "Selection outline" and carries a Reset.** Not
-cosmetic naming: the 3.4.4 typings document `Outliner.color/thickness/fillColor/fillOpacity` as
-delegates to `SimpleOutlinePass`'s **`"default"` group**, which is exactly what `setupHighlighter`
-configures (`#bcf124`, fill `0.3`) and binds to selection. Those four sliders therefore retune
-every selection in the app, on every tab, globally. Reset restores the `setupHighlighter` values
-so a fill-opacity-to-zero cannot silently kill the selection affordance. The tutorial's own
-`outliner.addItems({ wall1, wall2 })` demo call is dropped — it fakes a selection the user never
-made.
+**Decision 4 — postproduction is no longer suppressed while a right-rail tool is active.**
+`ViewportRightToolbar` snapshotted and killed `Hoverer`, `Outliner` *and* `postproduction` whenever
+`activeTool !== "select"`. The first two stay; postproduction comes out of the list.
 
-**Decision — the master "Postproduction enabled" toggle is disabled while a viewport tool is
-active.** `postproduction.enabled` already has an owner: `ViewportRightToolbar` snapshots it into
-`fxBaselineRef` and forces it `false` for as long as `activeTool !== "select"`, restoring the
-snapshot on exit. The panel reading `activeTool` from `bimStore` and greying the toggle out (with
-a line of copy saying why) makes a write impossible exactly while the other owner holds the flag,
-so the arbiter's snapshot is always the user's own value. Without that gate the checkbox lies —
-open the tab mid-Measure and it reads "off", which is suppression, not a setting; turn it on and
-leaving Measure restores the stale snapshot over the top.
+Raised by the developer as "why does the Model Render change when I use the sectioning tool" —
+which it did, visibly, the instant *Add plane* was pressed.
 
-- **Rejected — lift `fxBaselineRef` into `bimStore` so both write through one owner.** The clean
-  end state, and the same shape [ADR-0017](docs/adr/0017-room-tab-owns-no-visibility-state.md)
-  called "cleaner while there were two owners, and moot with one". Rejected for the same reason:
-  it edits shipped, working code as a side effect of an unrelated feature, and the gate removes
-  the conflict instead of refereeing it.
-- **Rejected — omit the master toggle.** No second owner at all, at the cost of the General
-  section's headline control.
+The original reasoning was that all three are redundant while `CursorSurface` owns the cursor.
+That holds for hover and outline, which are *selection affordances*. It does not transfer to
+postproduction, which is *how the model looks* — and for sectioning it is actively backwards, since
+element edges are what tell you which face you are about to cut. It also bought nothing: `activeTool`
+holds a non-select value only while a tool is armed (`ClipperCursor` returns to `"select"` the moment
+a placement resolves), so the sole visible effect was a flat-render flash per plane placed, and the
+per-frame pass it "saved" is already paid throughout select mode.
 
-**Decision — no `bim-components/setup/` edits.** The tab is panel-only; bootstrap defaults are
-untouched. **Observation logged instead of fixed:** the tutorial does
-`postproduction.basePass.isolatedMaterials.push(grid.material)` and **nothing in `src/` touches
-`isolatedMaterials`**, so our grid runs through AO and edge detection. Latent today only because
-`create-world.ts` ships the grid hidden — turn it on in Viewport Settings and it is shaded as
-geometry. A one-line fix, deliberately left for its own change rather than riding along in a tab.
+- **Rejected — make it a Viewport Setting.** A toggle for a behaviour whose correct value is "on"
+  is a setting nobody will find a reason to change.
+- **Rejected — suppress it for the measure tools but not for clip.** Per-tool exceptions to a
+  blanket rule are how the rule became wrong in the first place.
+- ⚠️ **Known consequence:** VW-04 below is now visible **during** placement as well. This exposes
+  nothing new — postproduction is on in select mode, so VW-04 was already on screen the rest of the
+  time. If it reads worse while placing, VW-04 is the thing to fix, not this.
+- **Separable from decisions 1–3.** Different file, different symptom, no shared code. Split it onto
+  its own branch if the placement fix needs to land alone.
 
-**Also rejected — picking a house look now** (a default style preset plus tuned AO in
-`create-world.ts`, with the panel as the override). Changes how the app looks for every user on
-every tab; that is a design decision, not a tab.
+⚠️ **Two promoted docs describe the *old* behaviour and must be corrected when decision 4 lands:**
+`bim-viewer.md` § Gotchas (the snapshot-and-restore line naming `postproduction.enabled`) and
+`bim-viewer.md` § PostRender tab (the master toggle is gated on `activeTool` precisely because the
+right rail co-owns that flag — with decision 4 the gate protects nothing and should probably go).
+Both correctly describe `main` today, which is why they were promoted as-is.
 
-**No API gap.** Installed `@thatopen/components-front@3.4.4` exposes the whole surface the
-tutorial uses — `glossPass`/`glossEnabled`, `defaultAoParameters`, `excludedObjectsPass`,
-`smaaEnabled`, `style`, `PostproductionAspect`, `EdgeDetectionPassMode`, and `edgesPass`'s
-`width`/`color`/`mode`. One asymmetry: `aoPass.updatePdMaterial(pdParameters)` has **no
-read-back** — `GTAOPass` exposes no getter for the poisson-denoise params, which is why the
-tutorial keeps them in a plain local object. Those seven values must live in app state or they
-cannot be displayed at all; everything else seeds off the pass.
-
-**Decision — the "Excluded objects enabled" toggle is not ported either.** `ExcludedObjectsPass`
-renders only materials registered through `addExcludedMaterial`, and **nothing in `src/` ever
-calls it** — the tutorial's only registration is the demo cube's material, which is also dropped.
-A toggle that provably cannot change a pixel reads as a broken control and invites someone to
-"fix" it. General therefore ships four controls: Postproduction enabled, Outlines enabled, SMAA
-enabled, Style. Whoever first needs an object exempted from the effects starts at
-`postproduction.excludedObjectsPass.addExcludedMaterial(...)`.
-
-**Decision — the tab ships a preset, applied once per world, not per mount.** `PRESET` in
-`PostRenderPanel` is the developer's reference look: `COLOR_PEN_SHADOWS`, outlines + SMAA on,
-gloss off, edges `1.1` at `#1a1a1a` in `DEFAULT` mode, AO screen-space with blend `0.7` /
-radius `0.3` / **distanceExponent `2`** / thickness `1.5`, and the selection outline at
-**fill `0.85`** / thickness `3`. Two values fight the vendor deliberately: `distanceExponent 2`
-against `5.7`, which collapses AO into a hairline contact seam instead of the broad soft shading
-in window reveals and under balcony slabs; and fill `0.85` against `setupHighlighter`'s `0.3`,
-which reads as a pale wash over light surfaces rather than the solid green of the reference.
-
-Applied through a `WeakSet` keyed on the `Postproduction` instance, so it lands the **first time
-the view opens on a given world** and never again: tune a slider, leave the tab, come back, and
-your tweaks survive. A reload builds a new world and starts from the preset. A `Restore preset`
-button in General is the way back, and it is the only reset for the Edges / Gloss / AO sections.
-
-- **`enabled` is not in the preset.** It is co-owned by `ViewportRightToolbar` during tool
-  suppression, and a mount-time write could land inside that window and fight the arbiter's
-  snapshot. `setupHighlighter` already turns postproduction on.
-- **AO parameters are written before the style.** The vendor's style setter itself pushes
-  `defaultAoParameters` into the material when the style leaves `PEN_SHADOWS`; explicit
-  `updateGtaoMaterial`/`updatePdMaterial` calls after it cover every other transition.
-- **Rejected (for now) — the preset as a `create-world.ts` bootstrap default.** That is what makes
-  the look appear app-wide on first paint instead of after one visit to the tab, and it is the
-  natural promotion once the numbers are confirmed against a real model. Held back because it
-  changes the app's appearance for every user on every tab, and because the numbers are still
-  eyeball estimates from a screenshot.
-- **Known consequence:** the world is shared, so opening the PostRender tab changes the look on
-  every other tab too, and leaving does not restore anything. That is the intent ("set this as
-  the default"), but it means the Models tab renders differently before and after a visit here.
+⚠️ **The bug report artifact that opened this (`Section Plane Misfire`, 28 Aug 2026) is wrong.**
+It blames `castRay()` reading "the hover pass's cached hit". The fallback is really OBC's `Mouse`,
+updated on every canvas `pointermove` — so for a human, the cached position *is* the click point.
+Its Trial C ("plane landed on the hovered point, ignored the click") is the signature of a browser
+agent dispatching synthetic clicks that emit no `pointermove`. Its evidence table does not
+describe the reported bug; keep the symptom, discard the diagnosis.
 
 ---
 
-## Staged: camera response tuned against crais (branch `feat/post-render-tab`)
+## Open, from the viewer-defect report — no decision yet, so nothing to promote
 
-**Untested beyond `tsc`, eslint and a production build.** Rode along on the PostRender branch
-because the developer asked for it mid-review; it is an independent change and could be split.
+VW-01 was resolved (not a defect) and is now a gotcha in `bim-viewer.md`. VW-03 and the Phase-1
+gizmo work shipped as [ADR-0019](docs/adr/0019-grab-volume-tracks-the-drawn-arrow.md). These two
+remain open investigations:
 
-**Where the numbers came from.** https://viewer.crais.io — three r184 + `camera-controls`, no
-`@thatopen` anywhere in its bundle (no `OrthoPerspectiveCamera`, no postproduction), so its camera
-layer is the *same library* OBC wraps and its config is directly portable. Read out of the minified
-bundle: shared base `smoothTime: 0.15`, `draggingSmoothTime: 0.05`, `restThreshold: 0.0025`,
-`dollyToCursor: true`, `dollyDragInverted: false`, `boundaryFriction: 0`; four per-mode presets
-(`orbit` / `fly` / `screenpan` / `pan`) carrying their own `minDistance`, `maxDistance`,
-`dollySpeed`, `truckSpeed` and rotate speeds, two of which set `minDistance === maxDistance` — the
-`camera-controls` idiom for look-around modes, where the pivot is pinned a fixed distance ahead so
-rotate becomes "look" and truck becomes "walk". Empirically 10 wheel ticks barely moved their
-camera, matching the orbit preset's `dollySpeed: 0.5`.
-
-**Decision — port the three that are pure response, in a new `setup/src/camera-response.ts`.**
-`smoothTime 0.2 → 0.15`, `draggingSmoothTime 0.125 → 0.05` (the library default OBC never
-changes; this is the one that makes an orbit *follow* the cursor instead of catching up with it),
-`dollySpeed 1 → 0.5`. Applied per camera and re-applied on `world.onCameraChanged`, for exactly
-the reason `applyCameraDepthRange` already documents: every `OBC.View` builds its own
-`OrthoPerspectiveCamera`, hence its own `CameraControls`. `dollyToCursor` needed nothing — it is
-already `true` via the OBC default.
-
-**`CursorZoom`'s `DOLLY_SETTLE_MS` became `DOLLY_SETTLE_FACTOR`.** It was a flat `300 ms`,
-hand-derived from `smoothTime = 0.2` plus slack, and its doc comment said so. With `smoothTime`
-now `0.15` that constant would hold the pivot re-anchor back for a dolly that finished 75 ms
-earlier, so it now reads `controls.smoothTime * 1000 * 1.5` off the live controls. Not cosmetic:
-the gate exists because a re-anchor landing mid-dolly sends `dollyToCursor`'s `lerpRatio` to ~9
-and lurches the camera (ADR-0006).
-
-- **Deferred — the navigation-mode system.** A mode switcher with per-mode presets, per-mode
-  mouse-button mappings and locked-distance walk/look modes. This is where most of "it feels like
-  a different app" actually lives, and it is a feature, not a tuning pass.
-- **Rejected — `infinityDolly: true` with `minDistance: 1`,** which is how crais's camera dollies
-  forever by pushing the target ahead of itself. That is the exact flag `CursorZoom` turns *off* on
-  purpose: with it on, `minDistance` is dead config and cursor-bounded navigation cannot exist at
-  all ([ADR-0004](docs/adr/0004-cursor-bounded-navigation.md), with the five-attempt bug history in
-  [ADR-0006](docs/adr/0006-zoom-pivot-reanchor.md)). Copying that half of the feel is a decision to
-  reverse two ADRs, not a value to change — and it means accepting fly-through.
-- **Not established:** which of crais's four presets is its default mode, and its mouse-button
-  mapping — that part of the bundle is string-table obfuscated.
-
----
-
-## Staged: the Realistic tab (branch `feat/realistic-view`)
-
-**Nothing implemented — the grilled plan, recorded before code.** The ask was a "Realisti" tab
-rendering the project like three.js's `webgl_lightprobes_sponza` example. Label ships as
-**"Realistic"** (the typed spelling was a slip).
-
-**The example cannot run here, and this is the finding everything else follows from.** It imports
-`three/addons/lighting/LightProbeGrid.js` and `helpers/LightProbeGridHelper.js`; our
-`three@0.182.0` ships `examples/jsm/lighting/` containing only `TiledLighting.js`. Available at
-0.182: `LightProbe` (single SH probe), `LightProbeGenerator`, `PMREMGenerator`, `RoomEnvironment`,
-`Sky`, `FirstPersonControls`, ACES tone mapping.
-
-**Decision — reproduce the look with 0.182 primitives; no version bump.** Sky + `HemisphereLight`
-carrying sky/ground colour + a shadow-casting `DirectionalLight` sun + ACES tone mapping with
-exposure, and postproduction switched to `COLOR_SHADOWS` so the vendor's existing AO pass supplies
-contact shading while pen edges stay off.
-
-- **Rejected — bump three to get `LightProbeGrid`.** *Not* blocked by ThatOpen: installed peer deps
-  are `three: ">=0.182.0"` across `components@3.4.8`, `components-front@3.4.4` and
-  `fragments@3.4.7`, and crais runs r184. Rejected on two counts. First, it moves the version the
-  whole BIM stack was built against, including the vendored FRAGS worker ([ADR-0014](docs/adr/0014-frags-worker-from-node-modules.md))
-  and a `@types/three` already 26 versions stale at 0.156.0. Second and decisively, **the bake is
-  unaffordable regardless**: the demo's 10×7×7 grid is 490 probes × 6 faces = 2,940 scene renders
-  *per bounce*, and this scene is 2,746 meshes / 1,188 materials / 7.3M triangles, 100% CPU-bound
-  on draw-call submission at ~3 µs each — small cubemaps do not help, because rendering at 64×64
-  instead of 520×687 moved frame cost by 0.5 ms. That is ~30 s of blocked main thread per bake, and
-  the demo re-bakes on every slider change. Getting the feature would not make it usable.
-- **Rejected — a standalone `/realistic` route with its own renderer**, as AR did. Cleanest
-  isolation, but it still needs the version answer and would have to solve getting fragment
-  geometry into a second context — doubling VRAM for 7.3M triangles.
-
-**Decision — no material changes, which caps what "realistic" can mean.** Fragments builds mostly
-`MeshLambertMaterial`, and `WebGLRenderer` assigns `materialProperties.environment =
-material.isMeshStandardMaterial ? scene.environment : null` — so **image-based lighting never
-reaches this geometry**. Non-standard materials also resolve env maps through `cubemaps` rather than
-`cubeuvmaps`, so a PMREM texture is the wrong input for them. What Lambert *does* honour: ambient,
-hemisphere and directional lights, shadow maps, and renderer tone mapping. Hence the rig above.
-
-- **Rejected — swap the material pool to `MeshStandardMaterial` while the tab is active.** The only
-  route to a true PBR look. It mutates `fragments.core.models.materials.list` in place — the same
-  shared pool `ToolbarGhost` mutates, which [ADR-0017](docs/adr/0017-room-tab-owns-no-visibility-state.md)
-  exists because of — and ~1,188 new materials means ~1,188 shader program compiles, i.e. a
-  multi-second stall on tab entry.
-- **Rejected — `envMap` per Lambert material.** Cheaper, still mutates the shared pool, and reads as
-  a faint mirror rather than soft irradiance for the `cubemaps` reason above.
-
-**Decision — the state lives only while the tab is open.** `RealisticView` follows `RoomView`'s
-shape (`OBC.Component implements OBC.Disposable`, static uuid, activated/deactivated by a feature
-hook as `useRooms` does), snapshotting renderer + scene + light state on activate and restoring it
-on deactivate. This is a performance requirement, not taste: leaving a shadow pass enabled globally
-would slow every other tab on a scene already at 27–40 fps. Accepted cost: a second save/restore
-owner over shared globals, so it needs an explicit interlock with the PostRender preset and
-`ViewportRightToolbar`'s FX baseline.
-
-- **Rejected — become the app's look, as the PostRender preset does.** Simpler ownership, but it
-  leaves the shadow pass running everywhere, and postproduction's pen styles actively contradict
-  photorealism. **Also rejected — a full viewport takeover** (hide toolbars, disable selection):
-  clearest mental model, largest UI change, and it removes measure/section while previewing.
-
-**Decision — `shadowMap.autoUpdate = false`.** Shadow maps live in *light* space, so orbiting the
-camera cannot invalidate them; `needsUpdate` is set only when a model loads, tiles stream, or the
-sun moves. The demo pays for a full shadow render every frame for nothing — on this scene that is
-roughly a doubled frame cost, straight back into the range `setupRenderCoalescer` exists to rescue.
-Per-mesh `castShadow`/`receiveShadow` must be applied as LOD tiles appear: nothing in `src/` sets
-those today, and tiles are created and destroyed continuously. The hook is `model.tiles.onItemSet` /
-`onItemDeleted`, which is exactly what `Outliner.bindModelTileEvents` subscribes to — copy its
-per-model unsubscribe map so the listeners cannot leak.
-
-**Decision — the camera is untouched.** No `FirstPersonControls`, no walk mode. The tab changes
-lighting and rendering only, so the just-tuned damping and cursor-bounded zoom keep working and no
-second owner appears over `minDistance`/`infinityDolly`.
-
-- **Deferred — walk mode via `camera-controls` locked distance** (`minDistance === maxDistance`,
-  crais's own idiom). Attractive because it needs no second controls object, but `CursorZoom`
-  already writes both fields, so it is an interlock, not a setting.
-- **Rejected — `FirstPersonControls` as in the demo.** Would mean disabling camera-controls,
-  `CursorZoom` and `PivotMarker` for the tab's lifetime, and it has no collision and flies at
-  constant height, so you walk through walls.
-
-**Tone mapping does survive postproduction** — verified, not assumed: the vendor composes three's
-own `OutputPass`, which reads `renderer.toneMapping`/`toneMappingExposure` and recompiles on change.
-⚠️ One trap: `_outputPass` is composed for every style **except `PEN`**, where tone mapping silently
-does nothing.
-
-**Consequence — the row primitives get promoted to `components/ui/`.** `RealisticPanel` needs the
-sliders/toggles that currently live in `features/post-render/PostRenderControls.tsx`, and CLAUDE.md
-forbids a feature importing another feature. The second consumer we said would justify promotion has
-arrived.
-
-## Staged: the house look is the app default, not a PostRender-tab side effect (branch `feat/default-render-preset`)
-
-The PostRender preset became the world's boot state. Everything below is **planned, not tested** —
-`applyPreset`'s values are the shipped ones with two edge changes the developer made live in the
-panel (`#6b6b6b` → `#323232`, `GLOBAL` → `DEFAULT (with LODs)`).
-
-**Decision 1 — the preset lives in `setup/src/postproduction.ts`, applied right after
-`setupHighlighter`.** Not in `create-world.ts`, which was the first instinct and is the right
-folder but the wrong moment: `PostproductionRenderer._postproduction` only exists once the
-renderer has a `currentWorld`, and every pass getter throws (`"Edge detection pass not
-initialized"`) until `initialize()` runs — which happens from exactly one place, the
-`set enabled` setter, on the first `true`. In this app that first `true` is `setupHighlighter`.
-`initialize()` also reads `currentWorld.camera.three`, and `create-world.ts` assigns the camera
-*after* the renderer.
-
-- **Rejected — bottom of `create-world.ts`.** Would need to force `enabled = true` ourselves to
-  trigger `initialize()`, pre-empting `setupHighlighter` on a flag `ViewportRightToolbar` also
-  snapshots during tool suppression (the ADR-0017 hazard). And the outliner half of the preset
-  would still have to live elsewhere, since the `Outliner` is created in `setupHighlighter`.
-- **Rejected — fold it into `highlighter.ts`.** Both halves in one existing file, no new bootstrap
-  line, but that file's job is selection wiring and `PostRenderPanel` importing the render look
-  from `highlighter.ts` reads wrong.
-- **Rejected — apply it from `ModelsView` per tab.** Engine state driven by a view; the look would
-  exist only inside `ModelsView` and would fight `RealisticView`'s own snapshot/restore on tab
-  flips.
-
-**Decision 2 — `setupHighlighter` stops setting the outliner's appearance.** It keeps
-`outliner.world`, `outliner.enabled` and the `onHighlight`/`onClear` bindings; the four appearance
-lines go, because the preset writes the same four properties moments later. One writer, one
-constant, and the panel's "Reset outline to preset" now resets to what the app actually booted
-with. The values themselves are unchanged from what `setupHighlighter` had (`#bcf124`,
-`fillOpacity 0.30`); `0.85` was tried in the preset and reverted — a near-solid fill reads as a
-flat green blob over the element instead of tinting it.
-
-**Decision 3 — GIS opts out by style, for as long as `GisPanel` is mounted.** `useGisRenderMode`
-in `features/gis/` snapshots `postproduction.style`, sets `COLOR`, restores on cleanup. `GisPanel`
-renders only on the GIS tab, so mount/unmount *is* the tab boundary. The conflict is real, not
-theoretical: `GisLayer3d` adds its Google/OSM tile groups straight into `world.scene.three`, so
-streamed photogrammetry goes through the same edge-detection pass as the model.
-
-- **Rejected — `ExcludedObjectsPass`.** The surgical answer on paper, and unusable here: it
-  excludes by *material* (`addExcludedMaterial`) and `3d-tiles-renderer` mints a new material per
-  streamed tile, so there is no stable list to register.
-- **Rejected — force `postproduction.enabled = false` on GIS.** Kills edges, AO and SMAA in one
-  move, but makes the GIS hook a second owner of the flag `ViewportRightToolbar` suppresses tools
-  with, and drops the selection outliner, which needs postproduction on.
-- **Rejected — drive it off `GisLayer3d.enabled` instead of the tab.** Truer to intent (the BIM
-  model would keep its edges until tiles are switched on) but needs a change event `GisLayers`
-  does not have, and moves the transition to a mid-session moment with no visible boundary.
-- **Rejected — an `activate`/`deactivate` API on `GisLayers`.** The `RealisticView` shape, but
-  that component exists because its rig is large; a two-field snapshot does not earn a public
-  engine API used by one panel.
-
-**Decision 4 — `RealisticView` is left alone.** Its `activate` already swaps `style` to
-`COLOR_SHADOWS`, which removes the visible half of the preset (pen edges). It now inherits the
-preset's AO (`radius 0.5`, `distanceExponent 1`, `blendIntensity 1`) instead of the vendor
-defaults, which is a normal render combination — sun shadows plus contact AO. Deferred, not
-rejected: widening `_baseline` with the AO block, if testing shows the AO reads too heavy against
-real daylight shadows. Not written blind.
-
-**AR needed nothing.** `/ar/$projectId` renders `ArModelViewer` and never calls
-`setupComponents`, so there is no OBC world and no `PostproductionRenderer` on that page.
-
-**⚠️ Untested, and the one thing to watch: `EdgeDetectionPassMode.DEFAULT`.** The shipped preset
-chose `GLOBAL` deliberately — it skips LOD geometry, which is both fewer lines at building scale
-and the faster path on a heavy scene. `DEFAULT` is now what every tab pays on a 60-model project.
-The screenshot it came from is the developer's own live tuning, so it stands until measured
-otherwise.
-
-## Staged: a configurable viewport background (branch `feat/viewport-background`)
-
-A Navisworks-style Background dialog behind a row in Viewport Settings, with two styles —
-Graduated (top/bottom) and Plain. **Planned, not tested.**
-
-**Decision 1 — it is painted in CSS, not in three.js.** The store never touches
-`world.scene.three.background`, which stays `null`. `.viewport-container` already paints the
-viewport's backdrop (`linear-gradient(135deg, …)` + a radial highlight) through the transparent
-canvas, so this feature drives a CSS custom property on that existing mechanism rather than
-introducing a second one.
-
-- **Rejected — `scene.three.background`.** The "correct" 3D answer, and it buys nothing here: a
-  graduated backdrop needs a generated `CanvasTexture` rebuilt and disposed on every colour
-  change, it renders through the base pass every frame, and it puts a new full-screen surface in
-  front of AO and edge detection that nothing has tested. The one argument for it — appearing in a
-  canvas screenshot — is moot: `src/` has no `toDataURL`, no `preserveDrawingBuffer`, and the clash
-  thumbnails come from BCF images.
-- **Not a concern — the Realistic tab.** `RealisticView` adds a `Sky` *mesh* to the scene rather
-  than setting `scene.background`, so it hides the backdrop entirely regardless of mechanism.
-- **Scope is automatic.** `.viewport-container` has exactly one user, `ViewportWrapper`, so the
-  setting reaches every ModelsView tab and nothing else.
-
-**Decision 2 — no override is a real state, and it is the default.** `viewportBackground` starts
-`null`, `.viewport-container` reads `background: var(--viewport-bg, <the two existing layers>)`,
-and the branded look is the `var()` fallback — untouched, glow included, until the user picks
-something. "Reset to defaults" removes the property rather than writing a colour.
-
-- **Rejected — make Graduated-with-sampled-colours the new default.** A two-state model instead of
-  three, but the app would boot subtly different from today: vertical instead of 135°, and the blue
-  radial highlight gone for good.
-- **Rejected — keep the glow layered over every choice.** A "Plain" background with a blue glow in
-  the corner is not plain, and the preview pane would have to either lie or replicate it.
-
-**Decision 3 — live apply, with Cancel restoring an open-time snapshot.** The real viewport is the
-preview; the modal's pane is a convenience. Buttons are Reset to defaults / Cancel / Done.
-
-- **Rejected — faithful OK/Cancel/Apply.** Three buttons with three meanings, and it makes a small
-  preview square stand in for a full viewport.
-- **Rejected — live apply with no Cancel.** Consistent with every other viewport setting, but a
-  background is a look you experiment with, and there is no undo once the old hex is gone.
-
-**Decision 4 — three colour fields, Plain reuses the top colour.** `{ style, topColor, bottomColor }`.
-Plain shows one row labelled Color bound to `topColor`, so Graduated → Plain → Graduated is
-lossless. Rejected: a separate `plainColor`, which lets two unrelated looks coexist at the cost of
-switching to Plain showing a colour unrelated to the gradient just on screen.
-
-**Decision 5 — state in `uiStore`, session-only, no persist.** Both the values and
-`backgroundModalOpen`. The rule in CLAUDE.md's state table points here, and there is a concrete
-reason beyond the rule: the CSS variable lives on `documentElement` and survives a `ToolbarSettings`
-remount, so local component state could reset and leave the settings row's swatch disagreeing with
-what the viewport is showing. One owner, no drift.
-
-- **Rejected — local `useState` in `ToolbarSettings`.** What `ToolbarLoadModel` does for
-  `CloudModelModal`, and what this file already does for `hoverColor` and `gridVisible`, so it would
-  read as consistent — but it carries the desync above.
-- **Rejected — per-user localStorage / per-project Supabase.** Persistence was considered and
-  declined: the background behaves like every other viewport setting for now. Supabase would also
-  need a migration and a mutation before a single pixel changed.
-
-**Decision 6 — the dialog copies `CloudModelModal`'s chrome**, not `components/ui/Modal`, and lives
-beside it in `components/bim/`. That shared primitive is a bare box with an unstyled "Close" text
-button, no header and no footer; matching the reference through it would mean rebuilding the chrome
-inside it anyway. Improving the shared primitive first was rejected as scope: it turns a viewport
-feature into a refactor of a component used by other screens.
-
-## Staged: an async `activate` needs an ownership token (same branch)
-
-Found while testing the background: opening the Realistic tab turned the viewport **white**, and it
-stayed white after switching away. Not a background bug — a lifecycle one, and StrictMode makes it
-the normal path rather than a rare race.
-
-`RealisticView.activate` published `_baseline` *before* `await this._measureModels()` and built the
-rig *after* it. Under `<React.StrictMode>` (see `main.tsx`) every effect runs mount → cleanup →
-mount, so: cleanup's `deactivate` tore down a rig that did not exist yet and nulled `_baseline`; the
-pending `activate` then resumed and installed a rig nobody owned; and every later `deactivate` hit
-`if (!baseline || !world) return` and left it in the scene.
-
-The colour was the confirmation. The orphaned `activate` ran `_applySettings`, which reads
-`this._world` — null by then — and returned early, so the leaked `Sky` kept three's default uniforms
-(`sunPosition (0,0,0)`, turbidity 2) and renders as a washed near-white dome rather than a sky. It
-covers the frame on every tab, which is why leaving Realistic did not clear it.
-
-**Fix — a `_generation` counter**, bumped by both `activate` and `deactivate` (the latter *before*
-its early return, so a pending activate is cancelled even when there is nothing to tear down).
-After the await, `activate` compares and returns if it no longer owns the component. `refit` carries
-the same guard: identical shape, identical hazard.
-
-**And the hook's `.then` stops calling `deactivate`.** `useRealisticView` deactivated from the
-stale callback, which the token turns from useless into harmful: under StrictMode that callback
-belongs to a *cancelled* activate while a live one is already in flight, so deactivating there
-cancels the live one too and the tab ends up with no rig at all. Cleanup is now the only teardown
-path; the `mounted` flag only gates `setSettings`.
-
-- **Rejected — build the rig before the await.** Makes this one ordering safe and leaves the class
-  of bug open: any future await in `activate` reintroduces it.
-- **Rejected — have `deactivate` await the in-flight `activate`.** Makes a synchronous teardown
-  asynchronous, which every caller (including `dispose`) would have to learn about.
-- **Rejected — drop StrictMode.** It found a real leak that a slow fragments worker would hit in
-  production too.
-
-⚠️ **Expected after the fix, not a regression:** the Realistic tab shows a proper blue `Sky` dome,
-so the chosen viewport background is not visible there — the sky covers it, by design.
+- **VW-04 — the cut clips surfaces but not edges.** The report's stated cause (*"add `clippingPlanes`
+  to the `LineBasicMaterial`"*) **does not apply here**: element edges are not line geometry at all,
+  they come from `OBF.EdgeDetectionPass`, a screen-space pass, whose `_overrideMaterial` is built with
+  `clipping: true` and the full `clipping_planes_*` chunks in both shaders. `LodMaterial` likewise sets
+  `clipping = true`. Both documented paths *should* clip, so the mechanism is still unknown. Top
+  surviving hypothesis: `EdgeDetectionPass.setMaterialToMesh` **skips `isLODGeometry` tiles**, so in
+  `edgeMode: DEFAULT` LOD tiles take a different path — which would make VW-04 and VW-01 one root
+  cause. **The test needs no code:** the PostRender tab already exposes a live *Edge mode* dropdown
+  (`Default (with LODs)` / `Global (faster)`); flip it to Global and re-drag a plane. Note that
+  [ADR-0025](docs/adr/0025-house-look-is-the-boot-preset.md) made `DEFAULT` the app-wide boot value,
+  so this is what every tab pays today.
+- **VW-02 — `byteLength` of undefined thrown inside `WebGLRenderer.render`, 56× at load.** **Could not
+  be reproduced.** A Playwright probe drove a real login and model load against the exact project from
+  the report (`522b15bc…`, 2524_VOCO, 6 fragments, 25.6 MB largest) in two environments: headless on
+  the Vite dev server, and **headed real-GPU Chrome on the production `vite preview` bundle**. Zero
+  uncaught throws, zero console errors, zero failed requests in both.
+  - ⚠️ **The transport hypothesis is positively ruled out** — the report's own "not yet checked" item.
+    Every fragment response was `200 application/octet-stream` at its full expected length; no
+    truncation, no 4xx, no `requestfailed`.
+  - What that leaves: the report ran against deployed bundle `index-Rd-bU4Mi.js` in the developer's own
+    Chrome (with extensions — it captured extension message-port errors too). Either the throw is
+    environment-specific, or it is already gone. Needs a repro in that browser before any code moves;
+    guarding it is not available to us in any case, since we do not own `WebGLAttributes`.
+  - The probe and its production-preview Playwright config are **not committed** (Phase 0 was specified
+    as instrumentation only). They are kept at `/tmp/bimboy-phase0/` with both run logs, and are worth
+    promoting to a real load-error regression spec if VW-02 ever reproduces.

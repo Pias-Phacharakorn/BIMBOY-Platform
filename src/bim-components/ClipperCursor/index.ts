@@ -22,6 +22,17 @@ export * from "./src";
 const MAX_PLANES = 6;
 
 /**
+ * A plane's display label, spelled in exactly one place.
+ *
+ * ⚠️ **Derived from list position, never from a counter.** A monotonic `nextPlaneIndex` was the
+ * first shape and it drifted: it kept incrementing across deletes and Clear all, so a session
+ * that had added and removed a few planes showed a lone "Plane 3" — a label naming nothing the
+ * list contained. Position is the only value that cannot disagree with what is on screen, which
+ * is why {@link ClipperCursor.deletePlane} renumbers rather than leaving gaps.
+ */
+const planeName = (index: number) => `Plane ${index + 1}`;
+
+/**
  * Hides and disables ThatOpen's default clipper arrow: the gizmo handle replaces it.
  *
  * Has to be re-applied after every `plane.visible` assignment, because that one setter
@@ -69,7 +80,6 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
   readonly onStateChanged = new OBC.Event<void>();
 
   public planes: ClipperPlaneState[] = [];
-  public nextPlaneIndex = 1;
   public selectedPlaneId: string | null = null;
 
   public readonly outlines: ClipperOutlineManager;
@@ -162,9 +172,17 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
        * model, which is the invariant `AxisDragManager` depends on and cannot check for itself.
        *
        * The diamond needs no thinness argument of its own — it *is* the drawn quad — but it does
-       * lean on `AxisDragManager._pickHandle`'s per-id "inPlane" priority: the diamond's corners
-       * (`0.424` gizmo units) sit entirely inside the arrow's grab cylinder (`0.525`), so without
-       * that override it could never win a nearest-hit raycast against its own arrow.
+       * lean on `AxisDragManager._pickHandle`'s per-id "inPlane" priority, which makes an
+       * `"inPlane"` hit beat that same id's `"axis"` hit **regardless of distance**.
+       *
+       * ⚠️ That priority used to be describable as a tie-break inside a containment: the diamond's
+       * corners reach `0.424` gizmo units and the arrow's grab cylinder had a radius of `0.525`,
+       * so the diamond was wholly enclosed and could never win a nearest-hit raycast unaided.
+       * `GIZMO_PICK_RADIUS` has since dropped to `0.16` (× `GRAB_AXIS_EMPHASIS` = `0.24`) to stop
+       * the cylinder swallowing orbit drags, so **the containment is now inverted** — the
+       * diamond's corners reach past the cylinder in-plane. The override is what still makes the
+       * centre handle behave, and it is now doing real work rather than breaking a tie: without
+       * it, which handle you got would depend on where in the diamond you pressed.
        */
       pickTargets: () => {
         const targets: { mesh: THREE.Mesh; id: string; mode?: AxisDragMode }[] = [];
@@ -281,6 +299,13 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
     this._clipper.delete(this._world, id);
     this.planes = this.planes.filter((p) => p.id !== id);
 
+    // Close the gap the filter just left, so every label still matches its row. Safe to rewrite
+    // in place: `name` is display-only — `id` is what the managers, the gizmos and `ToolbarClip`
+    // key on — so renaming a plane cannot reach anything but the text in the list.
+    this.planes.forEach((plane, index) => {
+      plane.name = planeName(index);
+    });
+
     if (this.drag.hoveredId === id) this.drag.clearHover();
 
     if (this.selectedPlaneId === id) {
@@ -335,11 +360,10 @@ export class ClipperCursor extends OBC.Component implements OBC.Disposable {
 
     this.planes.push({
       id: planeId,
-      name: `Plane ${this.nextPlaneIndex}`,
+      name: planeName(this.planes.length),
       enabled: true,
       gizmoMoved: false,
     });
-    this.nextPlaneIndex++;
 
     this._adoptPlane(planeId);
     this.selectPlane(planeId);
