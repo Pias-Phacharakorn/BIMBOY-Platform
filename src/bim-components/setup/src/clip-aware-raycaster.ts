@@ -58,6 +58,38 @@ const nearestOf = <T extends { distance: number }>(
  * non-snap raycasts, so the term was removed rather than replaced. The clip-blind behaviour it
  * used to describe is no longer opt-in — if the vendor's fast path now short-circuits the
  * raycast data this override reads, selection into a cut regresses for every consumer at once.
+ *
+ * ⚠️ **`requireNormal` exists because the 3.4.8 fast path cannot promise a surface normal.**
+ * That warning above landed. `SimpleRaycaster.castRay` is no longer a worker raycast at all: it
+ * is a GPU pick, `FastModelPickers.get(world).getFullPick(position)`, composed from three
+ * render+readback passes —
+ *
+ * ```js
+ * const item   = await this.getItemAt(position);    // id pass, then AWAITS a worker round-trip
+ * const point  = await this.getPointAt(position);   // re-renders the scene, reads depth
+ * const normal = await this.getNormalAt(position);  // re-renders the scene, reads the normal
+ * return { ...item, point, normal, distance };      // normal may be null — the pick still "succeeds"
+ * ```
+ *
+ * Across that worker await the scene keeps streaming: tiles arrive, LODs swap. If the pixel under
+ * the cursor changes in that window `getNormalAt` returns `null` and **the hit is returned anyway,
+ * with no normal** — while a null from `getPointAt` sinks the whole pick. Neither is an error, so
+ * a consumer that needs orientation sees an ordinary miss.
+ *
+ * That is invisible to id-only consumers (`Highlighter` reads the id pass alone) and fatal to
+ * orientation ones: it is why the *first* section plane silently failed to place right after a
+ * model load, and why the second never did — from one plane onward, `clippingPlanes` is non-empty
+ * and every pick already came down the worker path below.
+ *
+ * So `requireNormal` does not add a fallback; it opts out of the fast path, which is all that was
+ * ever needed — {@link _nearestVisibleFragment} reads `model.raycastAll`, whose normals come from
+ * face data rather than a readback, and it clip-filters on the way. Opt-in rather than always-on
+ * because `Hoverer` picks on every settle and must keep the cheap path.
+ *
+ * ⚠️ **Still unfixed for the other orientation consumers.** `MeasureHoverManager`,
+ * `SpotCoordinate`, `SurfaceMeasureEngine` and `ViewportWrapper`'s align mode all derive a normal
+ * from `castRay` and all take the fast path at zero planes, so all four can intermittently lose
+ * it the same way. Each is a one-line `requireNormal: true`.
  */
 export class ClipAwareRaycaster extends OBC.SimpleRaycaster {
   /** {@inheritDoc OBC.SimpleRaycaster.castRay} */
@@ -65,13 +97,21 @@ export class ClipAwareRaycaster extends OBC.SimpleRaycaster {
     items?: THREE.Mesh[];
     position?: THREE.Vector2;
     snappingClasses?: SnappingClass[];
+    /**
+     * Ask for a hit that actually carries `normal`. Costs a worker round-trip even with nothing
+     * clipped — see the ⚠️ note on the class. Pass it only from tools that need orientation.
+     */
+    requireNormal?: boolean;
   }) {
     const renderer = this.world.renderer?.three;
-    const planes = renderer?.clippingPlanes;
+    // `?? []` rather than the optional chain the guard below used to test: with `requireNormal`
+    // set we take the filtering path at zero planes too, and `_nearestVisibleFragment` needs a
+    // list to iterate. An empty one filters nothing — `[].every(…)` is `true` for every hit.
+    const planes = renderer?.clippingPlanes ?? [];
 
     // Fast path: with nothing clipped there is nothing to filter, so keep the vendor's
     // optimised call. This matters — Hoverer raycasts on every pointermove.
-    if (!renderer || !planes?.length) {
+    if (!renderer || (!planes.length && !data?.requireNormal)) {
       return super.castRay(data);
     }
 
