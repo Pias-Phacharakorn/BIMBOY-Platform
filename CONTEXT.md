@@ -310,3 +310,166 @@ day that tab is built.
 
 `setup/index.ts:108` and `ModelsView.tsx:125` both still claim `RoomView` ghosts the model.
 ADR-0017 removed the ghost. They mislead about precisely the thing being changed here.
+
+---
+
+## Staged: Realistic owns its own Gloss and AO (grilled 2026-08-28, not yet implemented)
+
+⚠️ **Nothing written yet.** Design only, settled in a `/grill-with-docs` session. No code, no guide
+edits, no ADR file until the developer has tested it.
+
+**Requirement.** The PostRender and Realistic tabs must not share Gloss and Ambient Occlusion
+settings. Realistic gets its own copy of both, tunable independently.
+
+This is [ADR-0025](docs/adr/0025-house-look-is-the-boot-preset.md) § Consequences being cashed in —
+it recorded *"widening its `_baseline` with the AO block […] Deferred, not rejected […] Not written
+blind."* Gloss was not anticipated there.
+
+### The rule
+
+There is exactly **one** set of passes: `world.renderer.postproduction` is a singleton, and
+`glossPass` / `aoPass` / `defaultAoParameters` are engine state. "Not shared" therefore means
+**snapshot-and-restore**, which `RealisticView` already does for `style` — the only reason the
+Realistic tab does not permanently corrupt the house look today.
+
+`RealisticView.Baseline` widens to carry `glossEnabled`, the six gloss numbers, a **copy** of
+`defaultAoParameters`, and `aoPass.blendIntensity`. `activate` snapshots and writes Realistic's
+values; `deactivate` restores the snapshot exactly. Tabs are mutually exclusive in `ModelsView`, so
+only one panel is ever mounted and there is no concurrent-writer case.
+
+| Decision | Choice |
+|---|---|
+| PostRender's Gloss/AO | **kept** — AO is part of the boot preset every other tab renders with; removing the controls would make the house look untunable |
+| Realistic's values | **remembered** across tab flips, in `RealisticView._settings` — matches sun/sky, which already survive `deactivate` |
+| PD denoise (7 sliders) | **excluded** from Realistic — stays global |
+| AO seed | `POSTPRODUCTION_PRESET.ao` verbatim, **except `aoBlend` `1 → 0.5`** |
+| Gloss seed | vendor shader defaults, **except `minGloss` `-0.12 → 0`**; `glossEnabled: false` |
+| Settings shape | nested `ao` / `gloss` blocks + dedicated `updateAo()` / `updateGloss()` |
+| Reset | two buttons — *Reset daylight* (sun/sky/exposure, unchanged scope) and a new *Reset render* (gloss + AO) |
+
+### Why the two seed deviations, and only those two
+
+Both are corrections that can be justified *before* looking at a render. Everything else is the
+house value, so the developer tunes from a known baseline in step 4 and the result is baked into the
+constant before any doc is written — the same loop that produced `POSTPRODUCTION_PRESET`.
+
+- **`aoBlend` `1 → 0.5`.** ADR-0025 chose `1` because *"anything less is invisible against this
+  scene's ambient light"*, and `create-world.ts` runs ambient at `1.5`. `RealisticView.activate`
+  drops ambient to **`0.15`** — a factor of ten — and adds real shadow maps. Blend `1` there is AO
+  doubling up on sun shadows, exactly the *"reads too heavy against real daylight shadows"* case the
+  ADR flagged.
+- **`minGloss` `-0.12 → 0`.** ⚠️ `minGloss` is not a gloss floor, it is a **global darkening offset
+  applied wherever gloss is absent.** `GlossPass`'s fragment shader clamps `gloss = max(gloss,
+  0.001)`, so a zero-gloss pixel evaluates to `normalize(vec3(0.001)) * minGloss` ≈ `0.577 * minGloss`
+  per channel, added to the scene colour. At the vendor's `-0.12` that is a flat **−0.069 on every
+  channel** of every low-gloss pixel — **including the entire sky**, which contributes nothing to the
+  gloss buffer (see the trap below). Against a daylight image that is already dark by design, that
+  reads as a bug and would cost a tuning round to trace.
+
+### Vendor traps found while grilling — none of them documented upstream
+
+1. ⚠️ **Gloss is camera-relative, not light-relative.** `projected-normal-material.ts` computes
+   `dot(vNormal, normalize(cameraPosition - vPosition))` and takes **no light direction at all**. It
+   is a fresnel sheen keyed to viewing angle, *not* a specular highlight — it will not track the sun.
+   This is why it is worth having on Realistic (material sheen) but is not "sun glint".
+2. ⚠️ **The sky contributes nothing to the gloss buffer.** `GlossPass.render` sets
+   `scene.overrideMaterial`, and `getProjectedNormalMaterial()` declares no `side`, so it defaults to
+   `FrontSide`; three.js `overrideMaterial` replaces `side` too. `Sky.js` is `side: BackSide` and the
+   camera is inside a 450 km sphere, so its faces are culled. `basePass.isolatedMaterials` does not
+   help — that is a `BasePass` concept and `GlossPass` never consults it. Hence trap 3 below hitting
+   the sky hardest.
+3. ⚠️ **Gloss costs a full extra scene render every frame.** `GlossPass.render` does
+   `renderer.render(this.renderScene, this.renderCamera)` into its own buffer. Unlike Realistic's
+   shadow map — pinned to `autoUpdate = false` in `_applySettings` precisely so orbiting is free —
+   this pays on every frame, in a scene ADR-0024 notes is CPU-bound on draw-call submission. **This
+   is why `glossEnabled` defaults to `false`**: nobody pays for a pass they did not ask for.
+4. ⚠️ **`set glossEnabled` re-runs the style setter** (`this.style = this._style`). Toggling gloss
+   rebuilds the entire composer chain, and the style setter pushes `defaultAoParameters` into the AO
+   material when the style leaves `PEN_SHADOWS`. Gloss and AO are therefore **not** independent
+   writes at the vendor level, whatever the UI suggests.
+5. `COLOR_SHADOWS` — the style `RealisticView` installs — **does** add the gloss pass, before the AO
+   pass. Worth confirming: `PEN` and `PEN_SHADOWS` omit `_glossPass` entirely, so gloss on the wrong
+   style would be a silent no-op.
+
+### Implementation constraints — consequences of the above, not open questions
+
+- **`Baseline` must copy the AO block, not reference it.** `defaultAoParameters` is mutated in place
+  (`postproduction.defaultAoParameters[key] = value`), so a stored reference would "restore" the very
+  values it was meant to undo.
+- **Order is load-bearing in both directions.** `activate` writes the AO block into
+  `defaultAoParameters` **before** touching `glossEnabled` or `style` — otherwise trap 4 pushes the
+  *old* AO into the material. `deactivate` restores AO, then gloss, then style.
+- **`deactivate` must call `updateGtaoMaterial` explicitly.** The style setter's re-push only fires
+  when leaving `PEN_SHADOWS`, and Realistic sits at `COLOR_SHADOWS`, so restoring `style` will not do
+  it. `aoPass.blendIntensity` is likewise untouched by the style setter and must be restored by hand.
+  Both rules are what `applyPostproductionPreset` already follows.
+- **All writes stay inside the `_generation` guard.** `activate` is async and StrictMode makes the
+  cancelled-activate path normal, not rare —
+  [ADR-0026](docs/adr/0026-async-activate-needs-an-ownership-token.md).
+- **`update()` stays sun-only.** Writing 14 pass values on every azimuth drag is waste; `updateAo` /
+  `updateGloss` write only their own block, and the initial write happens once at `activate`.
+
+### Placement
+
+- **Engine:** `bim-components/RealisticView/index.ts` — widened `Baseline`, widened
+  `RealisticSettings` / `REALISTIC_DEFAULTS`, new `updateAo()` / `updateGloss()`. Types reused from
+  `setup/src/postproduction.ts` (`AoParameters`, `aoPassOf`), not re-declared.
+- **Hook:** `useRealisticView` returns `updateAo` / `updateGloss` alongside `update`.
+- **UI:** two new `PanelSection`s in `RealisticPanel` — **Gloss** (`icon="APPLY"`) and **Ambient
+  occlusion** (`icon="TRANSPARENT"`), both `defaultOpen={false}`, below Sun and Sky & exposure, so the
+  daylight controls stay the visible ones. Icons and collapsed treatment match `PostRenderPanel`.
+- **Nothing in `postproduction.ts` changes**, and `PostRenderPanel` is untouched.
+
+### Alternatives rejected
+
+- **Move Gloss/AO to Realistic, off PostRender.** Breaks the house look: AO *is* part of
+  `POSTPRODUCTION_PRESET` ([ADR-0025](docs/adr/0025-house-look-is-the-boot-preset.md)), which every
+  non-Realistic tab renders with. You would be tuning the daylight look and hoping the flat one
+  followed.
+- **Inherit-and-forget** — Realistic starts from the live house values each visit, tuning dies on tab
+  exit. Rejected because `deactivate` already does *not* clear `_settings` (sun angles survive a tab
+  flip today), so one panel would have two memory rules; and AO tuned for daylight would have to be
+  re-entered every visit.
+- **Give Realistic the PD sliders, restoring `PD_DEFAULTS` on exit.** Data loss wearing a feature's
+  clothes: it silently discards whatever the user tuned in PostRender.
+- **Give Realistic the PD sliders, backed by a shadow record in `postproduction.ts`.** The
+  technically correct version of "include", and it would fix a real existing drift —
+  `PostRenderPanel.readState` seeds `pd: { ...PD_DEFAULTS }` on every mount, so tuning PD, leaving the
+  tab and returning shows defaults while the engine holds the tuned values. Rejected **for this
+  branch only**: PD is a denoiser for the AO buffer, not a look, so the visual payoff for changing
+  shared bootstrap code is close to nil. ⚠️ **Accepted consequence: PD stays genuinely shared between
+  the two tabs**, and the PostRender read-back drift stays unfixed. Worth its own change.
+- **A flat `RealisticSettings`** (`aoRadius`, `glossMinGloss`, …) so the existing shallow
+  `{ ...this._settings, ...next }` stays correct. Rejected: it discards `AoParameters`, which is
+  derived from the vendor type, and needs a hand-rolled re-assembly layer before `updateGtaoMaterial`
+  can consume it — with nothing to catch the two drifting apart.
+- **One `update()` with a deep merge for the two object keys.** Hides the hazard instead of removing
+  it: shallow for six keys and deep for two is a footgun for whoever adds the ninth. ⚠️ The hazard is
+  real — with nested blocks, the current shallow spread would let `update({ ao: { radius: 0.3 } })`
+  type-check while wiping every sibling AO field at runtime.
+- **One reset button covering everything.** Sun and exposure get moved constantly; AO and gloss get
+  set once. A single button costs the AO tuning every time you want the sun back. The split also
+  matches `PostRenderPanel`, which already separates *Restore preset* from *Reset outline to preset*.
+- **Hand-picked daylight values for the whole block.** Rejected as writing blind — the thing ADR-0025
+  explicitly refused. The house preset itself came from the developer's live tuning against a real
+  model; that is step 4, not step 3.
+
+### Docs plan (only after the developer confirms it works)
+
+1. **New ADR — *Realistic owns its own gloss and AO*.** Carries the rejections above and the five
+   vendor traps. ⚠️ **Number not yet assigned:** the staged IFCSpace entry above has already claimed
+   **ADR-0028**, so whichever branch merges first takes it and this becomes **0029**. Fix at
+   promotion time.
+2. **[ADR-0025](docs/adr/0025-house-look-is-the-boot-preset.md) amended, not superseded** — its
+   *"`RealisticView` is left alone […] Deferred, not rejected"* Consequences bullet gains a forward
+   pointer to the new ADR. The boot-preset decision itself stands in full.
+3. `bim-viewer.md` § Realistic tab — the widened baseline, the two new sections, the two seed
+   deviations and why, and the per-frame cost of gloss.
+4. `bim-viewer.md` § PostRender tab — one line that PD is the only render setting still shared with
+   the Realistic tab, and that its read-back drift is known.
+
+### Open, deliberately
+
+The gloss and AO numbers above are a **starting point, not a claim.** Step 4 is where the developer
+tunes them against a real model in daylight; the values landed on get baked into `REALISTIC_DEFAULTS`
+before any of the docs plan is executed. Where testing and this entry disagree, this entry is wrong.
