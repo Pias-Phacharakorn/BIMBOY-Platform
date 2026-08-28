@@ -29,6 +29,26 @@ Supabase is the sole backend: auth, Postgres, storage. The client is created onc
 - Typed helpers + generated `types.ts` keep queries type-safe; regenerate types after schema changes.
 - For schema/RLS/migration/edge-function work, delegate to the `Agent_Supabase` agent (Supabase MCP).
 
+## Guest demo mode
+
+`/demo` gives a signed-out visitor a working viewer. **A guest gets no Supabase session at all** — the whole feature is client-side, with zero backend surface. → [ADR-0021](../adr/0021-guest-demo-mode-is-client-side-only.md).
+
+- `AuthContext` carries an `isGuest` flag in `sessionStorage`; `useProjects` / `useProject` / `useProjectMembers` short-circuit to a hard-coded `DEMO_PROJECT_ROW` **before any network call**; the viewer loads `.frag` files from `public/resources/demo/` as static assets.
+- `/demo` is the single entry point and its `beforeLoad` guard performs the navigation, so the one-redirect-mechanism rule above still holds.
+- ⚠️ **`src/lib/guestSession.ts` owns the flag, and the route guards read it *synchronously*** — not only off `context.auth`. This is not stylistic: on a hard load the router evaluates `beforeLoad` before `RouterProvider`'s context is wired (`router.tsx` starts with `auth: undefined!`). A signed-in user self-heals because `login.tsx`'s guard bounces them to `?redirect=`; a guest has nothing to bounce them back, so guest mode did not survive a refresh at all. It lives in `lib/` because both `AuthContext` and the route guards need it, and features may not import one another.
+- Changing what the demo shows is a code change plus new `.frag` files — not a database edit.
+- **Open, unproven:** the MODELS LIST panel shows 7 of the 8 demo models on first paint, and which one is absent varies per run. All 8 fetch cleanly (HTTP 200) and no load error surfaces, so it looks like a list-subscription race rather than a dropped model — but that is a hypothesis.
+
+### ⚠️ Before anyone enables Supabase anonymous sign-in
+
+Anonymous auth was the rejected design, and three **unverified** hazards are the reason. They are properties of the existing schema, not of the demo feature, so they apply to whoever flips that switch for any reason:
+
+1. **Anonymous users hold the `authenticated` Postgres role.** Any policy checking only the role (`auth.role() = 'authenticated'`, or `to authenticated` with no predicate) starts admitting guests the instant the switch is flipped — no policy edit, no error, nothing in the logs.
+2. **`create_dummy_user` is a `SECURITY DEFINER` function in `public`**, called straight from the browser. Postgres grants `EXECUTE` to `PUBLIC` by default, so RPCs are not RLS-gated: today any registered user can mint `auth.users` rows; with anonymous sign-in on it becomes an unauthenticated endpoint.
+3. **A possible self-promotion chain:** if the `profiles` UPDATE policy lets a caller set their own `hub_role`, a guest becomes `hub_admin` and `is_hub_admin()` opens every policy in the database.
+
+None were confirmed against the live database. The read-only queries to check them were written as `supabase/audits/guest_mode_preflight.sql` and survive in git history on `feat/guest-demo-mode`. **Also note there is no staging database** — dev and production share one Supabase project (`tbrnwnghjfkwnzsldfit`, in both `.env.local` and the Cloudflare build variables).
+
 ## Gotchas / watch-outs
 
 - Don't call Supabase from `views/` or `components/` — always through a feature service.

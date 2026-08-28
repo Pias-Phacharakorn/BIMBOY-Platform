@@ -75,13 +75,25 @@ Sets which world direction the ViewCube calls "front".
 
 ### Settings (`ToolbarSettings.tsx`)
 
-The one dropdown that is a form. Grid visible · Mini Map · Auto Rotate · Grid Level (m) · Camera Projection │ Hover Highlight · Hover Colour │ Performance · Scene Diagnostics.
+The one dropdown that is a form. Grid visible · Mini Map · Auto Rotate · Grid Level (m) · Camera Projection │ Background │ Hover Highlight · Hover Colour │ Performance · Scene Diagnostics.
 
 - **It re-reads the engine on every open** (the sync effect depends on `isSettingsOpen`), because every one of these values can be changed by something other than this menu.
 - **It subscribes `world.onCameraChanged` to keep the projection select honest** — opening or closing a 2D view swaps `world.camera` to an orthographic camera and back, and the dropdown would otherwise lie. Changing projection here also calls `postproduction.updateCamera()`, per the resync gotcha in `bim-viewer.md`.
 - **Mini Map is the only setting that lives in `uiStore`** (`showMinimap`) rather than being written straight to the engine — it gates the `MiniMapOverlay` component, not an OBC flag.
 - **Auto Rotate is a hand-rolled `requestAnimationFrame` loop**, not a camera-controls feature: it targets the `BoundingBoxer` model centre, then calls `controls.rotate(0.005, 0, false)` per frame. It cancels itself on the first `controlstart` (any user input wins) and when the last model unloads, and is disabled outright with no model loaded. `hasModel` is tracked by subscribing `fragments.list.onItemSet`/`onItemDeleted`, with a `setTimeout` retry because those events aren't available until the manager initialises.
 - ⚠️ **Hover Highlight writes `OBF.Hoverer.enabled` directly** — see § Cross-button hazards. This is the one setting the right rail will silently undo.
+
+#### Background (the row, and its dialog)
+
+A Navisworks-style dialog behind one row, with two styles — Graduated (top/bottom) and Plain. → [ADR-0027](../adr/0027-viewport-background-painted-in-css.md).
+
+- ⚠️ **It is painted in CSS, and never touches `scene.three.background`,** which stays `null`. `.viewport-container` already paints the backdrop through the transparent canvas, so this drives a CSS custom property on that existing mechanism rather than adding a second one. Do not "fix" this by moving it into three.js — a graduated backdrop there needs a `CanvasTexture` rebuilt and disposed on every colour change, and puts an untested full-screen surface in front of AO and edge detection.
+- **"No override" is a real state, and it is the default.** `viewportBackground` starts `null` and the rule reads `background: var(--viewport-bg, <the two existing layers>)`, so the branded look — 135° gradient plus the blue radial highlight — is the `var()` fallback, untouched until the user picks something. **Reset to defaults removes the property**; it does not write a colour. Anything reading this state must treat `null` as "the branded look", not as "unset".
+- **State is `{ style, topColor, bottomColor }` in `uiStore`**, session-only, alongside `backgroundModalOpen`. In `uiStore` rather than local `useState` (which is what this file does for `hoverColor` and `gridVisible`) for a concrete reason: the CSS variable lives on `documentElement` and survives a `ToolbarSettings` remount, so local state could reset and leave the row's swatch disagreeing with the viewport.
+- **Plain reuses `topColor`**, so Graduated → Plain → Graduated is lossless.
+- **Live apply, with Cancel restoring an open-time snapshot** (Reset to defaults / Cancel / Done). The real viewport is the preview; the modal's pane is a convenience.
+- The dialog copies `CloudModelModal`'s chrome and sits beside it in `components/bim/`, rather than building on `components/ui/Modal` — that primitive is a bare box with no header or footer, so matching the reference through it would mean rebuilding the chrome inside it anyway.
+- **The Realistic tab ignores this setting** — it adds a `Sky` *mesh*, which hides the backdrop whatever paints it.
 
 #### The two diagnostic rows (`features/viewport-diagnostics/`)
 
