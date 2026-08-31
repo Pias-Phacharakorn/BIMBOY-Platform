@@ -473,3 +473,47 @@ constant before any doc is written — the same loop that produced `POSTPRODUCTI
 The gloss and AO numbers above are a **starting point, not a claim.** Step 4 is where the developer
 tunes them against a real model in daylight; the values landed on get baked into `REALISTIC_DEFAULTS`
 before any of the docs plan is executed. Where testing and this entry disagree, this entry is wrong.
+
+---
+
+## Staged: full-screen viewport toggle (branch `feat/viewport-fullscreen`)
+
+⚠️ **Nothing implemented yet — this is the grilled design only.** Promote to
+`bim-viewport-toolbars.md` (+ an ADR for the `fullscreenchange` decision) only after the developer
+confirms it in the app.
+
+**Goal.** A button in `ViewportToolbar` that takes the model viewport full-screen — hiding the app's
+own chrome (`Sidebar`, `WorkspaceHeader`) *and* entering browser fullscreen.
+
+### What the codebase already had
+
+- `uiStore.sidebarCollapsed` / `setSidebarCollapsed` are **declared and dead** — nothing reads or
+  writes them. `AppShell` keeps its own `useState` + `localStorage("sidebarCollapsed")` instead.
+  Left alone deliberately: cleaning it up is unrelated to this feature, and the new flag is a
+  different concept, not a reuse of that one.
+- `appIcons.EXPAND` (`eva:expand-fill`) existed and was unused.
+- `create-world.ts` binds `viewport.addEventListener("resize", resizeWorld)` on the `<bim-viewport>`
+  element, so the renderer should follow the size change with no new code. **Assumption, untested.**
+
+### Decisions
+
+| # | Decision | Rejected, and why |
+|---|----------|-------------------|
+| 1 | **Both** app-chrome hiding *and* the browser Fullscreen API — not either alone | In-page maximise alone leaves browser chrome; browser-fullscreen alone leaves the app's own frame |
+| 2 | `requestFullscreen()` targets **`document.documentElement`** | Fullscreening the viewport `<section>` breaks portalled modals — `BackgroundSettingsModal` and `CloudModelLoadingModal` portal to `document.body`, which is not a descendant of a fullscreened `<section>`, so the browser refuses to render them. Settings → Background from the very toolbar this button joins would open onto nothing. Fixing that means re-parenting the portals into this feature's element — the modals would have to learn about fullscreen |
+| 3 | **One flag, and `fullscreenchange` is its only writer.** The button calls `requestFullscreen`/`exitFullscreen` and writes nothing | Two independent flags strand the user: Esc returns browser chrome but leaves `Sidebar`/`WorkspaceHeader` hidden, with the exit affordance to hunt for. **Listening for the Escape *key* was also rejected** — `ClipperPlacementManager` binds a lifetime-long global `window` keydown for Escape, and four modals bind their own; a fifth would make Esc during plane placement cancel the placement *and* exit fullscreen. The browser raises `fullscreenchange` for Esc itself, so Esc-to-exit is free and conflict-free |
+| 4 | Hides **only** `Sidebar` + `WorkspaceHeader`. `LeftPanel`/`RightPanel` untouched | Collapsing the panels too needs restore-on-exit, but `LeftPanel` owns `isOpen` *and* a dragged `width` in local `useState` — restoring means lifting that into the store or overriding by prop. Not restoring silently discards a width the user dragged. Their collapsed rails stay reachable in fullscreen anyway, so "model only" is already two clicks away |
+| 5 | **Session-only** — no `localStorage`, and `ModelsView` exits fullscreen on unmount | Persisting is not merely unwanted but impossible to honour: `requestFullscreen()` needs a user gesture, so a restored flag on boot would hide chrome with no fullscreen — decision 3's stranded state, on every reload. Global persistence across routes would leave a header-less Settings page with no `ViewportToolbar` to escape from |
+| 6 | New `COLLAPSE: "eva:collapse-fill"` icon; the glyph swaps, *and* the active styling from `ToolbarGhost` is kept | Tinting one glyph (the `ToolbarGhost` precedent) reads fine while the app frame is there to orient you. Fullscreen deletes that frame — the toolbar is the only chrome left — so the exit affordance should not rest on a colour difference |
+
+### Accepted consequence
+
+If `requestFullscreen()` is rejected (iframe without `allow="fullscreen"`, browser policy), the
+chrome never hides either — the button no-ops rather than half-works. Chosen over falling back to
+in-page maximise, which would reintroduce the state decision 3 exists to prevent.
+
+### Untested assumptions
+
+1. That `<bim-viewport>`'s resize event fires on the layout change and `world.renderer.resize()`
+   follows. If it does not, the canvas keeps its old aspect and the model appears stretched.
+2. That `LeftPanel`/`RightPanel` reflow correctly when the flex row gains the sidebar's width.

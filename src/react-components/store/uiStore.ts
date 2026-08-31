@@ -56,6 +56,22 @@ interface UIState {
    */
   viewportBackground: ViewportBackground | null
   setViewportBackground: (background: ViewportBackground | null) => void
+  /**
+   * Full-screen viewport mode — `AppShell` drops the `Sidebar` and `ModelsView` drops the
+   * `WorkspaceHeader` while it is set.
+   *
+   * **Only `useViewportFullscreen` writes this, and only from a `fullscreenchange` event.** The
+   * toolbar button asks the browser and writes nothing, so this boolean can never claim a mode the
+   * browser is not actually in — which is what makes Esc and F11 exit correctly without this app
+   * binding a keydown listener of its own.
+   *
+   * Deliberately not persisted (this store has no `persist` middleware, and `AppShell`'s
+   * neighbouring `sidebarCollapsed` localStorage key is not a precedent to follow here):
+   * `requestFullscreen()` needs a user gesture, so a value restored at boot would hide the chrome
+   * with no fullscreen behind it.
+   */
+  isViewportFullscreen: boolean
+  setViewportFullscreen: (fullscreen: boolean) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -84,4 +100,6 @@ export const useUIStore = create<UIState>((set) => ({
   bumpVisibilityEpoch: () => set((state) => ({ visibilityEpoch: state.visibilityEpoch + 1 })),
   viewportBackground: null,
   setViewportBackground: (background) => set({ viewportBackground: background }),
+  isViewportFullscreen: false,
+  setViewportFullscreen: (fullscreen) => set({ isViewportFullscreen: fullscreen }),
 }))

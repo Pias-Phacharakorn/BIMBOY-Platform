@@ -5,6 +5,7 @@ import { ToolbarVisibility } from "./ToolbarVisibility";
 import { ToolbarGhost } from "./ToolbarGhost";
 import { ToolbarAlign } from "./ToolbarAlign";
 import { ToolbarSettings } from "./ToolbarSettings";
+import { ToolbarFullscreen } from "./ToolbarFullscreen";
 
 export function ViewportToolbar() {
   const { components } = useBimStore();
@@ -20,6 +21,7 @@ export function ViewportToolbar() {
       <ToolbarGhost />
       <ToolbarAlign />
       <div className="w-[1px] h-4 bg-border" />
+      <ToolbarFullscreen />
       <ToolbarSettings />
     </div>
   );

@@ -32,6 +32,7 @@ export const appIcons = {
   SETTINGS: "mdi:cog-outline",
   TASK: "mdi:file-check-outline",
   EXPAND: "eva:expand-fill",
+  COLLAPSE: "eva:collapse-fill",
   CAMERA: "solar:camera-bold",
   SOURCE: "mdi:file-document-outline",
   SMARTVIEW: "mdi:teamviewer",
