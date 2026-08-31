@@ -3,6 +3,7 @@ import * as THREE from "three";
 // Relative, not the @/* alias: tsconfig excludes src/bim-components/**, so
 // vite-tsconfig-paths does not rewrite aliases inside this folder. Repo-wide convention here.
 import { CursorSurface } from "../../CursorSurface";
+import type { ClipAwareRaycaster } from "../../setup/src/clip-aware-raycaster";
 
 /**
  * Drives the shared {@link CursorSurface} guide from pointer movement: one raycast per
@@ -46,10 +47,19 @@ export class MeasureHoverManager {
     this._raycastInProgress = true;
 
     const cursorSurface = this._cursorSurface;
-    const raycaster = this._components.get(OBC.Raycasters).get(this._world);
+    // Typed to the subclass, not to what `Raycasters.get()` declares: the pick below passes
+    // `requireNormal`, which only `ClipAwareRaycaster` understands. `setupClipAwareRaycaster`
+    // has already swapped the instance into `Raycasters.list` before any world is usable, so
+    // this is the real type — the base signature is what is inaccurate.
+    const raycaster = this._components
+      .get(OBC.Raycasters)
+      .get(this._world) as ClipAwareRaycaster;
 
     raycaster
-      .castRay()
+      // The guide is *oriented* by the hit normal, so it needs the hit to carry one — and the
+      // opt-out that guarantees that is also what keeps this cast off the GPU pick, where a
+      // measurement line under the cursor decodes as a depth. See `ClipAwareRaycaster`.
+      .castRay({ requireNormal: true })
       .then((result) => {
         const normal = result && this._worldNormalOf(result);
         if (result?.point && normal) {
