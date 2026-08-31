@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Palette } from "lucide-react";
-import { ColorRow } from "@/react-components/components/ui";
+import { ColorRow, PresetRow } from "@/react-components/components/ui";
 import { useUIStore } from "@/react-components/store/uiStore";
 import {
+  VIEWPORT_BACKGROUND_PRESETS,
   VIEWPORT_BACKGROUND_SEED,
   applyViewportBackground,
   viewportBackgroundCss,
@@ -24,6 +25,12 @@ import {
  * branded gradient in `style.css`. The pickers open on {@link VIEWPORT_BACKGROUND_SEED} in that
  * state, and "Reset to defaults" returns to `null` rather than writing those seed colours — so the
  * default look is the original CSS rule, not an approximation of it.
+ *
+ * **A preset is a starting point, not a mode.** Dark and White write a whole
+ * {@link ViewportBackground} through the same `commit` a colour picker uses, after which every
+ * control below stays editable — so there is no "am I in a preset" state to keep in sync, and
+ * Cancel, Escape and Reset behave exactly as they did before presets existed. Note that Dark is not
+ * Reset: it is a vertical two-stop gradient, where the default is the branded 135° rule.
  *
  * Portalled to `document.body`, as `CloudModelModal` is: the Settings dropdown that opens this has
  * its own outside-click handler, and a dialog rendered inside it would be closed by its own clicks.
@@ -72,6 +79,21 @@ export function BackgroundSettingsModal() {
 
   const isPlain = draft.style === "plain";
 
+  // Derived every render rather than stored: editing a colour away from a preset unlights its
+  // swatch for free, and typing one back lights it again. Matched against the *committed*
+  // background, not the draft, so the default state (`null`) correctly lights neither — the draft
+  // is seeded with Dark's colours there, and highlighting Dark would claim a backdrop the viewport
+  // is not showing.
+  const activePresetId =
+    (viewportBackground &&
+      VIEWPORT_BACKGROUND_PRESETS.find(
+        ({ background }) =>
+          background.style === viewportBackground.style &&
+          background.topColor.toLowerCase() === viewportBackground.topColor.toLowerCase() &&
+          background.bottomColor.toLowerCase() === viewportBackground.bottomColor.toLowerCase(),
+      )?.id) ??
+    null;
+
   return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
@@ -99,6 +121,20 @@ export function BackgroundSettingsModal() {
           />
 
           <div className="flex flex-col gap-3.5 flex-1 min-w-0">
+            <PresetRow
+              label="Theme"
+              options={VIEWPORT_BACKGROUND_PRESETS.map(({ id, label, background }) => ({
+                id,
+                label,
+                background: viewportBackgroundCss(background),
+              }))}
+              activeId={activePresetId}
+              onSelect={(id) => {
+                const preset = VIEWPORT_BACKGROUND_PRESETS.find((option) => option.id === id);
+                if (preset) commit(preset.background);
+              }}
+            />
+
             <div className="flex items-center justify-between gap-3 text-xs text-fg">
               <span className="font-medium text-muted">Style</span>
               <div className="relative flex items-center">
