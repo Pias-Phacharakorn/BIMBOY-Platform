@@ -102,6 +102,56 @@ export function ColorRow({ label, value, onChange }: ColorRowProps) {
   );
 }
 
+interface PresetRowProps {
+  label: string;
+  options: {
+    id: string;
+    label: string;
+    /** Any CSS `background` shorthand — the swatch paints it verbatim, gradients included. */
+    background: string;
+  }[];
+  /** `null` when the current value matches none of them, which is a normal state here. */
+  activeId: string | null;
+  onSelect: (id: string) => void;
+}
+
+/**
+ * A row of one-click presets. Deliberately ignorant of what a preset *is*: it takes an already
+ * resolved CSS background per option and an id to hand back, so it stays a props-only primitive
+ * like its neighbours rather than importing whatever domain the presets came from.
+ *
+ * `activeId` is a highlight, not a mode — a caller is expected to derive it from the live value, so
+ * a preset can be selected and then edited away from without this row needing to be told.
+ */
+export function PresetRow({ label, options, activeId, onSelect }: PresetRowProps) {
+  return (
+    <div className={ROW}>
+      <span className={LABEL}>{label}</span>
+      <div className="flex items-center gap-1.5">
+        {options.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => onSelect(option.id)}
+            aria-pressed={option.id === activeId}
+            className={`flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded border text-[11px] font-semibold transition-colors duration-120 cursor-pointer ${
+              option.id === activeId
+                ? "border-accent bg-accent/15 text-fg"
+                : "border-border bg-surface-alt text-muted hover:border-accent hover:text-fg"
+            }`}
+          >
+            <span
+              className="w-3.5 h-3.5 rounded-sm border border-border/40"
+              style={{ background: option.background }}
+            />
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface SelectRowProps<T extends number> {
   label: string;
   value: T;

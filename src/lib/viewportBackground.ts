@@ -34,16 +34,46 @@ export const VIEWPORT_BACKGROUND_VAR = "--viewport-bg";
  */
 export const VIEWPORT_BACKGROUND_CURRENT_CSS = `var(${VIEWPORT_BACKGROUND_VAR}, var(--viewport-bg-default))`;
 
+export type ViewportBackgroundPresetId = "dark" | "white";
+
+export interface ViewportBackgroundPreset {
+  id: ViewportBackgroundPresetId;
+  label: string;
+  background: ViewportBackground;
+}
+
 /**
- * What the pickers open on when nothing has been chosen yet, converted from the branded rule's own
- * stops (`oklch(21% 0.05 252)` / `oklch(9% 0.014 255)`). A starting point for the dialog only —
- * these are never written anywhere until the user changes something.
+ * The two themed backdrops offered as one click in the settings dialog.
+ *
+ * They are ordinary {@link ViewportBackground} values, not a third state — selecting one is written
+ * through the same path a colour picker uses, so Style, Top and Bottom stay editable afterwards and
+ * Cancel / Reset need to know nothing about presets. They live here rather than in the dialog so a
+ * future toolbar quick-toggle can reuse them without importing a component.
+ *
+ * **Dark is not the same as Reset.** Dark is a vertical two-stop gradient; the default that this
+ * module's `null` state hands back is the branded 135° rule plus a blue radial highlight
+ * (`style.css`), which no combination of these two colours reproduces.
  */
-export const VIEWPORT_BACKGROUND_SEED: ViewportBackground = {
-  style: "graduated",
-  topColor: "#05192E",
-  bottomColor: "#010205",
-};
+export const VIEWPORT_BACKGROUND_PRESETS: readonly ViewportBackgroundPreset[] = [
+  {
+    id: "dark",
+    label: "Dark",
+    background: { style: "graduated", topColor: "#05192E", bottomColor: "#010205" },
+  },
+  {
+    id: "white",
+    label: "White",
+    background: { style: "graduated", topColor: "#C4D8ED", bottomColor: "#B8B8B8" },
+  },
+];
+
+/**
+ * What the pickers open on when nothing has been chosen yet — the Dark preset, whose stops are the
+ * branded rule's own (`oklch(21% 0.05 252)` / `oklch(9% 0.014 255)`) converted to hex. A starting
+ * point for the dialog only: never written anywhere until the user changes something.
+ */
+export const VIEWPORT_BACKGROUND_SEED: ViewportBackground =
+  VIEWPORT_BACKGROUND_PRESETS[0].background;
 
 /** Vertical, like the Navisworks dialog this mirrors. The default's 135° angle is not exposed. */
 export const viewportBackgroundCss = (background: ViewportBackground) =>
