@@ -19,6 +19,8 @@ import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useAutoLoadCloudModels } from "@/react-components/features/cloud-models/useAutoLoadCloudModels";
 import { useGuestDemoModels } from "@/react-components/features/guest-demo/useGuestDemoModels";
 import { useIfcSpaceVisibility } from "@/react-components/features/ifc-space-visibility/useIfcSpaceVisibility";
+import { useViewportFullscreenOwner } from "@/react-components/features/viewport-fullscreen/useViewportFullscreen";
+import { useUIStore } from "@/react-components/store/uiStore";
 
 const workspaceTabs = ["Models", "Queries", "Room", "Smart Views", "GIS", "Viewpoint", "Drawing Editor", "AR", "PostRender", "Realistic"];
 
@@ -53,6 +55,13 @@ export function ModelsView() {
   // IFCSPACE geometry is hidden in the viewport unless the user ticks it in Settings — except on
   // the Room tab, which is a list of spaces and so forces them visible for as long as it is open.
   useIfcSpaceVisibility(isRoomTab);
+
+  // This view owns full-screen mode: it renders the viewport, and the toolbar button that toggles
+  // it. The owner hook is what mirrors `fullscreenchange` into the store and guarantees the mode
+  // cannot outlive this view — `AppShell` wraps every workspace view, and a header-less Clash or
+  // Settings page would have no toolbar to escape from.
+  useViewportFullscreenOwner();
+  const isViewportFullscreen = useUIStore((state) => state.isViewportFullscreen);
 
   // The "AR" tab escapes ModelsView entirely: it navigates to the standalone
   // full-screen /ar page instead of swapping panels here, so the WebXR session
@@ -90,12 +99,16 @@ export function ModelsView() {
 
   return (
     <AppShell project={project} showSettings={showSettings}>
-      <WorkspaceHeader
-        title="BIM Model"
-        tabs={workspaceTabs}
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-      />
+      {/* Unmounted in full-screen mode, not hidden: it holds no state (`activeTab` lives here), and
+          the tabs it renders are the app chrome the mode exists to remove. */}
+      {!isViewportFullscreen && (
+        <WorkspaceHeader
+          title="BIM Model"
+          tabs={workspaceTabs}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+        />
+      )}
       <div
         className={
           isDrawingEditorTab
