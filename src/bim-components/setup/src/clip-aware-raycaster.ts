@@ -86,10 +86,33 @@ const nearestOf = <T extends { distance: number }>(
  * face data rather than a readback, and it clip-filters on the way. Opt-in rather than always-on
  * because `Hoverer` picks on every settle and must keep the cheap path.
  *
- * ⚠️ **Still unfixed for the other orientation consumers.** `MeasureHoverManager`,
- * `SpotCoordinate`, `SurfaceMeasureEngine` and `ViewportWrapper`'s align mode all derive a normal
- * from `castRay` and all take the fast path at zero planes, so all four can intermittently lose
- * it the same way. Each is a one-line `requireNormal: true`.
+ * ⚠️ **A snapping cast is never rasterised, and that is correctness, not preference.** The 3.4.8
+ * pick passes hide non-BIM objects only where `child.isMesh` is true:
+ *
+ * ```js
+ * scene.traverse((child) => { if (!child.isMesh) return; ...hide... });
+ * ```
+ *
+ * So every `Line`, `LineSegments` and `LineLoop` in `world.scene` renders into the id/depth/normal
+ * target **with its own material**, and its colour is then decoded as a packed depth. The only
+ * sanity check is `depth >= 1 - 1e-6`, which a line's colour sails past. Measured on VOCO: on a
+ * pixel covered by a measurement line the pick returned a point 897 m from the camera where the
+ * worker returned 59 m — the correct ray, a garbage distance. 10 px off the line, the two agreed
+ * to within 5 cm.
+ *
+ * That lands on the measure tools specifically because `LengthMeasurement`'s **preview line ends
+ * at the cursor**, so the second click of every length reads its own preview, and each committed
+ * `DimensionLine` poisons a fresh stripe of pixels for the next one. The point stays on the click
+ * ray, so it looks right until the camera moves and the measurement floats off into the sky.
+ *
+ * ⚠️ **Still unfixed for the other orientation consumers.** `SpotCoordinate`,
+ * `SurfaceMeasureEngine` and `ViewportWrapper`'s align mode all derive a normal from `castRay` and
+ * all take the fast path at zero planes, so all three can intermittently lose it — and, per the
+ * paragraph above, can be handed a line's colour as a depth. Each is a one-line
+ * `requireNormal: true`, as `MeasureHoverManager` now does. `CursorZoom` reads only a point and is
+ * a fourth. **`Hoverer`/`Highlighter` cannot be fixed here at all** — selection keeps the cheap
+ * path by design, so a click on a pixel crossed by a line can still miss or hit the wrong item.
+ * Only an upstream fix to `FastModelPicker` covers that.
  */
 export class ClipAwareRaycaster extends OBC.SimpleRaycaster {
   /** {@inheritDoc OBC.SimpleRaycaster.castRay} */
@@ -110,8 +133,9 @@ export class ClipAwareRaycaster extends OBC.SimpleRaycaster {
     const planes = renderer?.clippingPlanes ?? [];
 
     // Fast path: with nothing clipped there is nothing to filter, so keep the vendor's
-    // optimised call. This matters — Hoverer raycasts on every pointermove.
-    if (!renderer || (!planes.length && !data?.requireNormal)) {
+    // optimised call. This matters — Hoverer raycasts on every pointermove. A snapping cast
+    // never qualifies, whatever the plane count: see the ⚠️ on the class.
+    if (!renderer || (!planes.length && !data?.requireNormal && !data?.snappingClasses?.length)) {
       return super.castRay(data);
     }
 
