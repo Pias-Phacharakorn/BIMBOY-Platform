@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type RefObject } from "react";
 import { ArSession, type ArSessionStatus } from "@/bim-components";
 import { useBimStore } from "@/react-components/store/bimStore";
 
-export function useArSession(overlayRef: RefObject<HTMLElement>) {
+export function useArSession(overlayRef: RefObject<HTMLElement | null>) {
   const components = useBimStore((state) => state.components);
   const world = useBimStore((state) => state.world);
   const [status, setStatus] = useState<ArSessionStatus>("idle");

@@ -1,6 +1,9 @@
 import * as React from "react";
 
-declare global {
+// React 19 removed the *global* JSX namespace — it now lives at React.JSX, so a
+// `declare global { namespace JSX }` block silently stops applying and every
+// <bim-*> tag reports TS2339. Augment the "react" module instead.
+declare module "react" {
   namespace JSX {
     interface IntrinsicElements {
       'bim-panel': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
