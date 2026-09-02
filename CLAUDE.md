@@ -103,7 +103,7 @@ Nothing in `ClipperCursor` reveals that a grabbable translucent quad was *shippe
 ## 🛠️ Tech Stack
 
 **Frontend:** React 19 · @tanstack/react-router (file-based) · Zustand v5 · Tailwind v4  
-**Data:** TanStack Query · Zod v3  
+**Data:** TanStack Query · Zod v4  
 **BIM:** @thatopen/components + @thatopen/ui **v3.4.x** · Three.js ^0.182  
 **Backend:** Supabase (auth, DB, storage)  
 **Build:** Vite 7 + router plugin + tsconfig paths  
