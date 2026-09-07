@@ -202,3 +202,126 @@
   box-shadow: 0 0 10px oklch(0% 0 0 / 50%);
 }
 
+
+/* ─── IoT annotation chips ─────────────────────────────────────────────────────
+   Floating readings anchored to bound IFC elements, drawn by the CSS2D layer that
+   `OBF.PostproductionRenderer` already owns.
+
+   These live here rather than in the component because `bim-components/` is engine-only by the
+   project's layer rules — no Tailwind — and because clickable chips need `:hover`, a selected
+   state and four tones, which inline styles cannot express without hand-rolling hover in JS.
+
+   A runtime probe confirmed the 2D layer is a light-DOM child of `<bim-viewport>`, so this
+   stylesheet reaches it and every token below resolves. Colour comes only from tokens.        */
+@layer components {
+  .iot-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: var(--radius-radius-sm);
+    border: 1px solid var(--color-border-strong);
+    /* Derived from the token, not a copy of its value — retuning --color-surface must carry. */
+    background: color-mix(in oklch, var(--color-surface) 92%, transparent);
+    color: var(--color-fg);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    /* The 2D layer as a whole is pointer-events:none, so each chip opts back in. */
+    pointer-events: auto;
+    box-shadow: 0 2px 8px oklch(0% 0 0 / 45%);
+    transition:
+      transform 120ms ease-out,
+      border-color 120ms ease-out,
+      background-color 120ms ease-out;
+  }
+
+  /* Set while a viewport tool is placing points or planes: chips must never win that click. */
+  .iot-chip--inert {
+    pointer-events: none;
+  }
+
+  .iot-chip:hover {
+    transform: translateY(-1px);
+    border-color: var(--color-accent);
+  }
+
+  .iot-chip__icon {
+    display: inline-flex;
+    color: var(--color-muted);
+  }
+
+  /* Mono for digits — DESIGN.md reserves it for technical values, and it keeps them aligned. */
+  .iot-chip__value {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .iot-chip__unit {
+    color: var(--color-muted);
+    font-size: 10px;
+  }
+
+  .iot-chip__divider {
+    width: 1px;
+    align-self: stretch;
+    background: var(--color-border-strong);
+  }
+
+  .iot-chip__secondary {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Status is never colour alone: this glyph is what a colour-blind reader sees instead. */
+  .iot-chip__flag {
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .iot-chip--warn {
+    border-color: var(--color-status-warn);
+  }
+
+  .iot-chip--warn .iot-chip__icon,
+  .iot-chip--warn .iot-chip__flag {
+    color: var(--color-status-warn);
+  }
+
+  .iot-chip--alarm {
+    border-color: var(--color-status-danger);
+  }
+
+  .iot-chip--alarm .iot-chip__icon,
+  .iot-chip--alarm .iot-chip__flag {
+    color: var(--color-status-danger);
+  }
+
+  .iot-chip--offline {
+    border-style: dashed;
+    border-color: var(--color-border);
+    color: var(--color-muted-2);
+  }
+
+  .iot-chip--offline .iot-chip__icon {
+    color: var(--color-muted-2);
+  }
+
+  .iot-chip--selected {
+    border-color: var(--color-accent);
+    background: color-mix(in oklch, var(--color-surface-alt) 96%, transparent);
+    box-shadow:
+      0 0 0 1px var(--color-accent),
+      0 4px 14px oklch(0% 0 0 / 55%);
+    transform: scale(1.06);
+  }
+
+  .iot-chip--selected:hover {
+    transform: scale(1.06) translateY(-1px);
+  }
+}

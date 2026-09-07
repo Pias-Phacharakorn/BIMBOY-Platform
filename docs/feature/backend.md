@@ -47,7 +47,24 @@ Anonymous auth was the rejected design, and three **unverified** hazards are the
 2. **`create_dummy_user` is a `SECURITY DEFINER` function in `public`**, called straight from the browser. Postgres grants `EXECUTE` to `PUBLIC` by default, so RPCs are not RLS-gated: today any registered user can mint `auth.users` rows; with anonymous sign-in on it becomes an unauthenticated endpoint.
 3. **A possible self-promotion chain:** if the `profiles` UPDATE policy lets a caller set their own `hub_role`, a guest becomes `hub_admin` and `is_hub_admin()` opens every policy in the database.
 
-None were confirmed against the live database. The read-only queries to check them were written as `supabase/audits/guest_mode_preflight.sql` and survive in git history on `feat/guest-demo-mode`. **Also note there is no staging database** — dev and production share one Supabase project (`tbrnwnghjfkwnzsldfit`, in both `.env.local` and the Cloudflare build variables).
+None were confirmed against the live database. The read-only queries to check them were written as `supabase/audits/guest_mode_preflight.sql` and survive in git history on `feat/guest-demo-mode`.
+
+### Two projects, no staging
+
+**There is no staging database.** Whichever project the app points at *is* production, so every migration is a production change.
+
+And there are **two** projects, not one — `.env.local` switches the app between them by commenting one `VITE_SUPABASE_URL` block and uncommenting the other, with instructions written into the file:
+
+| Account | Project ref | Notes |
+|---------|-------------|-------|
+| PIAS | `tbrnwnghjfkwnzsldfit` | The original. Cloudflare build variables still point here |
+| RITTA | `amsgzhzesbbfozrjystt` | **What `.env.local` selects today** |
+
+Both carry the same tables and the same `is_project_member` / `is_project_admin` / `is_hub_admin` helpers (all `SECURITY DEFINER`, `search_path` pinned, each testing `is_active` itself), but they hold **different data** — different projects, different members.
+
+⚠️ **A schema change must be applied to both.** Applying to one leaves the other broken the moment somebody switches `.env.local` back, and nothing about the resulting "relation does not exist" points at the migration as the cause. The MCP servers are named `supabase-pias` and `supabase-ritta` for exactly this reason.
+
+`.mcp.json` reads its access tokens from environment variables, and **Claude Code does not read `.env.local`** — only Vite (for `VITE_*`) and `playwright.config.ts` (which calls `loadEnv` deliberately) do. Put them in `.claude/settings.local.json` under `env`, which is git-ignored; never in `.mcp.json`, which is tracked.
 
 ## Gotchas / watch-outs
 

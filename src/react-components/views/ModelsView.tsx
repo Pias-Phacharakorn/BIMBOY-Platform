@@ -10,6 +10,8 @@ import { ClashList, ClashPreview } from "@/react-components/features/clash-dashb
 import { DrawingEditorPanel, DrawingEditorBoard } from "@/react-components/features/drawing-editor";
 import { PostRenderPanel } from "@/react-components/features/post-render";
 import { RealisticPanel } from "@/react-components/features/realistic-view";
+import { IotDeviceList, IotDataPanel, IotBindPanel } from "@/react-components/features/iot";
+import { useIotTab } from "@/react-components/features/iot/useIotTab";
 // AR runs on a standalone full-screen /ar page (single WebGL context, no OBC engine).
 // Clicking the "AR" tab navigates there — see onTabChange below.
 // The custom ArSession/ArViewerPanel/useArSession approach is kept in the repo but
@@ -22,7 +24,7 @@ import { useIfcSpaceVisibility } from "@/react-components/features/ifc-space-vis
 import { useViewportFullscreenOwner } from "@/react-components/features/viewport-fullscreen/useViewportFullscreen";
 import { useUIStore } from "@/react-components/store/uiStore";
 
-const workspaceTabs = ["Models", "Queries", "Room", "Smart Views", "GIS", "Viewpoint", "Drawing Editor", "AR", "PostRender", "Realistic"];
+const workspaceTabs = ["Models", "Queries", "Room", "Smart Views", "GIS", "Viewpoint", "Drawing Editor", "AR", "IOT", "PostRender", "Realistic"];
 
 export function ModelsView() {
   const { projectId } = useParams({ strict: false });
@@ -43,6 +45,7 @@ export function ModelsView() {
   const isRoomTab = activeTab === "Room";
   const isPostRenderTab = activeTab === "PostRender";
   const isRealisticTab = activeTab === "Realistic";
+  const isIotTab = activeTab === "IOT";
   const isFlexLayout =
     activeTab === "Models" ||
     isGisTab ||
@@ -50,10 +53,20 @@ export function ModelsView() {
     isDrawingEditorTab ||
     isRoomTab ||
     isPostRenderTab ||
-    isRealisticTab;
+    isRealisticTab ||
+    isIotTab;
+
+  // The IOT tab's devices, binding, selection and live tick. Called once here and passed to both
+  // panels: they are siblings with the viewport between them, so calling the hook in each would
+  // give the tab two selections, two ticks and two device lists.
+  const iot = useIotTab(isIotTab, project?.id, user?.id, showSettings);
 
   // IFCSPACE geometry is hidden in the viewport unless the user ticks it in Settings — except on
-  // the Room tab, which is a list of spaces and so forces them visible for as long as it is open.
+  // the Room tab, whose whole content is a list of spaces.
+  //
+  // The IOT tab no longer forces it: phase 1 could land on spaces by accident because it *picked*
+  // the elements, whereas devices are now bound by a user who could see what they were selecting.
+  // A device on a space is simply reported as unlocatable if that geometry is hidden.
   useIfcSpaceVisibility(isRoomTab);
 
   // This view owns full-screen mode: it renders the viewport, and the toolbar button that toggles
@@ -162,6 +175,25 @@ export function ModelsView() {
           </LeftPanel>
         )}
 
+        {isIotTab && (
+          <LeftPanel icon="IOT" defaultOpen={true}>
+            <PanelSection label="Devices" icon="IOT" defaultOpen={true} noPadding={true} fullHeight={true}>
+              {iot.canManage && (
+                <IotBindPanel binding={iot.binding} onBound={iot.onBound} />
+              )}
+              <IotDeviceList
+                rows={iot.devices.rows}
+                selectedDeviceId={iot.devices.selectedDeviceId}
+                onSelect={iot.devices.select}
+                isLoading={iot.devices.isLoading}
+                isEmpty={iot.devices.isEmpty}
+                error={iot.devices.error}
+                canBind={iot.canManage}
+              />
+            </PanelSection>
+          </LeftPanel>
+        )}
+
         <section
           className={`h-full min-w-0 relative border border-border overflow-hidden bg-[#0d0e12] ${
             isFlexLayout ? "flex-1" : ""
@@ -234,6 +266,23 @@ export function ModelsView() {
               <div className="p-4">
                 <ClashPreview projectId={project.id} />
               </div>
+            </PanelSection>
+          </RightPanel>
+        )}
+
+        {isIotTab && (
+          <RightPanel icon="IOT" defaultOpen={true} defaultWidth={340}>
+            <PanelSection label="Device Data" icon="IOT" defaultOpen={true} noPadding={true} fullHeight={true}>
+              <IotDataPanel
+                row={iot.devices.selectedRow}
+                history={iot.devices.history}
+                canEdit={iot.canManage}
+                isSaving={iot.isSaving}
+                isDeleting={iot.isDeleting}
+                editError={iot.editError}
+                onSave={iot.saveDevice}
+                onDelete={iot.deleteDevice}
+              />
             </PanelSection>
           </RightPanel>
         )}

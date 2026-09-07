@@ -39,10 +39,15 @@ const REGEN_DEBOUNCE_MS = 400;
  * would silently answer a separate product question, since room boundaries on a plan are often
  * wanted.
  *
- * @param isRoomTab Whether the Room tab is active. Its whole content is a list of spaces, so it
- * forces them visible for as long as it is open.
+ * @param forceSpacesVisible Whether an open tab needs `IFCSPACE` geometry on screen, overriding
+ * the user's preference for as long as it is open. **One caller asks for it: the Room tab**, whose
+ * whole content is a list of spaces.
+ *
+ * The IOT tab deliberately does not: its devices are bound by a user who could see what they were
+ * picking, so a device on a hidden space is simply reported as unlocatable rather than forcing
+ * translucent volumes over the equipment everything else is bound to.
  */
-export function useIfcSpaceVisibility(isRoomTab: boolean) {
+export function useIfcSpaceVisibility(forceSpacesVisible: boolean) {
   const { components } = useBimStore();
 
   const showIfcSpaces = useUIStore((state) => state.showIfcSpaces);
@@ -50,8 +55,8 @@ export function useIfcSpaceVisibility(isRoomTab: boolean) {
   const visibilityEpoch = useUIStore((state) => state.visibilityEpoch);
 
   /**
-   * ⚠️ Derived from `isRoomTab` directly, **not** from the store's `ifcSpacesForced`. Publishing
-   * the flag and reading it back costs a render: the commit that first sees `isRoomTab === true`
+   * ⚠️ Derived from `forceSpacesVisible` directly, **not** from the store's `ifcSpacesForced`.
+   * Publishing the flag and reading it back costs a render: the commit that first sees it `true`
    * still has `ifcSpacesForced === false`, so the rule below would fire a redundant hide and only
    * show spaces on the following render — two `Hider` calls, each paying a full
    * `fragments.core.update(true)`, and a visible flash on entry to the Room tab.
@@ -60,7 +65,7 @@ export function useIfcSpaceVisibility(isRoomTab: boolean) {
    * knowing a tab called "Room" exists. It may trail this value by one frame; only the checkbox
    * reads it, so that is harmless.
    */
-  const effective = showIfcSpaces || isRoomTab;
+  const effective = showIfcSpaces || forceSpacesVisible;
 
   /** `modelId -> IFCSPACE localIds`. Populated per model, so a new load queries only itself. */
   const cacheRef = useRef(new Map<string, number[]>());
@@ -83,11 +88,11 @@ export function useIfcSpaceVisibility(isRoomTab: boolean) {
   /** Bumped by the debounced model-changed handler to re-run the rule against the new models. */
   const [modelTick, setModelTick] = useState(0);
 
-  // Publish the Room tab's requirement so `ToolbarSettings` can render the checkbox forced-on
-  // without knowing that a tab called "Room" exists.
+  // Publish the requesting tab's requirement so `ToolbarSettings` can render the checkbox
+  // forced-on without knowing which tabs exist.
   useEffect(() => {
-    setIfcSpacesForced(isRoomTab);
-  }, [isRoomTab, setIfcSpacesForced]);
+    setIfcSpacesForced(forceSpacesVisible);
+  }, [forceSpacesVisible, setIfcSpacesForced]);
 
   // Unmount only — deliberately not folded into the effect above, which would clear and re-set
   // the flag on every tab change and fire a spurious pair of transitions. The setter is read off

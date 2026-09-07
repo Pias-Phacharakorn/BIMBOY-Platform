@@ -46,6 +46,17 @@ interface UIState {
    */
   visibilityEpoch: number
   bumpVisibilityEpoch: () => void
+
+  /**
+   * Whether the IOT tab's floating reading chips are drawn.
+   *
+   * Lives here rather than in the feature so it survives selecting or binding a device and models
+   * finishing loading. It is also the escape hatch for clickable chips: they cannot be occluded, so
+   * one will eventually sit on an element the user needs to pick, and a single click cannot mean
+   * both "select this device" and "pick what is behind it".
+   */
+  iotChipsVisible: boolean
+  setIotChipsVisible: (visible: boolean) => void
   /**
    * Viewport backdrop. `null` means "no override" — the branded gradient in `style.css` — and is
    * both the initial value and what Reset returns to; see `lib/viewportBackground.ts`.
@@ -98,6 +109,9 @@ export const useUIStore = create<UIState>((set) => ({
   setIfcSpacesForced: (forced) => set({ ifcSpacesForced: forced }),
   visibilityEpoch: 0,
   bumpVisibilityEpoch: () => set((state) => ({ visibilityEpoch: state.visibilityEpoch + 1 })),
+
+  iotChipsVisible: true,
+  setIotChipsVisible: (visible) => set({ iotChipsVisible: visible }),
   viewportBackground: null,
   setViewportBackground: (background) => set({ viewportBackground: background }),
   isViewportFullscreen: false,

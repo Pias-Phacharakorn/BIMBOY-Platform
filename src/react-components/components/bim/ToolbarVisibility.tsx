@@ -113,6 +113,11 @@ export function ToolbarVisibility() {
       if (OBC.ModelIdMapUtils.isEmpty(selection)) return;
       const hider = components.get(OBC.Hider);
       await hider.isolate(selection);
+      // Nothing emits a visibility event — `OBC.Hider` has none, and neither does the fragments
+      // layer — so consumers that must react to a visibility change can only be told through this
+      // epoch. Until the IOT chips existed only Show All bumped it, which left Isolate and Hide as
+      // silent changes. Bumping here keeps chips honest without polling faster.
+      bumpVisibilityEpoch();
     });
 
   // Hide clears the selection afterwards; Isolate deliberately does not. Once
@@ -125,6 +130,7 @@ export function ToolbarVisibility() {
       if (OBC.ModelIdMapUtils.isEmpty(selection)) return;
       const hider = components.get(OBC.Hider);
       await Promise.all([hider.set(false, selection), highlighter.clear("select")]);
+      bumpVisibilityEpoch();
     });
 
   const buttonClass = cn(
