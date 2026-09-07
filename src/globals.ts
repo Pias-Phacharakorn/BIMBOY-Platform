@@ -58,6 +58,15 @@ export const appIcons = {
   FILE: "mdi:file-outline",
   DRAWING: "mdi:floor-plan",
   POWERBI: "simple-icons:powerbi",
+  IOT: "mdi:access-point",
+  // Per-metric glyphs for the IoT chips. Kept here with every other icon so feature code never
+  // imports an icon library directly (DESIGN.md § Centralized Icon System).
+  METRIC_TEMPERATURE: "mdi:thermometer",
+  METRIC_HUMIDITY: "mdi:water-percent",
+  METRIC_CO2: "mdi:molecule-co2",
+  METRIC_OCCUPANCY: "mdi:account-group",
+  METRIC_POWER: "mdi:flash",
+  METRIC_PM25: "mdi:blur",
   SEARCH: "mdi:magnify",
   ALIGN: "solar:compass-bold",
   GOOGLE: "logos:google-icon",

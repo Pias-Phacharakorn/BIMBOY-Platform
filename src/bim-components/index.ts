@@ -7,6 +7,7 @@ export * from "./PropertyTable";
 export * from "./MiniMap";
 export * from "./SmartViews";
 export * from "./RoomView";
+export * from "./IotView";
 export * from "./CursorSurface";
 export * from "./SpotCoordinate";
 export * from "./ArSession";
