@@ -4,7 +4,7 @@
  * **Every device is listed, always** — including ones whose model is not loaded. Hiding those would
  * make the list under-report what is configured: a user who bound twenty devices and sees six
  * concludes the data is gone, and tries to create them again against elements they cannot see.
- * → `CONTEXT.md` § *IOT phase 2*, decision 7.
+ * → `docs/feature/iot.md` § Gotchas.
  */
 
 import { Icon } from "@/react-components/components/ui";
@@ -47,7 +47,8 @@ export function IotDeviceList({
   /**
    * The escape hatch for the floating chips. They cannot be occluded, so one will eventually sit
    * on an element the user needs to pick, and a single click cannot mean both "select this device"
-   * and "pick what is behind it". → `CONTEXT.md` § *IOT phase 3*, decisions 2 and 5.
+   * and "pick what is behind it". → `docs/adr/0037-iot-chips-are-css2d-and-take-clicks.md`,
+   * decisions 2 and 5.
    */
   const chipToggle = (
     <label className="flex items-center gap-2 px-3 py-2 border-b border-border cursor-pointer select-none hover:bg-surface-alt transition-colors duration-120">

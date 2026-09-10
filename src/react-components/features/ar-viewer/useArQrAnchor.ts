@@ -24,7 +24,7 @@ import {
 } from "./qrPose";
 
 // Physical printed size of the QR, edge length in metres. MUST match the codes
-// you print. Placeholder until confirmed; documented in CONTEXT.md.
+// you print. Placeholder until confirmed. → `docs/feature/ar-webxr.md`.
 export const QR_PHYSICAL_SIZE_M = 0.15;
 
 // Decode is expensive (full-frame readPixels + jsQR). Only attempt it every Nth

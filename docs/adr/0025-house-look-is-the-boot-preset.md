@@ -83,6 +83,11 @@ through the same edge-detection pass as the model.
   `COLOR_SHADOWS` and removes the visible half of the preset anyway. Deferred, not rejected: widening
   its `_baseline` with the AO block, if the AO reads too heavy against real daylight shadows.
   Not written blind.
+  → ⚠️ **Cashed in by [ADR-0035](0035-realistic-owns-its-own-gloss-and-ao.md).** The AO did read too
+  heavy, for the reason predicted here — `RealisticView.activate` drops ambient from `1.5` to `0.15`
+  and adds real shadow maps — so the baseline now carries the AO block *and* gloss, and Realistic
+  seeds `aoBlend` at `0.5` rather than the preset's `1`. The boot-preset decision itself stands in
+  full; PostRender keeps its Gloss and AO controls.
 - **AR needed nothing.** `/ar/$projectId` renders `ArModelViewer` and never calls `setupComponents`,
   so there is no OBC world and no `PostproductionRenderer` on that page.
 - **`EdgeDetectionPassMode.DEFAULT` is now what every tab pays on a 60-model project.** The PostRender

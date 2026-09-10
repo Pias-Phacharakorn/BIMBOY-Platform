@@ -80,7 +80,7 @@ export function DrawingEditorBoard() {
   };
 
   // Swap the sheet's registered viewport whenever the active level's drawing changes —
-  // one SheetBoard sheet stays mounted, only its content changes (per CONTEXT.md).
+  // one SheetBoard sheet stays mounted, only its content changes. → `docs/feature/drawing.md`.
   useEffect(() => {
     const board = boardRef.current;
     const paper = paperRef.current;
@@ -204,7 +204,7 @@ export function DrawingEditorBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [des]);
 
-  // Callout text entry via a plain prompt(), per CONTEXT.md decision.
+  // Callout text entry via a plain prompt(). → `docs/feature/drawing.md`.
   useEffect(() => {
     const calloutTool = des?.calloutTool;
     if (!calloutTool) return;

@@ -1,8 +1,8 @@
 /**
  * Threshold constants and the pure function that turns a reading into a status.
  *
- * Thresholds are constants in phase 1. Making them per-project needs the same settings plumbing as
- * the real device↔element mapping table, and both belong to phase 2 — see `CONTEXT.md` § *IOT tab*.
+ * Thresholds are global constants. Making them per-project needs settings plumbing nobody has asked
+ * for yet; this file stays the single place to change one meanwhile. → `docs/feature/iot.md`.
  */
 
 import type { DeviceStatus, Metric, Reading } from "./iotTypes";

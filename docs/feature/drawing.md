@@ -1,6 +1,5 @@
 # Drawing — Drawing Directory & shop-drawing register
 
-> Status: seed — expand as you work this area.
 > Roadmap item 4 (Drawing Management, CAD/PDF).
 
 ## Overview
@@ -21,29 +20,6 @@ Drawings are stored as `shop_drawings` rows + PDF objects in the `project-files`
 
 Note: the general Project Files Directory on the Settings page (unfocused `ProjectFolders`, showing `01_ifc`/`02_frag`/`03_ClashImport`/`04_Drawing` as flat Storage listings) keeps its own simpler inline-tree rendering of `04_Drawing` — it is a different component from `DrawingFolderExplorer` and was deliberately left alone since it has no document-management metadata to show in a table.
 
-## Key files
-
-- `src/react-components/views/DrawingView.tsx` — page: `WorkspaceHeader` tabs (Folder/Register), composition only. Also owns `registerDisciplineFilter` state and `handleOpenRegister`, so the Folder tab's "Drawing Register" button can switch to the Register tab pre-filtered to a discipline.
-- `src/routes/projects/$projectId/drawing.tsx` — route → `DrawingView` (composition only)
-- `src/react-components/features/shop-drawings/DrawingFolderExplorer.tsx` — the Folder tab: a 2-level tree (discipline → drawing folder) on the left, a table that mirrors the tree's current selection depth on the right. Owns `expandedDisciplines` (independent of selection) plus a `selection: { level: "discipline" | "sheet"; ... } | null` state, search query, and CSV export. Takes an `onOpenRegister` prop from `DrawingView` for the "Drawing Register" button.
-- `src/react-components/features/shop-drawings/useGroupedShopDrawings.ts` — shared hook (groups `useShopDrawings`' cached rows by discipline → sheet). Consumed by both `DrawingFolderExplorer.tsx` and `ProjectFolders.tsx`; shares the same React Query cache as `ShopDrawingTable.tsx` rather than fetching independently.
-- `src/react-components/features/shop-drawings/useShopDrawingActions.ts` — shared hook for create-sheet/add-revision/download, used by `ProjectFolders.tsx` and `DrawingFolderExplorer.tsx` (not `ShopDrawingTable.tsx`, which has its own inline-note error UX instead of `alert()`). Centralizes the author-is-uploader-email logic in one place instead of three.
-- `src/react-components/components/shop-drawings/RowActionsMenu.tsx` — generic kebab (⋮) dropdown menu, pure UI, used for each row's actions.
-- `src/react-components/components/shop-drawings/CompareDrawingsModal.tsx` — full-screen "Compare Revisions" modal. Renders the selected page of two revisions to canvas (via the internal `usePdfSide` hook, which exposes both a preview data URL and the raw `HTMLCanvasElement`), then shows either an **Overlay** pixel-diff or a **Slider** view, plus zoom and an **Export PDF** button. Despite living under `components/`, it already contains fetch/pdfjs logic — a pre-existing layer deviation, not a template to copy.
-- `src/react-components/components/shop-drawings/PdfSliderCompare.tsx` — pure UI clip-path slider (newer clipped over older) with pan/zoom; centers its content when zoomed out (see gotchas).
-- `src/react-components/components/shop-drawings/PdfOverlayCompare.tsx` — pure UI pan/zoom viewer for the single composited diff image.
-- `src/lib/pdfCompareUtils.ts` — pure helpers: `createDiffCanvas(newer, older)` (size-normalized pixel diff) and `exportComparisonPdf()` (3-page A4 landscape via `jspdf`).
-- `src/react-components/features/shop-drawings/ShopDrawingTable.tsx` — the Register table UI, plus a sortable Discipline column and a filter dropdown (All + the 8 codes). Accepts an optional `initialDisciplineFilter` prop to seed that dropdown when opened via the Folder tab's "Drawing Register" button.
-- `src/react-components/features/shop-drawings/useShopDrawings.ts` — TanStack Query hooks (list/create/addRevision/delete)
-- `src/react-components/features/shop-drawings/shopDrawingsService.ts` — Supabase data + storage access
-- `src/react-components/features/shop-drawings/shopDrawingTypes.ts` — `ShopDrawing`, `GroupedDrawing`, `mapShopDrawingRow`
-- `src/react-components/features/shop-drawings/disciplines.ts` — `DISCIPLINES` list (single source of truth for the 8 discipline codes/labels), `DisciplineCode` type
-- `src/react-components/features/shop-drawings/index.ts` — feature entry
-- `src/react-components/features/project-folders/ProjectFolders.tsx` — the Settings-page general file browser (all 4 subfolders, unfocused); its `04_Drawing` branch now also consumes `useGroupedShopDrawings` but keeps its original inline nested-tree UI unchanged
-- `src/react-components/components/shop-drawings/AddDrawingDialog.tsx` — create-sheet form; discipline select, lockable via `lockedDiscipline` prop. Author is **not** a form field — see Author below.
-- `src/react-components/components/shop-drawings/UploadPdfDialog.tsx` — add-revision form; requires a **Reason** in addition to the PDF file — see Reason below.
-- Supabase: `shop_drawings` table (incl. `discipline` enum column, `reason` text column) + `project-files` storage bucket
-
 ## Patterns & conventions
 
 - **Storage layout**: `{projectnumber}_{projectName}/04_Drawing/{discipline}/{sheetNo}/Rev{revision}_{timestamp}.pdf` (see `buildPdfPath`). PDF public URL via `getPdfPublicUrl`. `pdf_path` is stored per-row, not recomputed from convention at read time — so rows created before the discipline segment was added keep working at their original path.
@@ -57,6 +33,11 @@ Note: the general Project Files Directory on the Settings page (unfocused `Proje
   - **Row click differs by level**: a discipline-view row (a drawing) clicking drills in via `selectSheet` — same as clicking it in the sidebar — rather than opening a PDF; use the kebab's "View" for that. A drawing-view row (a revision, a leaf) still opens the PDF viewer directly on click, since there's nothing to drill into.
   - **Toolbar**: a search box (filters the currently visible table's rows by name/author/reason — scoped to whatever's selected, not a global cross-discipline search) and an Export button (CSV of the currently visible rows only — drawings or revisions, whichever level is showing). Discipline selected also shows a **"Drawing Register"** button (calls `onOpenRegister(discipline)`, switching `DrawingView` to the Register tab pre-filtered to that discipline — reuses `ShopDrawingTable` rather than building a second summary UI) and, admin-only, **"+ Add Drawing"**. Drawing selected also shows a **"Compare Revision"** button (disabled <2 revisions, opens the same `CompareDrawingsModal` as the row-level kebab's "Compare Revisions" — both entry points coexist) and, admin-only, **"+ Upload New Revision"**.
   - There is no "Revision History" action anymore — browsing a sheet's full revision history is just clicking its folder in the tree (or selecting it), no tab switch needed. (An earlier version of this feature had a kebab item that deep-linked to the Register tab; removed as redundant once revisions became browsable in-place, along with `DrawingView`'s `pendingRegisterFilter` plumbing that supported it — a *different*, discipline-scoped Register link was later reintroduced via the "Drawing Register" button above.)
+- **Three surfaces, one cache.** `useGroupedShopDrawings` is shared by `DrawingFolderExplorer` and
+  `ProjectFolders`, and it groups the rows `useShopDrawings` already cached — the same React Query
+  cache `ShopDrawingTable` reads. None of the three fetches independently, so a revision uploaded in
+  one is visible in the others without a refetch. `ProjectFolders` consumes the hook for its
+  `04_Drawing` branch while keeping its own inline nested-tree rendering.
 - **Admin gate**: create/revise/delete gated by `useIsProjectAdmin` (project admin or `hub_admin`).
 - Data access stays in `shopDrawingsService.ts` wrapped by `useShopDrawings.ts` — see `backend.md`.
 
@@ -74,4 +55,8 @@ Note: the general Project Files Directory on the Settings page (unfocused `Proje
 - "Compare Revision" has two entry points that both open the same `CompareDrawingsModal`/`compareSheet` state: the discipline-view row kebab's "Compare Revisions", and a header button shown when a drawing is selected. They're intentionally redundant, not a duplication bug — don't remove one assuming the other supersedes it.
 - **Compare Revisions — Slider centering when zoomed out**: `PdfSliderCompare` centers its content both horizontally and vertically inside the scroll container whenever the zoomed-out page is smaller than the viewport (the inner content sits in a flex column with `m-auto`). Because of that centering, the content's left edge no longer coincides with the container's scroll origin, so `updateSlider` measures the slider percentage from the **inner content's own `getBoundingClientRect()`**, not the container's — get this wrong and the handle drifts off the page once zoomed out. Panning (`handlePanPointerMove`) drives `container.scrollLeft/scrollTop` directly, which is already centering-agnostic; any future change to how the content is centered has to keep the slider-position math measuring from the content rect.
 - **Compare Revisions — Overlay/Slider/Export**: the modal has two view modes (default **Overlay**). Overlay is a *raster* pixel diff of the two rendered pages (red = added in newer / green = removed from older / grey = unchanged), so it flags any visual delta including anti-alias/resampling noise — not semantic CAD changes; a `DIFF_THRESHOLD` in `pdfCompareUtils.ts` filters minor noise. The diff always compares the **currently-selected page** on each side (respects the two Page dropdowns) and recomputes **live** on any revision/page change (no "Compare" button) — it runs even in Slider mode so mode-toggle and Export are instant. Legend swatches use the `status-danger`/`status-ok` design tokens; the raw canvas pixels use matching hardcoded RGB (canvas `ImageData` can't take tokens — never put those RGBs in JSX). "Newer revision" (side A) is treated as the added side regardless of which revisions the user picks. Export produces a 3-page A4-landscape PDF (diff / older / newer).
+- ⚠️ **`CompareDrawingsModal.tsx` lives under `components/` but fetches and drives pdfjs itself.**
+  That is a pre-existing layer deviation, not the pattern to copy — CLAUDE.md's rule (pure UI in
+  `components/`, data access in `features/`) still stands for everything new. Don't cite this file
+  as precedent, and don't "fix" it as a drive-by either.
 - _(fill as encountered)_

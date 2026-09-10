@@ -38,13 +38,16 @@ This file holds the **rules**; these guides hold the **detail** — deep and pro
 | Drawing Directory, shop-drawing register, PDF revisions | `docs/feature/drawing.md` |
 | GIS layers, Cesium 3D Tiles, coordinates/CRS | `docs/feature/gis-cesium.md` |
 | AR / WebXR viewing, `/ar/$projectId`, ModelsView AR tab | `docs/feature/ar-webxr.md` |
+| IOT tab — authored devices, live readings, viewport chips | `docs/feature/iot.md` |
 
 **The `docs/` tree:**
 
 | Path | Holds |
 |------|-------|
-| `docs/feature/` | The 9 domain guides above — a **map** of how this project wires each area: what exists, how it fits together, and what will bite you |
+| `docs/feature/` | The 10 domain guides above — a **map** of how this project wires each area: what exists, how it fits together, and what will bite you |
 | `docs/adr/` | Architecture decision records — *why* a decision was made, with the alternatives rejected. See `docs/adr/README.md` |
+| `docs/glossary.md` | The domain glossary — terms only, no implementation detail. Written by `/domain-modeling`, **lazily**: it does not exist until the first term is resolved |
+| `docs/agents/` | How the engineering skills consume this repo: `issue-tracker.md` (where tickets live) and `domain.md` (which doc holds what). See § Agent skills |
 | `docs/ThatOpen_docs/` | Vendored ThatOpen documentation snapshot (v3.4.x). Read-only reference — start at its `INDEX.md`, never hand-edit |
 
 **Upstream OBC source — outside this repo:**
@@ -74,6 +77,7 @@ Two caveats, both load-bearing:
 | **the code** | the system itself | **the only truth about behaviour** |
 | **`docs/feature/`** | what exists, how it fits, what will bite you | navigational — loses to the code, always |
 | **`docs/adr/`** | *why*, and what was tried and rejected | **the only source; not derivable from code** |
+| **`docs/glossary.md`** | what each domain term means, and which synonyms to avoid | **the only source; naming is a decision, not a fact about the code** |
 | **`CONTEXT.md`** | in-flight decisions, during planning | temporary by definition |
 
 Nothing in `ClipperCursor` reveals that a grabbable translucent quad was *shipped and reversed within a day* — [ADR-0002](docs/adr/0002-section-plane-outline-only.md) is the only reason it hasn't been built a third time. Vendor traps found by reading `node_modules` are the same.
@@ -83,7 +87,7 @@ Nothing in `ClipperCursor` reveals that a grabbable translucent quad was *shippe
 2. **Don't restate what the code says plainly** — that adds drift surface, not knowledge.
 3. **Do record what it can't say** — why, what was rejected, what bites, where the vendor lies.
 
-**Timing:** update the matching guide (+ an ADR when the *why* lasts) **only after the developer has tested the change and confirmed it works** — see Workflow § *Document*, and `docs/adr/README.md`, whose promotion flow already says "implemented **+ merged**". `CONTEXT.md` is the exception: it is written during planning, and is safe to write early precisely because it is never the permanent record.
+**Timing:** update the matching guide (+ an ADR when the *why* lasts) **only after the developer has tested the change and confirmed it works** — see Workflow § *Verify with the developer*, and `docs/adr/README.md`, whose promotion flow already says "implemented **+ merged**". Two exceptions, both written *during* the work because neither is a permanent record of behaviour: `CONTEXT.md` (staged decisions, cleared on promotion) and `docs/glossary.md` (a term is settled the moment you agree on the word — `/domain-modeling` writes it inline, mid-interview).
 
 ---
 
@@ -227,61 +231,77 @@ Layout state always from the store (never `useState`); views compose via a `LAYO
 
 ## 📋 Workflow
 
+This project follows **Matt Pocock's main flow** (`.claude/skills/`, upstream `mattpocock/skills`). `/ask-matt` is the router over every skill here; read it when you're unsure which one fits. This section records only what the flow is and **where this repo overrides it**.
+
 | Role | Responsibility |
 |------|-----------------|
-| Claude (you) | Primary developer — reads, plans, implements, hands over for testing, fixes what testing finds, reviews & simplifies, **then** documents, and presents the diff |
-| Developer (you're working with) | **Tester and final approver** — runs the feature in the real app and says whether it works; reviews the diff and commits/merges personally |
+| Claude (you) | Runs the flow end to end: grill → spec → tickets → implement → review. Presents the diff |
+| Developer | **Decides and approves.** Answers the grilling, confirms the seams, tests in the real app, reviews the diff, and commits/merges personally |
 
-Steps run in order. Cite them **by name**, not number, anywhere outside this file.
+### The main flow: idea → ship
 
-**1. Read first**
-- OBC feature? → read [`docs/ThatOpen_docs/INDEX.md`](docs/ThatOpen_docs/INDEX.md) first, then the relevant tutorial/API doc it points to
-- Custom OBC component? → `_thatopen-bim-component` skill
-- BUI patterns? → `.claude/skills/`
+| # | Step | What it does |
+|---|------|--------------|
+| 1 | **`/grill-with-docs`** | Sharpens the idea by interview, and writes what it settles to `docs/glossary.md` / `docs/adr/` as it goes. Always start here — never `/grill-me`, which leaves no paper trail |
+| 2 | **`/to-spec`** | Turns the thread into a spec at `.scratch/<feature>/spec.md`. Confirms the **test seams** with the developer first |
+| 3 | **`/to-tickets`** | Splits the spec into tracer-bullet tickets under `.scratch/<feature>/issues/`, each declaring its `Blocked by:` edges |
+| 4 | **`/implement`** | Builds one ticket, driving `/tdd` at the agreed seams. `/clear` between tickets — each is self-contained |
+| 5 | **`/code-review`** | Two-axis review (Standards + Spec) of the diff, in a fresh sub-agent |
 
-**2. Plan before code**
-- Use `grill-with-docs` skill for requirements + layer placement
-- New architecture, cross-cutting refactor, tricky bug, or multiple viable approaches? → suggest the developer run `/fable-advisor` (developer-triggered only, never auto-invoked) to get a second opinion from Fable before finalizing the plan
-- Use `plan-visualizer` skill for: current flow (Mermaid) + proposed flow (mark `[NEW]`/`[MOD]`/`[DEL]`) + pros/cons + files — written to `plan-visualizer.md` at the project root
-- **Get explicit approval before coding**
+**Small change?** Steps 2–3 are for multi-session builds. A change that fits one context window goes straight from the grilling to `/implement`.
 
-**3. Execute — code only**
-- Implement the approved plan directly.
-- Work on a feature branch, never directly on `main`.
-- **Write no domain guide and no ADR yet.** Code, and the checks that can run without a human (`tsc`, build, any project check script). Stop there.
+**Context hygiene.** Keep steps 1–3 in **one unbroken context window** — the grilling, spec, and tickets must build on the same thinking. `/compact` at a phase boundary if the window gets long; don't push on degraded. `.claude/skills/ask-matt/PHASE-BOUNDARIES.md` has the decision tree.
 
-**4. Hand over for testing** ⟵ _the gate_
-- Say plainly what was built, **what was actually verified, and what was not**. "`tsc` and the build pass" is not "it works".
-- Name the specific things only a running app can confirm — visual result, feel of an interaction, whether the fix actually fixes the reported bug.
-- Then **stop and wait**. The developer tests in the real app. Suggest `/run` if it helps.
-- Fix what testing surfaces, and hand back. Loop 3 ⟷ 4 until the developer says it works.
+### On-ramps — two ways in that aren't step 1
 
-**5. Refine — review & simplify** _(non-trivial changes only)_
-- Skip both passes for genuinely trivial edits (typo, rename, import fix, single-line tweak, config bump) — no need to ask, just say so in one line so it's visible.
-- Otherwise **ask the developer two things together**: whether to run review + simplify at all, and **whether it runs before or after their testing** — that ordering is a per-task call, so never assume a default.
-  - *Before testing* → they test code that has already had a correctness pass, at the risk of reviewing code a design change is about to replace.
-  - *After testing* → the behaviour is settled first, so nothing is reviewed twice.
-- If yes:
-  1. **Code-review** via a **fresh sub-agent** (`code-review` skill) — independent eyes that did not write the code
-  2. **Apply confirmed findings**; report any deliberately not acted on + why
-  3. **Simplify** inline (`simplify` skill) on the now-correct code
-  4. **Light behavior-preservation check** after simplify — verify nothing changed semantically (not a full second review)
-- If no: go straight to § *Document*.
+| Situation | Skill | Merges back at |
+|---|---|---|
+| **Something's broken** — a bug that resists a first glance, an intermittent flake, a regression between two known-good states | **`/diagnosing-bugs`** | Fixes in place with a regression test. Model-invoked, so it starts itself when you report a bug |
+| **A huge, foggy effort** the way to isn't visible yet — a greenfield area or a build too big for one session | **`/wayfinder`** | Produces **decisions, not deliverables**, then hands off to step 2 `/to-spec` |
 
-**6. Document — only once it is proven**
-- Trigger: the developer has confirmed the feature works. **Never before.**
-- Promote out of `CONTEXT.md`: update the matching `docs/feature/` guide, and add an ADR when the *why* has lasting value (`docs/adr/README.md`). Clear the staged entry.
-- Document **what testing actually established**, not what the plan predicted. Where the two differ, the code wins and the difference is worth a line.
-- If testing changed the design, correct the staged `CONTEXT.md` entry too — a stale rejected-alternatives list is worse than none.
+`/diagnosing-bugs` will not theorise until it has a **tight feedback loop** — one command that already goes red on *this* bug. In this repo that usually means a Playwright spec under `e2e/`, since there is no unit-test runner. Give it one, or expect it to build one first.
 
-**7. Uncertain?**
-- Ask one concrete question with a recommended option
-- Never assume state placement, data shape, or layer assignment
+`/wayfinder` is slow and dense, and only pays off when you genuinely can't see the route. A well-scoped feature goes to `/grill-with-docs`, not here.
 
-**8. Present & stop**
-- Do not prompt, ask, or offer to run `git add` / `git commit` / merge
-- Present the diff/result and stop — the developer reviews and commits personally
-- Segment the final diff so it's clear what came from where: **implemented** / **changed after testing** / **changed by review** / **changed by simplify**
+### ⚠️ Three overrides — these beat the skill files
+
+The skills are upstream and unmodified; where they conflict with the rules below, **these win**.
+
+1. **Never commit, never merge.** `/implement` ends with "Commit your work to the current branch" and `/code-review` runs "before committing" — **ignore both**. Stop at the diff, presented and explained. The developer commits personally. Work on a feature branch, never `main`.
+
+2. **`CONTEXT.md` is not the glossary.** `/domain-modeling` treats `CONTEXT.md` as the glossary; here it is the **staging buffer** for in-flight decisions, and the glossary is **`docs/glossary.md`**. Full table in `docs/agents/domain.md`.
+
+3. **`docs/feature/` still exists, and still gates on testing.** The upstream layout has no equivalent of the 10 area guides; this repo keeps them. Update the matching guide only **after** the developer confirms the change works — never off `tsc` and a build.
+
+### Verify with the developer
+
+`/implement` finishes when the code is written and reviewed, not when it works. Before saying a feature is done:
+
+- Say plainly **what was actually verified and what was not**. "`tsc` and the build pass" is not "it works"
+- Name the things only a running app can confirm — the visual result, the feel of an interaction, whether the fix fixes the reported bug. Suggest `/run`
+- Then **stop and wait**. Fix what testing surfaces, and hand back
+
+Only once the developer confirms it works: promote out of `CONTEXT.md` into the matching `docs/feature/` guide, plus an ADR when the *why* has lasting value. Document what testing **established**, not what the plan predicted.
+
+### Uncertain?
+
+Ask **one** concrete question with a recommended option. Never assume state placement, data shape, or layer assignment.
+
+## 🤖 Agent skills
+
+Configuration the engineering skills read. Written by `/setup-matt-pocock-skills`.
+
+### Issue tracker
+
+Local markdown under `.scratch/<feature>/` — the repo has a GitHub remote but no `gh` CLI, and `.scratch/` is gitignored. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+None. The `triage` skill is not installed, so there is no label vocabulary and no `docs/agents/triage-labels.md`. Every ticket `/to-tickets` produces is agent-ready by construction.
+
+### Domain docs
+
+Single-context, but **split**: glossary at `docs/glossary.md`, staging buffer at `CONTEXT.md`, decisions in `docs/adr/`, area guides in `docs/feature/`. See `docs/agents/domain.md`.
 
 ## 🚫 Hard Constraints
 
@@ -299,6 +319,8 @@ Steps run in order. Cite them **by name**, not number, anywhere outside this fil
 | No `features/index.ts` barrel | Circular deps + HMR slowdown |
 | No subdirs under `views/` | Views must be flat at root |
 | Never work directly on `main` — always a feature branch | The developer merges; nothing lands unreviewed |
-| No AI prompts/offers to `git add`/commit/merge | Developer reviews the real `git diff` and commits personally |
-| No `docs/feature/` or ADR edits before the developer confirms it works | Docs written for untested code get rewritten when testing changes the design, and assert as settled what nobody has seen run. `CONTEXT.md` is the exception — it is explicitly in-flight |
+| No AI prompts/offers to `git add`/commit/merge | Developer reviews the real `git diff` and commits personally. ⚠️ **Overrides `/implement` and `/code-review`**, which both end by committing — see Workflow § Three overrides |
+| No `docs/feature/` or ADR edits before the developer confirms it works | Docs written for untested code get rewritten when testing changes the design, and assert as settled what nobody has seen run. `CONTEXT.md` and `docs/glossary.md` are the exceptions — one is explicitly in-flight, the other records an agreed word, not a behaviour |
 | Never report "it works" off static checks alone | `tsc` and a build prove it compiles, not that it behaves. Say what was checked and what was not |
+| No test at a seam the developer hasn't confirmed | `/tdd`'s rule: agreeing seams up front is what puts testing effort on the critical paths instead of every edge case |
+| Never treat `CONTEXT.md` as the glossary | It is the staging buffer. The glossary is `docs/glossary.md`. ⚠️ **Overrides `/domain-modeling`** — see `docs/agents/domain.md` |

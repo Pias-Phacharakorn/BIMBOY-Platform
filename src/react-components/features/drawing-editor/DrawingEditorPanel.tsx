@@ -7,9 +7,8 @@ import { useBimStore } from "@/react-components/store/bimStore";
  * Right-hand "List View Level" panel for the "Drawing Editor" tab. Owns the
  * DrawingEditorSetup engine's activate/deactivate lifecycle: activates on
  * mount, deactivates on unmount (switching tabs resets the drawing —
- * session-only, per CONTEXT.md). Levels are real building storeys
- * discovered from the loaded model(s) via OBC.Views.createFromIfcStoreys —
- * see CONTEXT.md's "real per-building-storey Levels" follow-up.
+ * session-only). Levels are real building storeys discovered from the loaded
+ * model(s) via OBC.Views.createFromIfcStoreys. → `docs/feature/drawing.md`.
  */
 export function DrawingEditorPanel() {
   const { components, world } = useBimStore();
