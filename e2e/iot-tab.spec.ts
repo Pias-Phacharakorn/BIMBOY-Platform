@@ -193,14 +193,15 @@ test.describe('IOT tab', () => {
         )
         .toBe('match')
 
-      // ─── Clicking the chip selects the device ────────────────────────────────
-      await chip.click()
-      const panel = page.getByTestId('iot-data-panel')
-      await expect(panel).toBeVisible()
-      await expect(panel).toHaveAttribute('data-device-id', deviceId!)
-      await expect(chip, 'the selected chip should be marked as such').toHaveClass(
-        /iot-chip--selected/,
-      )
+      // ⚠️ **Everything that asserts a chip is in the DOM must run before the first selection**,
+      // because selecting flies the camera and `CSS2DRenderer` only *inserts* a chip's element
+      // while its anchor is inside the frustum — out of frustum it sets `display:none` and, for a
+      // chip created while out of frustum, never appends the element at all. This test binds
+      // whatever element a blind viewport click happens to hit, and in a project whose first
+      // pickable element is a ~500 m slab, `fitToItems` parks the camera ~1150 m away — past the
+      // world camera's 1000 m far plane. The chip then legitimately has no DOM node, and an
+      // assertion placed after the flight fails for a reason that has nothing to do with what it
+      // is testing. Assertions that survive a flight (classes, the panel) stay below.
 
       // ─── The layer switch removes every chip, and restores them ──────────────
       const chipToggle = page.getByTestId('iot-chip-toggle')
@@ -219,6 +220,16 @@ test.describe('IOT tab', () => {
       ).toHaveCount(0)
       await openIotTab(page)
       await expect(chip).toBeVisible({ timeout: 15_000 })
+
+      // ─── Clicking the chip selects the device ────────────────────────────────
+      // Last of the chip assertions: this is the one that moves the camera.
+      await chip.click()
+      const panel = page.getByTestId('iot-data-panel')
+      await expect(panel).toBeVisible()
+      await expect(panel).toHaveAttribute('data-device-id', deviceId!)
+      await expect(chip, 'the selected chip should be marked as such').toHaveClass(
+        /iot-chip--selected/,
+      )
 
       // ─── It drives the right panel ───────────────────────────────────────────
       await row.click()

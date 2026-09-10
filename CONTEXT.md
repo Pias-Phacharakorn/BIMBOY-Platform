@@ -1,5 +1,9 @@
 # CONTEXT
 
+> ⚠️ **This is not the glossary.** Skills that say "read `CONTEXT.md` for the project's
+> vocabulary" (`domain-modeling`, `tdd`, `diagnosing-bugs`, `to-spec`) want **`docs/glossary.md`**
+> in this repo. See `docs/agents/domain.md`.
+
 _Staging buffer for in-flight design decisions (grill-with-docs). Once a
 decision is implemented, promote it into its domain guide under `docs/feature/`
 (the single source of truth for **how** the thing works) and — when the
@@ -520,182 +524,12 @@ in-page maximise, which would reintroduce the state decision 3 exists to prevent
 
 ---
 
-## IOT tab — device list + data panel (phase 1, mock data)
-
-⚠️ **Nothing implemented yet — this is the grilled design only.** Promote to `bim-viewer.md`
-(the tab wiring) and `frontend.md` (the provider/feature shape), plus an ADR for the
-provider-interface decision, only after the developer confirms it in the app.
-
-**Goal.** An `IOT` tab in `ModelsView`: left panel lists IoT devices and clicking one flies the
-camera to the element it is bound to; right panel charts that device's recent readings.
-
-### What the codebase already had
-
-- `camera.fitToItems(items?: ModelIdMap)` — installed typings, `@thatopen/components` `3.4.8`.
-  Zoom-to-device needs no bounding-box math. `Views2DList` documents that it routes through
-  `controls.fitToSphere`, so it **preserves view direction** rather than snapping to a canned angle.
-- `getLocalIdsByGuids(guids)` / `getGuidsByLocalIds(localIds)` — installed `@thatopen/fragments`
-  typings. GUID↔localId is a first-class vendor call, not something to hand-roll.
-- `RoomView` enumerates every `IFCSPACE` across all loaded models via
-  `getItemsOfCategories([/^IFCSPACE$/])` and tracks selection as `{modelId, localId}` — the same
-  `ModelIdMap` shape `fitToItems` consumes.
-- **`ViewportWrapper` is mounted in exactly one place in the whole app** (`ModelsView`). The OBC
-  world is a singleton; this is not incidental.
-- **No charting library is installed.** **Supabase Realtime is used nowhere** — the only
-  `subscribe()` in the app is `onAuthStateChange`.
-- `ClashList` is *not* a precedent for zoom-to-element: it replays a **stored BCF camera**
-  (position/target/up in UTM, converted to local). Different mechanism, not needed here.
-
-### Decisions
-
-| # | Decision | Rejected, and why |
-|---|----------|-------------------|
-| 1 | **Spatially bound**, not a flat dashboard | A charts-only IoT page is a worse Power BI, and the Power BI tab already exists. Putting the value *on the element* is the only thing this app can do that Grafana cannot |
-| 2 | A **tab in `ModelsView`**, not a new sidebar workspace | A second viewport-owning view means a second `ViewportWrapper` against a singleton world — the described layout already *is* `isFlexLayout` (left panel / viewport / right panel), so this is one string in `workspaceTabs`. A sidebar entry later should navigate to `/model` with the tab preselected, never stand up a rival viewport |
-| 3 | A **narrow provider interface** — `listDevices` / `getLatest` / `getHistory` — with a mock behind it | There is no real IoT source yet. Designing a schema around an unseen payload is how this feature dies; any real platform can satisfy these three methods, so the transport decision is **deferred, not guessed** |
-| 4 | **No `ifcGuid` on the `Device` type** | If the GUID leaks into the device shape, the mock starts pretending it knows about BIM and the interface stops being satisfiable by a real platform. Real sensors carry a device ID and nothing else — confirmed by the developer |
-| 5 | **Runtime auto-binding** to elements in the loaded model, via a category **fallback chain** (equipment → `IFCSPACE` → any element) | A hardcoded GUID list works on exactly one IFC and looks broken on every other project. A real `iot_device_bindings` table would be durable storage of *fiction* — mapping fake device IDs to real GUIDs, then thrown away when real IDs arrive. Reversed from an earlier position in this session once "sensors carry only a device ID" was established |
-| 6 | **No persistence at all in phase 1** | Follows from 5. Devices are stable across reloads by deterministic seeding, not by storage. Settings-page device config (`powerbiTabs`-style) is phase 2, and lands with the real mapping table |
-| 7 | **Hand-rolled SVG** charts — no new dependency | Recharts renders its own SVG subtree with inline `fill`/`stroke`, so every axis/grid/tooltip becomes a token threaded through a prop, against hard constraints banning `!important` and raw `oklch()` in JSX. Three chart forms (line, stat tile, status pill) is the low end of hand-rolled. React 19 compat of recharts is also unverified |
-| 8 | **Stacked mini-charts** for multi-metric devices, not one chart + metric selector | The panel answers "how is this room doing" at a glance; a selector makes you click three times to learn the same thing |
-| 9 | **Live tick at 5s, React state only — the tick never touches the OBC world** | Static data reads as broken. But phase 1 only *zooms*, it does not colour geometry, so the tick has no legitimate reason to reach the viewport — worth writing down before a pulsing highlight undoes [ADR-0020](docs/adr/0020-one-render-per-frame-and-hover-on-settle.md)'s one-render-per-frame |
-| 10 | Tick gated on **the tab being active**, not on mount | `ModelsView` keeps inactive tabs mounted-but-`hidden`, so a mount-scoped interval runs forever on every other tab |
-| 11 | Status is **computed, never stored** — `statusFor(metric, value)` over threshold constants | A `status` field on `Reading` is a denormalised copy that goes stale when a threshold changes, and no real platform will hand you *your* thresholds. Configurable thresholds are phase 2 |
-| 12 | Alarming devices **sort to the top** with a colour dot | Six names sorted alphabetically is a nav control; one red dot at the top is a monitoring tool — and it is what makes "click to zoom" meaningful (you zoom to the alarm, not to the fourth item) |
-
-### Mock data shape
-
-```ts
-type Metric = "temperature" | "humidity" | "co2" | "occupancy" | "power"
-type Device  = { deviceId: string; label: string; metrics: Metric[]; online: boolean; lastSeen: string }
-type Reading = { deviceId: string; metric: Metric; value: number; unit: string; ts: string }
-```
-
-Generated by a **deterministic quasi-periodic drift** — each value is a pure function of
-`(deviceId, metric, bucketIndex)`, where the bucket is the 5s tick. *Implemented as a change from
-the grilled design, which called for a seeded random walk:* an accumulating walk needs stored state
-to be reproducible across a reload, whereas a pure function makes reproducibility **and** the ring
-buffer's bound fall out for free — there is nothing to accumulate and nothing to trim. It satisfies
-every property the walk was chosen for. Not `Math.random()` and not a static file: static JSON gives
-flat-line charts that cannot distinguish a rendering bug from real data, and raw random gives noise
-that looks broken. Three states are **scripted** so every rendering path is exercisable
-on load rather than when the RNG obliges — one device in CO₂ alarm, one over temperature, one
-offline. **Offline must not render as `0`.** History is a ring buffer of ~200 points per
-device/metric.
-
-### Accepted consequences
-
-- IoT is only usable **when a model is loaded**. Given devices bind to elements and clicking zooms
-  the camera, that is the premise, not a limitation.
-- Re-entering the tab regenerates a slightly different past (history is walked backwards from
-  *now*). Accepted — reproducible history is real work for a benefit nobody looking at a mock notices.
-- If the binding chain falls through to `IFCSPACE`, zooming lands on geometry that is **hidden by
-  default** — `useIfcSpaceVisibility` only forces spaces visible on the Room tab. The IOT tab must
-  do the same forcing, or the camera flies to an apparently empty void.
-
-### Untested assumptions
-
-1. That `fitToItems(map)` with a single-element `ModelIdMap` frames one small object usefully —
-   `Views2DList` only ever calls it bare (whole model). A single air terminal may frame too tight.
-2. That the category fallback chain finds bindable elements in a real project IFC at all.
-3. That `dataviz` skill guidance (loaded at implementation time, before the first line of chart
-   code) does not conflict with `DESIGN.md` tokens.
-
----
-
-## IOT phase 2 — IFC elements as devices, persisted in Supabase
-
-⚠️ **ยังไม่ได้ลงมือ — นี่คือผลการ grill เท่านั้น** promote เข้า `bim-viewer.md` / `frontend.md` / `backend.md`
-(+ ADR สำหรับการเลือก `ifc_guid` เป็น anchor) หลังผู้พัฒนายืนยันว่าใช้งานได้จริงแล้วเท่านั้น
-
-**เป้าหมาย** ผู้ใช้เลือก IFC element ในโมเดลแล้วผูกเป็น IoT device แบบ Autodesk Tandem เก็บลง Supabase
-จากนั้นเลือกว่า element นั้นรายงาน metric อะไรบ้าง โปรเจกต์ที่ยังไม่ได้ผูกอะไรจะว่างเปล่า
-
-### สิ่งที่ตรวจสอบกับของจริงแล้ว (ไม่ใช่การเดา)
-
-- **โมเดล `.frag` มี IFC GlobalId ครบ** — probe ด้วย Playwright บนโปรเจกต์จริง 3 โมเดล: สุ่ม 500/500,
-  211/211 และ 8/8 ได้ GUID ไม่ใช่ null ทุกตัว และ `getLocalIdsByGuids` **round-trip กลับได้ localId เดิม**
-  (`133079` → GUID → `133079`) นี่คือเงื่อนไขที่ทั้งดีไซน์ตั้งอยู่ ถ้าไม่ผ่านต้องออกแบบใหม่ทั้งหมด
-- **`modelId` ดริฟท์จริง** — ค่าที่เจอคือ `6ad248cc-…-d8c558989946 (1)` ต่อท้ายด้วย ` (1)` จากการอัปโหลด
-  ไฟล์ชื่อซ้ำ ไม่ใช่ความเสี่ยงเชิงทฤษฎี เกิดขึ้นแล้วในโปรเจกต์นี้
-- **มีสองฐานข้อมูล ไม่ใช่ฐานเดียว** — PIAS `tbrnwnghjfkwnzsldfit` (projects 9 แถว) และ
-  RITTA `amsgzhzesbbfozrjystt` (projects 7 แถว) `.env.local` สลับได้ ปัจจุบันแอปชี้ **RITTA**
-  ⚠️ `docs/feature/backend.md` ยังเขียนว่ามีฐานเดียวคือ PIAS — **เอกสารผิด**
-- **helper สำหรับ RLS เหมือนกันทั้งสองฐาน** — `is_project_member` / `is_project_admin` / `is_hub_admin`
-  เป็น `SECURITY DEFINER` + `search_path=public, pg_temp` และ **ทั้งสามเช็ก `is_active = true` ในตัวเอง**
-  policy จึงไม่ต้องเขียนเงื่อนไขนั้นซ้ำ
-
-### Decisions
-
-| # | ตัดสิน | ที่ตัดทิ้ง และเพราะอะไร |
-|---|--------|------------------------|
-| 1 | anchor = **`ifc_guid`** เป็น identity, **`model_id`** เป็น hint เท่านั้น | `local_id` เปลี่ยนทุกครั้งที่ re-export — ถ้าใช้เป็น key วันได้โมเดลใหม่ sensor จะไปเกาะ element มั่วแบบเงียบ ๆ ซึ่งแย่กว่าหลุดหาย ส่วน `model_id` มาจากชื่อไฟล์และดริฟท์จริงแล้ว (` (1)`) จึงเป็น key ไม่ได้ หา hint ไม่เจอให้ fallback ค้นทุกโมเดลแล้วเขียน hint ทับ |
-| 2 | **element 1 = device 1**, `unique (project_id, ifc_guid)` | หลาย device ต่อ element ทำให้เฟสระบายสีมี 2 สถานะขัดกันบน element เดียว ต้องออกกฎว่าใครชนะ; device ครอบหลาย element ต้องมีตารางเชื่อมและ join ทุก query เพื่อแก้ปัญหาที่ยังไม่เกิด |
-| 3 | **`metrics iot_metric[]`** เป็น enum array + เพิ่ม `pm25` | enum ทำให้ DB กับ TS union ไม่หลุดจากกัน (`types.ts` generate ให้ฟรี) `text[]` ปล่อยให้พิมพ์ผิดเข้าไปได้เงียบ ๆ; jsonb ไม่มี constraint เลย; ตารางลูกจะถูกก็ต่อเมื่อต้องการ **threshold ต่อ device** ซึ่งยังไม่ขอ — ย้ายทีหลังได้เชิงกลไก |
-| 4 | เพิ่ม device จาก **selection ปกติ** ใน viewport | โหมด "กดปุ่มแล้วค่อยจิ้ม" ต้องสร้างโหมดยึด pointer ตัวที่ 5 ต่อจาก Measure/Clip/Sectionbox/Isolate ซึ่งโปรเจกต์นี้ถึงขั้นต้องมี `SectioningArbiter` มาตัดสินอยู่แล้ว และต้องตอบว่า Escape ยกเลิกอะไรก่อน |
-| 5 | อ่าน = member, **เขียน = `is_project_admin`**; **ลบจริง** ไม่ soft delete | binding คือการตั้งค่าที่เปลี่ยนสิ่งที่ทุกคนเห็น ไม่ใช่เนื้อหาแบบ clash report; ผ่อนทีหลังแก้ policy บรรทัดเดียว รัดทีหลังคือไปยึดสิทธิ์คืน — soft delete จะทำให้แถวที่ลบยังกิน `unique (project_id, ifc_guid)` แปลว่าผูก element เดิมกลับไม่ได้ ต้องใช้ partial index มาแก้เพื่อเก็บประวัติที่ไม่มีใครอ่าน |
-| 6 | ค่าจำลองเพาะจาก **`device_id`** + hash กำหนดย่านสถานะ (~ปกติ 70 / warn 15 / alarm 10 / offline 5) | เพาะจาก `ifc_guid` จะทำให้ลบ device แล้วผูกใหม่ได้ค่าชุดเดิมกลับมา เหมือนระบบจำสิ่งที่ลบไปแล้ว; คอลัมน์ `mock_profile` ให้ผู้ใช้เลือกพฤติกรรมถูกตัดทิ้งเพราะเป็นการฝัง config ของข้อมูลปลอมลงตารางที่ต้องอยู่ต่อถึงตอนต่อของจริง — เหตุผลเดียวกับที่เฟส 1 ไม่ยอมสร้างตาราง mapping ให้ device ปลอม |
-| 7 | **แสดง device ทุกตัวเสมอ** ตัวที่ resolve GUID ไม่เจอในโมเดลที่โหลดอยู่ ให้ zoom ไม่ได้แต่ยังเห็นค่า | ซ่อนตัวที่ resolve ไม่ได้ = รายการโกหก ผู้ใช้ตั้ง 20 ตัวเห็น 6 ตัวแล้วสรุปว่าข้อมูลหาย จะไปเพิ่มซ้ำจนชน unique; และการอ่าน CO₂ ไม่ควรต้องรอโหลด geometry |
-| 8 | apply migration ผ่าน **Supabase MCP** แล้ว regenerate `types.ts` | เขียน `types.ts` ด้วยมือถูกห้ามโดย `backend.md` และจะถูกลบทิ้งใน generate ครั้งถัดไป ระหว่างนั้นมันจะโกหกว่า schema เป็นแบบที่เราคิด |
-| 9 | **ลง migration ทั้งสองฐาน** (PIAS + RITTA) | `.env.local` ออกแบบมาให้สลับ มีคอมเมนต์สอนวิธีสลับกำกับไว้ — schema ไม่ตรงกันคือระเบิดเวลาที่จะระเบิดใส่คนที่สลับกลับ โดยไม่มีอะไรโยงให้เขาเดาถูกว่าเป็นเพราะ migration |
-| 10 | **`device_code` มีแต่ nullable**; แสดงผล fallback เป็นประเภท element | เฟสถัดไประบบ IoT จริงส่งมาแค่ device id — ไม่มีช่องรอไว้ตั้งแต่ตอนนี้ วันเชื่อมจริงต้อง migration เพิ่มคอลัมน์แล้วไล่กรอกย้อนหลัง; แต่บังคับกรอกตอนนี้จะได้รหัสมั่วที่ต้องล้างทีหลัง — uuid ไม่เอามาแสดง และ GUID ย่อไม่สื่ออะไรกับมนุษย์ |
-
-### เค้าโครงตาราง
-
-```sql
-create type iot_metric as enum
-  ('temperature','humidity','co2','power','occupancy','pm25');
-
-create table iot_devices (
-  id               uuid primary key default gen_random_uuid(),
-  project_id       uuid not null references projects(id),
-  ifc_guid         text not null,          -- identity ตัวจริง
-  model_id         text,                   -- hint เท่านั้น เขียนทับได้
-  device_code      text,                   -- ช่องรอ device id ของระบบจริง
-  label            text not null,
-  element_category text,                   -- ดูหมายเหตุ
-  metrics          iot_metric[] not null,
-  created_by       uuid references profiles(uid),
-  created_at       timestamptz not null default now(),
-  updated_at       timestamptz not null default now()
-);
-```
-
-**ทำไมต้องเก็บ `element_category` ทั้งที่อ่านจากโมเดลได้** — เพราะ decision 7 บังคับให้รายการแสดง device
-ที่โมเดลยังไม่โหลดด้วย ตอนนั้นไม่มีอะไรให้ query เลย ถ้าไม่เก็บไว้ แถวเหล่านั้นจะไม่มีอะไรแสดงใต้ชื่อ
-เป็นการ denormalise ที่จงใจ และยอมรับว่ามันอาจเก่าได้ — ใช้เพื่อแสดงผลเท่านั้น ไม่เคยใช้ตัดสินใจ
-
-### PM2.5
-
-| metric | หน่วย | warn | alarm |
-|---|---|---|---|
-| `pm25` | µg/m³ | 35 | 55 |
-
-อิงช่วง AQI สากล (moderate เริ่ม ~35, unhealthy ~55) — WHO 24h guideline เข้มกว่านี้ที่ 15
-ถ้าอาคารอิงมาตรฐานอื่นให้ปรับที่ `iotThresholds.ts` จุดเดียว
-
-### โค้ดเฟส 1 ที่ถูกลบทิ้ง ไม่ใช่ดัดแปลง
-
-- `iotBinding.ts` ทั้งไฟล์ — การเดินอ่านโมเดลเพื่อแจก device แบบสุ่มไม่มีที่ยืนแล้ว
-- roster ตายตัว 6 ตัวใน `mockIotProvider.ts` — เหลือแต่ตัวสร้างค่าที่เพาะจาก `device_id`
-- `hasModel` เลิกทำหน้าที่คุม empty state ทั้งแท็บ empty state ตัวจริงกลายเป็น "ยังไม่มี device"
-
-ที่เหลืออยู่ครบ: panel ซ้าย, กราฟ SVG, การ sort ตามสถานะ, tick 5 วิ, `statusFor`, `IotStatusBadge`,
-การ zoom ด้วย `fitToItems` — คือเหตุผลที่เฟส 1 คุ้มที่จะทำ
-
-### สมมติฐานที่ยังไม่ได้ทดสอบ
-
-1. `fitToItems` กับ element เดี่ยวเล็ก ๆ จะ frame ใช้งานได้จริงไหม (ยกมาจากเฟส 1 ยังไม่ได้ทำ spike)
-2. ตอนกดบันทึก ถ้า `getGuidsByLocalIds` คืน `null` ต้องปฏิเสธพร้อมบอกเหตุผล — ยังไม่รู้ว่าเกิดบ่อยแค่ไหน
-   จาก probe คือ 0% แต่ทดสอบแค่ 3 โมเดล
-3. `element_category` ดึงจาก property ตอนผูกได้ครบทุกกรณีหรือไม่
-
----
-
 ## IOT phase 3 — device annotations floating in the viewport
 
-⚠️ **ยังไม่ได้ลงมือ — ผลการ grill เท่านั้น** promote เข้า `bim-viewer.md` (+ ADR สำหรับการเลือก CSS2D
-และการยอมให้ป้ายกินคลิก) หลังผู้พัฒนายืนยันว่าใช้งานได้จริง
+⚠️ **โค้ด merge แล้ว (PR #44) แต่ยังไม่ได้ยืนยันในแอปจริง** บล็อกนี้จึงยังค้างอยู่ที่นี่
+— เฟส 1-2 promote ไป [`docs/feature/iot.md`](docs/feature/iot.md) + ADR-0028–0031 เรียบร้อยแล้ว
+เมื่อยืนยันแล้ว promote บล็อกนี้เข้า `docs/feature/iot.md` § Viewport chips
+(+ ADR สำหรับการเลือก CSS2D และการยอมให้ป้ายกินคลิก) แล้วลบออกจากที่นี่
 
 **เป้าหมาย** ป้ายข้อมูล IoT ลอยเกาะ element ที่ผูกไว้ในวิวพอร์ต แบบเดียวกับป้ายชื่อห้องของ `RoomView`
 สไตล์ตาม `DESIGN.md` อ้างอิงภาพ Autodesk-Tandem-style ที่ผู้พัฒนาส่งมา
@@ -739,28 +573,56 @@ create table iot_devices (
 3. **การรื้อของเดิม** — ย้าย `iotResolver` + `fitToItems` ออกจาก `features/iot/` เข้า `IotView` คือการ
    ผ่าตัดโค้ดที่เพิ่งผ่าน e2e ในเฟส 2
 
-### ⏸ ค้างไว้ — ต้องทำต่อ (phase 3)
+### ✅ ปิดแล้ว — e2e assertion ที่ตกอยู่ (phase 3)
 
-**เทสต์ e2e ตกอยู่ 1 assertion: ปิดสวิตช์ chip แล้วเปิดกลับ chip ไม่กลับมา**
-(`e2e/iot-tab.spec.ts` — บล็อก "The layer switch removes every chip, and restores them")
+**เทสต์ผ่านครบแล้ว** (`e2e/iot-tab.spec.ts` 2/2) หลังจากสลับลำดับ assertion ไม่ได้แก้โค้ดฝั่ง app เลย
 
-ที่แก้ไปแล้วแต่ยังไม่หาย: เพิ่ม `chipsVisible` เข้า dependency ของ effect ที่เรียก `syncChips`
-เพื่อให้เปิดสวิตช์แล้ว re-sync ทันทีโดยไม่ต้องรอ tick ถัดไป
+**สาเหตุจริง (วัดจากของจริง ไม่ใช่การเดา)** — instrument `IotView.syncChips` / `IotChips.set` แล้วรัน
+เทสต์ซ้ำ พบว่าเปิดสวิตช์กลับมาแล้ว engine **สร้าง chip ใหม่สำเร็จทุกครั้ง** (`pool=1`, `object.parent`
+มีจริง, `object.visible=true`) แต่ `document.querySelectorAll(".iot-chip").length === 0` ตลอด เพราะ:
 
-**ยังไม่ยืนยันว่าเป็นบั๊กของโค้ดหรือของเทสต์** เบาะแสสุดท้ายก่อนหยุด:
+> `CSS2DRenderer.renderObject` ของ three จะ **append element เข้า DOM เฉพาะตอน anchor อยู่ในเฟรม
+> กล้อง** (`-1 ≤ z_ndc ≤ 1`) นอกเฟรมมันจะ `display:none` เฉย ๆ — และ chip ที่ **ถูกสร้างใหม่ตอน
+> anchor อยู่นอกเฟรม จะไม่มี DOM node เลย** ไม่ใช่แค่ถูกซ่อน
 
-- โปรเจกต์ที่เทสต์เลือก (THAI DC) **ไม่มี device เลย** — 4 ตัวที่ผู้พัฒนาผูกไว้อยู่คนละโปรเจกต์
-  ฉะนั้นตอนเทสต์รัน มี device แค่ตัวเดียวที่มันเพิ่งสร้าง
-- device ตัวนั้น**ตกอยู่ในย่าน offline** ตามที่ hash ของ `device_id` สุ่มได้ (ยืนยันจาก
-  `row=undefined chip=--`) ซึ่งอาจเกี่ยวหรือไม่เกี่ยวกับอาการก็ได้
-- สวิตช์ไม่ถูก render ในสถานะ "ยังไม่มี device" — `IotDeviceList` คืน empty state ก่อนถึง toggle
+ทำไม anchor ถึงอยู่นอกเฟรม: element ที่เทสต์สุ่มจิ้มได้ใน THAI DC คือแผ่นขนาด **495.65 × 0.30 ×
+557.95 m** พอ `zoomTo` → `fitToItems` มันเลยถอยกล้องไปที่ระยะ **~1148 m** จากจุดกึ่งกลาง ซึ่งเลย
+**far plane = 1000** ของ world camera → `z_ndc = 1.000+` → renderer ตัดทิ้ง
 
-**วิธีตรวจที่เร็วที่สุด (30 วินาที):** เปิดแท็บ IOT ในโปรเจกต์ที่**มี device อยู่แล้ว** กดสวิตช์
-"Show readings on model" ปิดแล้วเปิด — ถ้า chip กลับมา แปลว่าเทสต์เขียนผิด ถ้าไม่กลับ แปลว่าเป็นบั๊กจริง
+ฉะนั้น **ไม่ใช่บั๊กของโค้ด phase 3** และไม่ใช่บั๊กของสวิตช์ — ยืนยันซ้ำด้วย probe แยกในโปรเจกต์ที่มี
+device จริง 4 ตัว: ปิด→เปิดสวิตช์ chip กลับมาครบ 4 ตัวภายใน 2 วิ ทั้งตอนที่ยังไม่ได้เลือก device และ
+ตอนเลือกแล้ว
 
-**สิ่งที่ยังไม่มีใครดูด้วยตา** (ค้างจากทุกเฟส):
-1. หน้าตา chip จริงที่ความกว้าง viewport จริง อ่านง่ายไหม
-2. chip ทับกันแค่ไหนเมื่อ device เกาะกลุ่มบนฝ้าเดียวกัน
-3. กล้องบินไปหา element เล็ก ๆ แล้วเฟรมใช้ได้ไหม — ค้างตั้งแต่เฟส 1 ยังไม่เคยทำ spike
-4. เทสต์ `isolating a room on the Room tab` เป็น **partial by construction** — ยืนยันแค่ว่า flow
+**ที่แก้: ลำดับใน `e2e/iot-tab.spec.ts`** ย้ายทุก assertion ที่ต้องการ chip อยู่ใน DOM (สวิตช์เลเยอร์,
+ออก/กลับเข้าแท็บ) ไป**ก่อน**การคลิก chip ซึ่งเป็นจังหวะแรกที่กล้องขยับ ส่วน assertion ที่รอดการบิน
+กล้องได้ (class `iot-chip--selected`, right panel) อยู่ท้าย พร้อมคอมเมนต์อธิบายว่าทำไมลำดับเป็นข้อผูกมัด
+
+### 🆕 พบระหว่างทาง — far plane ตัด element ใหญ่ทิ้ง (ไม่ใช่เรื่องของ IOT)
+
+`applyCameraDepthRange` (`bim-components/setup/src/camera-depth-range.ts`) ตั้ง **near = 0.1** ไว้
+อย่างจงใจ แต่ **ปล่อย far = 1000 ตามค่า default ของ OBC** ⇒ zoom ไปหา element ที่ใหญ่กว่า ~400 m
+จะทำให้ตัวมันเองหลุดออกนอก far plane และถูก GPU ตัดทิ้ง ไม่ใช่แค่ป้าย CSS2D
+
+หลักฐาน: `camPos 50,50,50 → 762.4,663.4,541.2`, `near=0.1 far=1000`, `z_ndc=1.000`
+
+**ยังไม่ได้แก้ — เป็นการแตะ camera setup ที่ใช้ร่วมทุกแท็บ ต้องให้ผู้พัฒนาตัดสิน** ทางเลือก:
+1. ให้ far ปรับตาม bounding box ของ world เหมือน `MiniMapCacheManager` (`size.y + 1000`) — **แนะนำ**
+   เพราะรักษาอัตราส่วน near/far ให้แคบเท่าที่โมเดลต้องการจริง
+2. ยก far เป็นค่าคงที่ใหญ่ขึ้น (เช่น 10,000) — ง่ายสุด แต่ได้อัตราส่วน 1:100,000 ซึ่งเป็นความเสี่ยง
+   z-fighting ที่คอมเมนต์ในไฟล์นั้นปฏิเสธไปแล้วตอนเลือก near
+3. clamp ระยะ fit ใน `zoomTo` ไม่ให้เกิน far — แคบสุด แต่เฟรมจะโกหกเงียบ ๆ เมื่อ element ใหญ่จริง
+
+### 👁 ที่ยืนยันด้วยตาแล้ว (screenshot จาก Playwright, โปรเจกต์ PSM ที่มี device จริง 4 ตัว)
+
+1. **หน้าตา chip ที่ 1600×900 — อ่านออกชัด** ไอคอน metric + ค่า + หน่วย + ⚠ บนตัวที่ warn
+   สีตาม token ตัดกับพื้นได้ ตัวที่เลือกมีขอบไฮไลต์ชัดเจน
+2. **ยังไม่เห็นการทับกัน** ในโปรเจกต์นี้ device 4 ตัวกระจายตัว — เคสฝ้าเดียวกัน 6 หัวจ่ายยังไม่มีข้อมูล
+3. **กล้องบินไปหา element ขนาดปกติเฟรมได้ดี** (ถังกลม เต็มจอพอดี) — ข้อค้างจากเฟส 1 ปิดได้เฉพาะเคสปกติ
+   เคส element ใหญ่มากคือหัวข้อ far plane ข้างบน
+
+### ⏸ ยังค้าง — ต้องใช้ตาผู้พัฒนา
+
+1. chip ทับกันแค่ไหนเมื่อ device เกาะกลุ่มบนฝ้าเดียวกัน (ยังไม่มีโปรเจกต์ที่มีเคสนี้)
+2. เทสต์ `isolating a room on the Room tab` เป็น **partial by construction** — ยืนยันแค่ว่า flow
    เดินจบและ engine ไม่ error ส่วน "ห้องยังมองเห็นอยู่จริง" ต้องใช้ตาคนดู
+3. ตัดสินใจเรื่อง far plane ข้างบน

@@ -3,7 +3,7 @@
  * live tick, the selection and the camera flight.
  *
  * Phase 1's runtime binding walk is gone — devices are authored, so nothing here ever *picks* an
- * element. → `CONTEXT.md` § *IOT phase 2*.
+ * element. → `docs/feature/iot.md`.
  *
  * **Nothing is cleared by an effect.** Where a value stops applying it is derived away at read time
  * instead, which keeps `react-hooks/set-state-in-effect` satisfied and removes a class of flicker.

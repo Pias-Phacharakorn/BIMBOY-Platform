@@ -1,7 +1,7 @@
 /**
  * One metric's recent history, as a small single-series line chart.
  *
- * Hand-rolled SVG rather than a charting library — see `CONTEXT.md` § *IOT tab*, decision 7. The
+ * Hand-rolled SVG rather than a charting library — see `docs/adr/0030-hand-rolled-svg-charts-over-a-chart-library.md`. The
  * reason is theming, not bundle size: libraries render their own SVG with inline `fill`/`stroke`,
  * so every axis and grid line becomes a design token threaded through a prop, against the hard
  * constraints banning `!important` and raw `oklch()` in JSX. Here a Tailwind token class applies

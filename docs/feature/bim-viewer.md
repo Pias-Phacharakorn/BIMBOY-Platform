@@ -1,42 +1,10 @@
 # BIM Viewer — ThatOpen / OBC wiring (this app)
 
-> Status: seed — expand as you work this area.
 > Documents how **this project** wires ThatOpen. How to *build* a generic OBC component → `_thatopen-bim-component` skill. ThatOpen API reference → start at `docs/ThatOpen_docs/INDEX.md`. Do not duplicate those here.
 
 ## Overview
 
 The 3D world is a singleton bootstrapped once in `bim-components/setup/` — never inside React. React reaches the engine through `bimStore`. `<bim-*>` BUI web components are normally confined to `ViewportWrapper.tsx` (shadow-DOM isolation); everywhere else uses plain React (`LeftPanel`/`RightPanel`, toolbar components). The **Drawing Editor** tab is the one documented exception — its SheetBoard web components (`<bim-sheet-board>`, `<bim-paper-space>`, `<bim-checkbox>`) live in that feature's React panes (see the Drawing Editor section). ThatOpen libs are pinned to **v3.4.x**.
-
-## Key files
-
-- `src/bim-components/setup/src/create-world.ts` — world/engine bootstrap (singleton — don't edit lightly)
-- `src/bim-components/setup/src/camera-depth-range.ts` — the world's near plane (`CAMERA_NEAR`), re-applied on every camera swap
-- `src/bim-components/setup/src/camera-response.ts` — damping and wheel stride (`smoothTime`, `draggingSmoothTime`, `dollySpeed`), re-applied on every camera swap for the same reason (see § Camera navigation)
-- `src/bim-components/setup/src/render-coalescer.ts` — wraps `renderer.update` so a frame renders once, however many callers ask (see § Render loop and hover cadence)
-- `src/bim-components/setup/src/postproduction.ts` — the app's boot render look, and the constants `PostRenderPanel` resets to (see § Postproduction and the house look)
-- `src/bim-components/RealisticView/` — custom OBC component owning the Realistic tab's sky/sun/shadow rig, snapshot-and-restore (see § Realistic tab)
-- `src/react-components/features/post-render/PostRenderPanel.tsx` — runtime override surface over the live passes
-- `src/react-components/features/gis/useGisRenderMode.ts` — swaps `postproduction.style` to `COLOR` for the GIS tab's lifetime
-- `src/bim-components/CursorZoom/` — custom OBC component owning cursor-bounded zoom + the hover orbit pivot
-- `src/bim-components/setup/src/fragments-manager.ts` — FragmentsManager wiring
-- `src/bim-components/setup/src/ifc-loader.ts` — IFC → fragments loading
-- `src/bim-components/setup/src/highlighter.ts`, `hoverer.ts`, `items-finder.ts` — selection/hover/query
-- `src/bim-components/setup/src/clip-aware-raycaster.ts` — the world's raycaster; every pick in the app goes through it (see § Picking)
-- `src/bim-components/setup/index.ts` — registers all setup components (the singleton entry)
-- `src/react-components/components/bim/ViewportWrapper.tsx` — the main viewport; normally the ONLY place `<bim-*>` may live
-- `src/react-components/features/cloud-models/` — `cloudModelsService.ts`, `useCloudModels.ts`, `useAutoLoadCloudModels.ts`
-- `src/react-components/components/bim/CloudModelModal.tsx`, `CloudModelLoadingModal.tsx` — cloud load UI
-- `src/react-components/store/bimStore.ts` — React's handle to the world/engine
-- `src/bim-components/ClipperCursor/` — custom OBC component owning the section tool (plane registry + the outline and placement managers); `src/planeFit.ts` fits each outline to the model
-- `src/bim-components/SectionBox/` — custom OBC component owning the crop volume (six inward planes + the faces and outline managers)
-- `src/bim-components/SectioningArbiter/` — keeps the two above from cropping at once; imports both, and neither imports it
-- `src/bim-components/GizmoAxis/` — custom OBC component owning every overlay axis gizmo (one shared scene + render pass) and the shared `AxisDragManager`
-- `src/bim-components/MeasureCursor/` — custom OBC components for the Length + Area measure tools (one shared engine + hover/pointer managers)
-- `src/bim-components/SurfaceMeasureCursor/` — the Surface measure tool (unrelated to the two above: coplanar-face extraction from worker geometry, no snapping)
-- `src/bim-components/RoomView/` — custom OBC component owning the Room tab's IFCSPACE query, CSS2D name chips and Highlighter subscription (see § Room browser)
-- `src/react-components/features/room-view/` — `useRooms.ts` (query + grouping + selection mirror), `RoomPanel.tsx` (grouped list, search, pin/zoom controls)
-- `src/bim-components/DrawingEditorSetup/index.ts` — custom OBC component owning the Drawing Editor engine (levels, TechnicalDrawings, tools)
-- `src/react-components/features/drawing-editor/` — `DrawingEditorPanel.tsx` (levels/layers panel + lifecycle), `DrawingEditorBoard.tsx` (Sheet View / paper-space pane)
 
 ## Patterns & conventions
 
@@ -48,6 +16,11 @@ The 3D world is a singleton bootstrapped once in `bim-components/setup/` — nev
 - OBC bootstrap is a **singleton** in `setup/` — React never constructs the world.
 - **The grid is off by default**, set in `create-world.ts` as `grid.config.visible = false`. Through `config`, **not** `three.visible`: the config setter also drives the component's own setter, which adds and removes the grid from the scene. `ToolbarSettings`' `useState` seed is `false` to match — the effect re-syncs from the live grid, but a mismatched seed makes the checkbox read "on" for the first paint. `SimpleGrid.visible` reads `this.three.visible`, so the toggle and the AR path share one flag. ⚠️ **Landmine fixed with it:** `ArSession` used to hide the grid and restore it with `visible = true` *unconditionally* — harmless while the grid was always on, but with it off by default that would switch on a grid the user never had. It now only takes ownership of a grid that was actually showing.
 - **React ↔ custom-component pattern:** a custom `OBC.Component` owns all engine state and exposes methods/getters + an `onChanged` event; a React feature panel drives it via `components.get(...)` and re-renders on `onChanged`. Precedents: `GisPanel` ↔ `GisLayers`, `DrawingEditorPanel`/`DrawingEditorBoard` ↔ `DrawingEditorSetup`.
+- **A mediator imports the components it mediates — never the reverse.** `SectioningArbiter` imports
+  both `ClipperCursor` and `SectionBox`, and neither imports it, so either can be read, moved or
+  disposed without knowing an arbiter exists. Wire any future interlock the same way round; an
+  arbiter reference inside a tool is a circular dependency waiting to happen. What it actually
+  arbitrates: [`bim-viewport-righttoolbars.md`](bim-viewport-righttoolbars.md) § Sectioning interlock.
 - **New OBC component — step checklist** (moved from CLAUDE.md; follow the `_thatopen-bim-component` skill for the full workflow):
   1. Use `_thatopen-bim-component` skill
   2. Place in `bim-components/`

@@ -1,6 +1,5 @@
 # Viewport toolbars — the floating React rails over the 3D canvas
 
-> Status: seed — expand as you work this area.
 > Covers the **bottom rail** (`ViewportToolbar.tsx`) button by button, plus what both rails share: layout, the dropdown idiom, and cross-button hazards. The **right rail** and its four tools — button *and* engine together — live in [`bim-viewport-righttoolbars.md`](bim-viewport-righttoolbars.md). World bootstrap, camera navigation, picking and the Drawing Editor live in [`bim-viewer.md`](bim-viewer.md).
 
 ## Overview

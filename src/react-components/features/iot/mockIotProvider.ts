@@ -1,5 +1,5 @@
 /**
- * Stand-in telemetry for devices the user has authored. → `CONTEXT.md` § *IOT phase 2*.
+ * Stand-in telemetry for devices the user has authored. → `docs/feature/iot.md` § Mock telemetry.
  *
  * **Phase 1's hardcoded roster is gone.** Devices now come from the database, so this module no
  * longer knows which devices exist — it only answers "what is this device reading". That is exactly

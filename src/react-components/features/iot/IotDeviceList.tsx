@@ -4,7 +4,7 @@
  * **Every device is listed, always** — including ones whose model is not loaded. Hiding those would
  * make the list under-report what is configured: a user who bound twenty devices and sees six
  * concludes the data is gone, and tries to create them again against elements they cannot see.
- * → `CONTEXT.md` § *IOT phase 2*, decision 7.
+ * → `docs/feature/iot.md` § Gotchas.
  */
 
 import { Icon } from "@/react-components/components/ui";

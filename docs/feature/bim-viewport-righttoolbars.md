@@ -1,6 +1,5 @@
 # Right rail — the viewport tools (button **and** engine)
 
-> Status: seed — expand as you work this area.
 > The four tools on `ViewportRightToolbar.tsx`, each documented button-first then engine, because working on one means touching both halves. **Bottom rail, the shared dropdown idiom and cross-button hazards** → [`bim-viewport-toolbars.md`](bim-viewport-toolbars.md). **World bootstrap, camera navigation, picking, Drawing Editor** → [`bim-viewer.md`](bim-viewer.md).
 
 ## Overview

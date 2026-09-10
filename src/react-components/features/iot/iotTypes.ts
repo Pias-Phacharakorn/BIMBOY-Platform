@@ -9,7 +9,7 @@
  *
  * Phase 1 had a single `Device` type with no BIM identity, because devices were invented at runtime
  * by walking the model. Phase 2 splits them: devices are project data, readings are a stream keyed
- * by device. → `CONTEXT.md` § *IOT phase 2*.
+ * by device. → `docs/feature/iot.md`, and `docs/adr/0028-iot-provider-interface-defers-the-transport.md`.
  */
 
 import type { Database } from "@/integrations/supabase/types";
