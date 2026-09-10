@@ -48,7 +48,7 @@ export function useIotTab(
 
   // Floating chips in the viewport. Clicking one selects the device, which is the same entry point
   // the list row uses — so the panel cannot end up describing something other than the highlighted
-  // chip. → `CONTEXT.md` § *IOT phase 3*.
+  // chip. → `docs/feature/iot.md` § Viewport chips.
   useIotChips(
     isActive,
     devices.rows,

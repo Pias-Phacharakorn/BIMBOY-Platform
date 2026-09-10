@@ -11,7 +11,7 @@
 //
 // QR-code real-world anchoring (useArQrAnchor / qrPose) is DORMANT — kept in
 // the tree, unimported, for a future "pin to a fixed physical spot" round,
-// mirroring the dormant ArSession.ts. See CONTEXT.md.
+// mirroring the dormant ArSession.ts. → `docs/feature/ar-webxr.md`.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import * as THREE from "three";

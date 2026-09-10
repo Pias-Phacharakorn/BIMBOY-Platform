@@ -72,15 +72,38 @@ Sets which world direction the ViewCube calls "front".
 - ⚠️ **Reset pokes the ViewCube with a synthetic event:** `camera.controls.dispatchEvent({ type: "update" })`. This is the same underlying problem `bim-viewer.md` § Gotchas records — the ViewCube and the projection dropdown don't follow camera changes on their own. The ViewCube now subscribes `world.onCameraChanged`, but a *rotation* reset isn't a camera swap, so the synthetic nudge is still what refreshes it.
 - Because it doesn't use `activeTool`, arming Align does **not** suppress viewport FX and does **not** cancel an active right-rail tool.
 
+### Fullscreen (`ToolbarFullscreen.tsx`)
+
+A bare toggle between Align and Settings: hides `Sidebar` + `WorkspaceHeader` **and** enters browser fullscreen, as one action. → [ADR-0036](../adr/0036-fullscreen-has-one-writer-the-browser.md).
+
+- ⚠️ **The button writes nothing.** It calls `requestFullscreen`/`exitFullscreen`; every write to `uiStore.isViewportFullscreen` comes from a `fullscreenchange` event. That single-writer rule is what makes Esc and F11 work for free — and it is why this app binds **no** keydown listener for Escape here, which would otherwise collide with `ClipperPlacementManager`'s lifetime-long global Escape handler and cancel a plane placement on the way out.
+- ⚠️ **Fullscreen is requested on `document.documentElement`, never on the viewport `<section>`.** `BackgroundSettingsModal` and `CloudModelLoadingModal` portal to `document.body`, which is not a descendant of a fullscreened `<section>` — the browser would simply not paint them, so Settings → Background from this very rail would open onto nothing.
+- **All-or-nothing:** a rejected `requestFullscreen()` (iframe without `allow="fullscreen"`, browser policy) leaves the chrome in place rather than hiding it with no fullscreen behind it. The rejection is swallowed on purpose.
+- **`LeftPanel`/`RightPanel` are untouched** — restoring `LeftPanel`'s dragged `width` would mean lifting local `useState` into the store, and their collapsed rails stay reachable anyway.
+- **Session-only**, and `ModelsView` exits on unmount. Persisting is impossible to honour: `requestFullscreen()` needs a user gesture, so a restored flag on boot would hide the chrome with no fullscreen behind it.
+- **The hook is split in two.** `useViewportFullscreen()` reads and toggles and is safe anywhere; `useViewportFullscreenOwner()` owns the listener and the exit-on-unmount and is called **once**, from `ModelsView`. Calling the owner hook twice would give a second component an unmount that drops the user out of fullscreen.
+- ⚠️ `uiStore.sidebarCollapsed`/`setSidebarCollapsed` are **dead** — `AppShell` keeps its own `useState` + `localStorage`. This feature deliberately did not reuse them; they are a different concept and still unused.
+
 ### Settings (`ToolbarSettings.tsx`)
 
-The one dropdown that is a form. Grid visible · Mini Map · Auto Rotate · Grid Level (m) · Camera Projection │ Background │ Hover Highlight · Hover Colour │ Performance · Scene Diagnostics.
+The one dropdown that is a form. Grid visible · Mini Map · Auto Rotate · Grid Level (m) · Camera Projection · IFCSpace │ Background │ Hover Highlight · Hover Colour │ Performance · Scene Diagnostics.
 
 - **It re-reads the engine on every open** (the sync effect depends on `isSettingsOpen`), because every one of these values can be changed by something other than this menu.
 - **It subscribes `world.onCameraChanged` to keep the projection select honest** — opening or closing a 2D view swaps `world.camera` to an orthographic camera and back, and the dropdown would otherwise lie. Changing projection here also calls `postproduction.updateCamera()`, per the resync gotcha in `bim-viewer.md`.
 - **Mini Map is the only setting that lives in `uiStore`** (`showMinimap`) rather than being written straight to the engine — it gates the `MiniMapOverlay` component, not an OBC flag.
 - **Auto Rotate is a hand-rolled `requestAnimationFrame` loop**, not a camera-controls feature: it targets the `BoundingBoxer` model centre, then calls `controls.rotate(0.005, 0, false)` per frame. It cancels itself on the first `controlstart` (any user input wins) and when the last model unloads, and is disabled outright with no model loaded. `hasModel` is tracked by subscribing `fragments.list.onItemSet`/`onItemDeleted`, with a `setTimeout` retry because those events aren't available until the manager initialises.
 - ⚠️ **Hover Highlight writes `OBF.Hoverer.enabled` directly** — see § Cross-button hazards. This is the one setting the right rail will silently undo.
+
+#### IFCSpace (the row)
+
+Unticked hides all `IFCSPACE` geometry in the viewport; ticked shows it. **Unticked is the default**, on every tab except Room. → [ADR-0034](../adr/0034-ifcspace-visibility-is-a-hide-only-derived-rule.md).
+
+- **Two booleans, one derived value.** `uiStore` holds `showIfcSpaces` (the user's preference — only this checkbox writes it) and `ifcSpacesForced` (published by `useIfcSpaceVisibility` from its argument). The effective value is `showIfcSpaces || ifcSpacesForced`, **derived at every read and never stored** — which is exactly why leaving the Room tab needs no restore step. On the Room tab the row renders **checked and disabled**, with the preference underneath untouched.
+- ⚠️ **The standing rule only ever hides. It never shows.** On mount, on model load and on a `visibilityEpoch` bump it hides spaces if they should be hidden, and does **nothing at all** if they should be visible. A symmetric rule is the obvious implementation and it destroys `Isolate`: isolate one room on the Room tab, and the next model load brings every space in the building back.
+- **Show All re-asserts it.** `ToolbarVisibility.handleShowAll` calls the hook's re-assert after `hider.set(true)`, so with the box unticked Show All shows everything *except* spaces. Without it, "hidden by default" would die on the first Show All. Accepted cost: a user who has forgotten the setting gets no clue but this checkbox.
+- ⚠️ **Viewport-only — the Drawing Editor is not filtered.** `DrawingEditorSetup` builds projections from `model.getItemsIdsWithGeometry()`, which ignores visibility, so a plan drawn with spaces hidden still contains every space outline. Known gap, not a bug — and filtering it would put a `uiStore` read inside `bim-components/`.
+- ⚠️ **`SmartViews` calls `hider.set(true)` in `reset()`/`apply()` without the re-assert.** Not a live conflict today — that tab renders a bare viewport with no React consumer — but it becomes one the day the tab is built.
+- The logic is `features/ifc-space-visibility/useIfcSpaceVisibility.ts`, called once from `ModelsView`; this file reads both flags and knows nothing about `Hider`. Category is `IFCSPACE` only — `IFCZONE` is an `IfcGroup` with no geometry and `IFCSPATIALZONE` is vanishingly rare here.
 
 #### Background (the row, and its dialog)
 

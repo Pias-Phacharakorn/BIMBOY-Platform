@@ -1,7 +1,12 @@
 # ADR-0017: The Room tab owns no visibility state
 
-**Status:** Accepted
+**Status:** Accepted — § "The tab does not touch visibility" amended by [ADR-0034](0034-ifcspace-visibility-is-a-hide-only-derived-rule.md)
 **Date:** 2026-08-14
+
+> The core decision stands in full: the Room tab still owns no visibility state, still adds no
+> ghost and no isolation, and the user still presses Ghost. ADR-0034 changes only *who* asks for
+> `IFCSPACE` to be visible — the tab now contributes one boolean to a hide-only rule owned
+> elsewhere, and `RoomView` itself needed no code change.
 **Area:** [`docs/feature/bim-viewer.md`](../feature/bim-viewer.md) § Room browser
 
 ## Context
@@ -21,6 +26,13 @@ in the right order across tab switches, mid-load model changes and disposal.
 The Room tab does not touch visibility. No hiding, no ghosting, no isolation. The user reaches
 for the Ghost button in `ViewportToolbar` — which is present on the Room tab and now needs no
 special-casing — and the panel carries a single line of copy pointing at it.
+
+⚠️ **Amended by [ADR-0034](0034-ifcspace-visibility-is-a-hide-only-derived-rule.md).** Since spaces
+are hidden by default app-wide, the tab does declare *one* thing about visibility: it passes
+`true` to `useIfcSpaceVisibility`, which publishes `ifcSpacesForced`. That is still not the tab
+touching `Hider` — it owns no state, saves nothing and restores nothing; the effective value is
+derived at each read, which is precisely why leaving the tab needs no restore step. Everything
+else in this decision is unchanged.
 
 ## Alternatives rejected
 

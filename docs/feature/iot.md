@@ -1,8 +1,8 @@
 # IOT — authored devices, live readings
 
 > Roadmap: not one of the five numbered items — IOT grew out of the viewer once elements could be
-> selected reliably. Phases 1 and 2 are covered here. **Phase 3 (viewport chips) shipped but has not
-> been verified — see the last section.**
+> selected reliably. All three phases are covered here — the tab, authored devices, and the chips
+> that float readings on the model.
 
 ## Overview
 
@@ -104,19 +104,57 @@ which is why `listDevices` left the provider interface after phase 1.
   *and* RITTA, or the feature breaks with "relation does not exist" the moment somebody switches
   `.env.local` back. → `backend.md` § Two projects, no staging.
 
-## Viewport chips — shipped, not yet verified
+## Viewport chips (`bim-components/IotView/`)
 
-Phase 3 put the readings on the model itself: `bim-components/IotView/` (`IotChips.ts`) owns the
-scene objects, `useIotChips` mirrors the panel's rows into chip requests, `uiStore.iotChipsVisible`
-drives the layer switch, and `.iot-chip` styles them.
+Readings float on the model itself, anchored to the element each device is bound to — the same
+`CSS2DObject` mechanism the Room tab uses for room-name chips. → [ADR-0037](../adr/0037-iot-chips-are-css2d-and-take-clicks.md)
+for the nine decisions and what was rejected.
 
-**This code is merged but has not been confirmed in the running app**, so it is not documented here
-as settled behaviour. Its design, its decisions, and the list of what still needs eyes on it — chip
-legibility at real viewport widths, overlap when devices cluster on one ceiling, and one e2e
-assertion whose last recorded state was red — live in **`CONTEXT.md` § *IOT phase 3***. Promote that
-section into this guide once it has been verified, and add the CSS2D ADR it calls for.
+- **`IotView` owns the scene objects; `useIotChips` is a *mirror*.** The hook derives each chip's
+  status, tone and headline value from the same rows the panel renders and hands the result over;
+  the engine layer computes no status and knows no thresholds. Deriving them twice is exactly how a
+  chip and its row end up disagreeing. `IotChips.ts` is the pool, `uiStore.iotChipsVisible` is the
+  layer switch, `.iot-chip*` in `style.css` is the styling.
+- **Every bound device gets a chip**, capped at `MAX_CHIPS` (20) and ordered **alarm → warn → ok →
+  offline**, with the selected device always holding a slot. ⚠️ The cap is filled **in the order the
+  caller supplies** — unlike `RoomView`, which fills in list order and would therefore drop an
+  alarming device's chip for sorting late.
+- ⚠️ **Chips cannot be occluded — they draw through walls — and they take clicks.** That combination
+  is deliberate and it has a cost: a chip can sit on the element you are trying to bind. Mitigations:
+  chips go inert automatically whenever `activeTool` is non-null, and the switch turns the layer off.
+  There is no third remedy.
+- ⚠️ **`_interactive` is held as state on `IotChips`, not just applied when it changes.** `_applyEntry`
+  reassigns `className` wholesale on every sync — which runs on every telemetry tick — so a class
+  toggled from outside would be wiped within seconds, silently re-arming the click interception.
+- **Chips follow hide and Isolate** via `model.getVisible()`. `OBC.Hider` raises no events and
+  neither does the fragments layer, so this is learned two ways: `visibilityEpoch` bumps from
+  Isolate/Hide give an immediate response, and a poll on the telemetry tick catches everything else
+  (`SmartViews` calls `Hider` directly). Polling alone leaves chips stale ~5 s after Isolate.
+- **IOT tab only** — mount activates, unmount disposes. `ModelsView` warns explicitly that a
+  hidden-but-mounted panel strands CSS2D chips across every other tab; this project has hit that bug
+  before with the same kind of label. The price is that readings are not visible from other tabs.
+- ⚠️ **A chip whose anchor leaves the camera frustum has no DOM node at all.** Three's
+  `CSS2DRenderer` appends an element only in the branch where the anchor is in frame, so a chip
+  *created* while out of frame is never inserted — not merely `display:none`. It appears the moment
+  the camera brings the anchor back, so nothing is lost visually, but **any test that asserts a chip
+  is in the DOM must run before anything that moves the camera** — which is why `e2e/iot-tab.spec.ts`
+  orders the layer-switch block ahead of the chip click. Diagnosed with a live probe; see
+  `bim-viewer.md` § Gotchas for the far-plane limit that triggered it.
+- **Chips sit at the bounding-box centre (`getBoxes`), and centres are cached** per model load —
+  each one costs a worker round-trip — invalidated on `fragments.list.onItemSet`/`onItemDeleted`.
+  ⚠️ **There is no clustering:** six diffusers on one ceiling will overlap, and the cap only helps in
+  part. Not yet seen in a real project, and still wants a human's eyes.
+- **`syncChips` carries an ownership token.** It is fire-and-forget from an effect that re-runs every
+  tick and awaits a worker round-trip per uncached centre, so two runs can interleave on the pool.
+  → [ADR-0026](../adr/0026-async-activate-needs-an-ownership-token.md)'s pattern.
 
-One convention already worth respecting if you touch it: `useIotChips` is a *mirror*. It derives
-each chip's status from the same rows the panel renders and hands the result to `IotView`; the
-engine layer computes no status and knows no thresholds. Deriving them twice is exactly how a chip
-and its row end up disagreeing.
+### Verified, and not
+
+**Verified in the running app:** chip legibility at 1600×900 (metric icon, value, unit, a ⚠ glyph on
+warn/alarm, a clear outline on the selected one); the layer switch off and back on restoring every
+chip; camera framing when flying to a normally-sized element; and `e2e/iot-tab.spec.ts` green.
+
+**Still wanting a human's eyes:** chip overlap when devices cluster on one ceiling, and whether a
+room isolated on the Room tab is still *drawn* after the added `visibilityEpoch` bumps — the e2e test
+for that is partial by construction, asserting only that the flow completes and the engine raises
+nothing.

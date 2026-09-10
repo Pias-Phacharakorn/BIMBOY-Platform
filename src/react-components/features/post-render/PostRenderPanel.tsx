@@ -29,7 +29,7 @@ import {
  * guarantees one render per animation frame, so every write here is visible on the next frame.
  * The tutorial's `updateIfManualMode()` is dead code in this app and is not ported — nor is its
  * Manual mode section, which would switch the renderer into a state where nothing sets
- * `needsUpdate` (see `render-coalescer.ts` and CONTEXT.md).
+ * `needsUpdate` (see `render-coalescer.ts`, and `docs/adr/0020-one-render-per-frame-and-hover-on-settle.md`).
  */
 
 type AoNumberKey =

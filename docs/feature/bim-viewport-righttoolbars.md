@@ -250,8 +250,10 @@ Add coordinate · Clear all, plus a list of placed points showing X/Y/Z to 3 dec
 
 ## FX suppression (the rail itself)
 
-**The right rail suppresses viewport FX while any tool is active.** On the first transition of `activeTool` to anything other than `select`, `ViewportRightToolbar` snapshots `OBF.Hoverer.enabled`, `OBF.Outliner.enabled` and `postproduction.enabled` into a ref, disables all three, and **restores that snapshot** — not defaults — on return to idle, and again on unmount if a tool is still active.
+**The right rail suppresses the selection affordances while any tool is active.** On the first transition of `activeTool` to anything other than `select`, `ViewportRightToolbar` snapshots `OBF.Hoverer.enabled` and `OBF.Outliner.enabled` into a ref, disables both, and **restores that snapshot** — not defaults — on return to idle, and again on unmount if a tool is still active.
 
-Rationale: `CursorSurface` is the on-model guide while a tool runs, so the element hover-highlight and the outliner pass are redundant, and they cost a raycast plus a fullscreen post pass every frame.
+Rationale: `CursorSurface` is the on-model guide while a tool runs, so the element hover-highlight and the outliner pass are redundant, and the hover costs a raycast every frame.
 
-⚠️ **Anything that toggles those three must respect the snapshot or it will be silently reverted.** This rule binds engine code too, not just toolbars — [`bim-viewer.md`](bim-viewer.md) § Gotchas carries a pointer back here for that reason.
+⚠️ **`postproduction.enabled` is deliberately *not* in that list.** It was, on the same "redundant while a tool owns the cursor" reasoning — but the argument does not transfer. Hover and outline are *selection affordances*; postproduction is *how the model looks*, and for sectioning it is backwards: element edges are exactly what tell you which face you are about to cut. It also bought nothing, since `activeTool` holds a non-select value only for the moment a tool is armed, so the sole visible effect was a flat-render flash on every plane placed. → [ADR-0033](../adr/0033-fx-suppression-covers-affordances-not-the-look.md). Two knock-ons: `PostRenderPanel`'s master toggle no longer needs its `activeTool` gate to protect anything, and VW-04 (the cut clips surfaces but not edges) is now visible *during* placement as well as everywhere else.
+
+⚠️ **Anything that toggles those two must respect the snapshot or it will be silently reverted.** This rule binds engine code too, not just toolbars — [`bim-viewer.md`](bim-viewer.md) § Gotchas carries a pointer back here for that reason.

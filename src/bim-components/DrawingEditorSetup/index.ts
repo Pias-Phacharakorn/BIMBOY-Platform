@@ -34,8 +34,7 @@ const STOREY_MERGE_TOLERANCE = 0.3;
  * `activate()`/`deactivate()` are called by the React panel on tab
  * mount/unmount — nothing 3D exists until `activate()` runs, and everything
  * (including every cached level drawing) is torn down on `deactivate()` so
- * switching tabs resets the drawing. See CONTEXT.md — "Drawing Editor — real
- * per-building-storey Levels (follow-up)".
+ * switching tabs resets the drawing. → `docs/feature/drawing.md`.
  */
 export class DrawingEditorSetup extends OBC.Component implements OBC.Disposable {
   static readonly uuid = "7a1e4c2b-6f3d-4b9a-8e5c-2d9f7a3b1c6e" as const;
