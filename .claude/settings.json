@@ -8,8 +8,8 @@
   "extraKnownMarketplaces": {
     "pias-skills": {
       "source": {
-        "source": "github",
-        "repo": "Pias-Phacharakorn/Central-Skill-PIAS"
+        "source": "git",
+        "url": "https://github.com/Pias-Phacharakorn/Central-Skill-PIAS.git"
       }
     }
   }
