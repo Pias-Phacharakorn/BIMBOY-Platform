@@ -1,6 +1,16 @@
 {
   "enableAllProjectMcpServers": true,
   "enabledPlugins": {
-    "cloudflare@claude-plugins-official": true
+    "cloudflare@claude-plugins-official": true,
+    "pias-workflow@pias-skills": true,
+    "bim-dev@pias-skills": true
+  },
+  "extraKnownMarketplaces": {
+    "pias-skills": {
+      "source": {
+        "source": "github",
+        "repo": "Pias-Phacharakorn/Central-Skill-PIAS"
+      }
+    }
   }
 }
