@@ -3,7 +3,8 @@
   "enabledPlugins": {
     "cloudflare@claude-plugins-official": true,
     "pias-workflow@pias-skills": true,
-    "bim-dev@pias-skills": true
+    "bim-dev@pias-skills": true,
+    "usage-bar@pias-skills": true
   },
   "extraKnownMarketplaces": {
     "pias-skills": {
