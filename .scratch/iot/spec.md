@@ -1,7 +1,7 @@
 # Spec — IOT tab (phase 1, mock data)
 
 > Status: **ready-for-agent** (label not applied — see § Further Notes, the tracker is unreachable).
-> Grilled design + rejected alternatives: `CONTEXT.md` § *IOT tab*. Flow diagrams: `plan-visualizer.md`.
+> Grilled design + rejected alternatives: `CONTEXT.md` § *IOT tab*. Flow diagrams: `plan-visualizer.md` (repo root).
 
 ## Problem Statement
 

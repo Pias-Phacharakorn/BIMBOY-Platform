@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { useLoadCloudModelBatch } from "@/react-components/features/cloud-models/useCloudModels";
 import { demoModelsService } from "./demoModelsService";
-import { DEMO_ASSET_PREFIX } from "./demoProject";
+import { DEMO_ASSET_PREFIX } from "@/react-components/features/projects/demoProject";
 
 /**
  * Guest counterpart to `useAutoLoadCloudModels`: loads the demo .frag files from

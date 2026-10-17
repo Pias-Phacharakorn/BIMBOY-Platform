@@ -18,11 +18,11 @@ import {
   Plus,
   GitCompareArrows,
 } from "lucide-react";
-import { shopDrawingsService, type ShopDrawingRow } from "@/react-components/features/shop-drawings/shopDrawingsService";
-import { mapShopDrawingRow } from "@/react-components/features/shop-drawings/shopDrawingTypes";
-import { useGroupedShopDrawings, sheetKey, type SheetBucket } from "@/react-components/features/shop-drawings/useGroupedShopDrawings";
-import { useShopDrawingActions } from "@/react-components/features/shop-drawings/useShopDrawingActions";
-import { type DisciplineCode } from "@/react-components/features/shop-drawings/disciplines";
+import { shopDrawingsService, type ShopDrawingRow } from "./shopDrawingsService";
+import { mapShopDrawingRow } from "./shopDrawingTypes";
+import { useGroupedShopDrawings, sheetKey, type SheetBucket } from "./useGroupedShopDrawings";
+import { useShopDrawingActions } from "./useShopDrawingActions";
+import { type DisciplineCode } from "./disciplines";
 import { AddDrawingDialog } from "@/react-components/components/shop-drawings/AddDrawingDialog";
 import { UploadPdfDialog, type UploadRevisionInput } from "@/react-components/components/shop-drawings/UploadPdfDialog";
 import { PdfViewerModal } from "@/react-components/components/shop-drawings/PdfViewerModal";

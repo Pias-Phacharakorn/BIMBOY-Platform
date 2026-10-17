@@ -27,3 +27,25 @@ against the shipped code, one of them had grown a second failure mode nobody had
 **Promote on merge, not eventually** — a staging buffer that accumulates is just a worse changelog.
 
 The next `/grill-with-docs` session starts writing below this line.
+
+---
+
+## Layer reorganization — branch `chore/reorganize-layers` (2026-10-17, untested)
+
+**Shared features.** `auth`, `projects` and `cloud-models` may be imported by any other feature;
+every other feature still may not import another. Chosen over a new `react-components/shared/`
+layer (strict, but a 5th layer and ~40 path changes) and over leaving the rule silently broken.
+On promotion: amend CLAUDE.md § Layer isolation (`features/` bullet) and record an ADR.
+
+**Merged, because each was only ever a slice of one feature:** `clash-table/` → `clash-dashboard/`,
+`project-folders/` → `shop-drawings/`.
+
+**Cycle broken:** `guest-demo/demoProject.ts` → `projects/demoProject.ts`. `useProjects` needs the
+demo row; `guest-demo` importing `projects` is now the only direction.
+
+**BUI containment:** `GisPanel`'s five `<bim-number-input>` replaced by React `NumberSliderRow`
+(`components/ui/ControlRows`). The Drawing Editor's `<bim-*>` stays — documented exception in
+`docs/feature/bim-viewer.md`.
+
+**Doc drift found:** CLAUDE.md says `.scratch/` is gitignored; it isn't. The IOT specs moved there
+are therefore still tracked (`.scratch/iot/`).

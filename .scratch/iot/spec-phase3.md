@@ -1,7 +1,7 @@
 # Spec — IOT phase 3: device annotations in the viewport
 
 > Grilled design + rejected alternatives: `CONTEXT.md` § *IOT phase 3*.
-> Phases 1–2 (the IOT tab, authored devices): `spec-iot-tab.md`, `spec-iot-phase2.md`.
+> Phases 1–2 (the IOT tab, authored devices): `spec.md`, `spec-phase2.md`.
 > Status label not applied — the tracker is unreachable, see § Further Notes.
 
 ## Problem Statement

@@ -6,7 +6,7 @@ import type { AppProject } from "@/types";
 import { projectsManager } from "@/classes/ProjectsManager";
 import { Project } from "@/classes/Project";
 import { useAuth } from "@/react-components/features/auth/useAuth";
-import { DEMO_PROJECT_ROW } from "@/react-components/features/guest-demo/demoProject";
+import { DEMO_PROJECT_ROW } from "./demoProject";
 
 export const projectsKeys = {
   all: ["projects"] as const,

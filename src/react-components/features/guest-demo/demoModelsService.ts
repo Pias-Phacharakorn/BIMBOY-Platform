@@ -1,5 +1,5 @@
 import type { CloudFragFile } from "@/react-components/features/cloud-models/cloudModelsService";
-import { DEMO_ASSET_PREFIX } from "./demoProject";
+import { DEMO_ASSET_PREFIX } from "@/react-components/features/projects/demoProject";
 
 /**
  * Static counterpart to `cloudModelsService`: the same two operations (list,

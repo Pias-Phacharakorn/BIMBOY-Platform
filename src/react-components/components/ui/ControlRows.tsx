@@ -8,7 +8,9 @@
  * side effect. The visual idiom is copied from `ToolbarSettings` so they read as the same app.
  */
 
-const ROW = "flex items-center justify-between gap-3 text-xs text-fg";
+import { useState } from "react";
+
+const ROW ="flex items-center justify-between gap-3 text-xs text-fg";
 const LABEL = "font-medium text-muted";
 const VALUE = "font-mono text-[11px] font-semibold text-fg tabular-nums";
 
@@ -66,6 +68,55 @@ export function SliderRow({ label, value, min, max, step, onChange }: SliderRowP
         step={step}
         value={value}
         aria-label={label}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-accent cursor-pointer"
+      />
+    </div>
+  );
+}
+
+/**
+ * `SliderRow` with the readout swapped for a typed field — for values a drag can't land on, like
+ * coordinates at 1e-6. The field keeps its own draft string so a half-typed `-` or `12.` isn't
+ * clobbered by the parent's number; it re-syncs whenever the committed value changes elsewhere.
+ */
+export function NumberSliderRow({ label, value, min, max, step, onChange }: SliderRowProps) {
+  const [draft, setDraft] = useState(String(value));
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    setDraft(String(value));
+  }
+
+  const commitDraft = (text: string) => {
+    setDraft(text);
+    const parsed = Number(text);
+    if (text.trim() !== "" && Number.isFinite(parsed)) onChange(Math.min(max, Math.max(min, parsed)));
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className={ROW}>
+        <span className={LABEL}>{label}</span>
+        <input
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={draft}
+          aria-label={label}
+          onChange={(e) => commitDraft(e.target.value)}
+          onBlur={() => setDraft(String(value))}
+          className={`${VALUE} w-28 rounded border border-border bg-bg px-1.5 py-0.5 text-right outline-none hover:border-border-strong focus:border-accent`}
+        />
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        aria-label={`${label} slider`}
         onChange={(e) => onChange(Number(e.target.value))}
         className="w-full accent-accent cursor-pointer"
       />
