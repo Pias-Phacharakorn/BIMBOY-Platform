@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as OBC from "@thatopen/components";
-import * as BUI from "@thatopen/ui";
 import { RotateCcw, Save } from "lucide-react";
 import { GisLayers } from "@/bim-components";
 import { useProject, useUpdateProject } from "@/react-components/features/projects/useProjects";
 import { useAuth } from "@/react-components/features/auth/useAuth";
 import { useProjectStore } from "@/react-components/store/projectStore";
-import { Icon } from "@/react-components/components/ui";
+import { Icon, NumberSliderRow } from "@/react-components/components/ui";
 import { useBimStore } from "@/react-components/store/bimStore";
 import { useGisRenderMode } from "@/react-components/features/gis/useGisRenderMode";
 import { cn } from "@/lib/utils";
@@ -58,11 +57,6 @@ export function GisPanel() {
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const longitudeRef = useRef<any>(null);
-  const latitudeRef = useRef<any>(null);
-  const cameraRangeRef = useRef<any>(null);
-  const rotationRef = useRef<any>(null);
-  const elevationRef = useRef<any>(null);
 
   const gisLayers = useMemo(() => {
     if (!components) return null;
@@ -160,74 +154,6 @@ export function GisPanel() {
 
     setState((current) => ({ ...current, longitude, latitude, rotation, elevation }));
   }, [gisLayers, activeProject]);
-
-  // Synchronize events from BUI elements back to state
-  useEffect(() => {
-    const lonEl = longitudeRef.current;
-    const latEl = latitudeRef.current;
-    const camEl = cameraRangeRef.current;
-    const rotEl = rotationRef.current;
-    const elevEl = elevationRef.current;
-
-    const handleLongitude = (e: any) => {
-      updateCoordinate("longitude", Number(e.target.value));
-    };
-    const handleLatitude = (e: any) => {
-      updateCoordinate("latitude", Number(e.target.value));
-    };
-    const handleCameraRange = (e: any) => {
-      updateCameraRange(Number(e.target.value));
-    };
-    const handleRotation = (e: any) => {
-      updateRotation(Number(e.target.value));
-    };
-    const handleElevation = (e: any) => {
-      updateElevation(Number(e.target.value));
-    };
-
-    lonEl?.addEventListener("change", handleLongitude);
-    lonEl?.addEventListener("input", handleLongitude);
-    latEl?.addEventListener("change", handleLatitude);
-    latEl?.addEventListener("input", handleLatitude);
-    camEl?.addEventListener("change", handleCameraRange);
-    camEl?.addEventListener("input", handleCameraRange);
-    rotEl?.addEventListener("change", handleRotation);
-    rotEl?.addEventListener("input", handleRotation);
-    elevEl?.addEventListener("change", handleElevation);
-    elevEl?.addEventListener("input", handleElevation);
-
-    return () => {
-      lonEl?.removeEventListener("change", handleLongitude);
-      lonEl?.removeEventListener("input", handleLongitude);
-      latEl?.removeEventListener("change", handleLatitude);
-      latEl?.removeEventListener("input", handleLatitude);
-      camEl?.removeEventListener("change", handleCameraRange);
-      camEl?.removeEventListener("input", handleCameraRange);
-      rotEl?.removeEventListener("change", handleRotation);
-      rotEl?.removeEventListener("input", handleRotation);
-      elevEl?.removeEventListener("change", handleElevation);
-      elevEl?.removeEventListener("input", handleElevation);
-    };
-  }, [gisLayers, components, state.longitude, state.latitude, state.cameraRange, state.rotation, state.elevation]);
-
-  // Synchronize state changes back to BUI elements
-  useEffect(() => {
-    if (longitudeRef.current && longitudeRef.current.value !== state.longitude) {
-      longitudeRef.current.value = state.longitude;
-    }
-    if (latitudeRef.current && latitudeRef.current.value !== state.latitude) {
-      latitudeRef.current.value = state.latitude;
-    }
-    if (cameraRangeRef.current && cameraRangeRef.current.value !== state.cameraRange) {
-      cameraRangeRef.current.value = state.cameraRange;
-    }
-    if (rotationRef.current && rotationRef.current.value !== state.rotation) {
-      rotationRef.current.value = state.rotation;
-    }
-    if (elevationRef.current && elevationRef.current.value !== state.elevation) {
-      elevationRef.current.value = state.elevation;
-    }
-  }, [state.longitude, state.latitude, state.cameraRange, state.rotation, state.elevation]);
 
   const tokenAvailable = state.token.trim().length > 0;
 
@@ -444,70 +370,39 @@ export function GisPanel() {
           </div>
         )}
 
-        {/* @ts-ignore */}
-        <bim-number-input
-          id="gis-longitude"
-          ref={longitudeRef}
-          style={{ maxHeight: "min-content" }}
-          pref="Longitude"
-          slider
+        <NumberSliderRow
+          label="Longitude"
+          value={state.longitude}
           min={-180}
           max={180}
           step={0.000001}
+          onChange={(value) => updateCoordinate("longitude", value)}
         />
-
-        {/* @ts-ignore */}
-        <bim-number-input
-          id="gis-latitude"
-          ref={latitudeRef}
-          style={{ maxHeight: "min-content" }}
-          pref="Latitude"
-          slider
+        <NumberSliderRow
+          label="Latitude"
+          value={state.latitude}
           min={-90}
           max={90}
           step={0.000001}
+          onChange={(value) => updateCoordinate("latitude", value)}
         />
-
-        {/* @ts-ignore */}
-        <bim-number-input
-          id="gis-camera-range"
-          ref={cameraRangeRef}
-          style={{ maxHeight: "min-content" }}
-          pref="Camera Range"
-          slider
+        <NumberSliderRow
+          label="Camera Range"
+          value={state.cameraRange}
           min={100}
           max={10000}
           step={50}
+          onChange={updateCameraRange}
         />
-
-        <div className="flex gap-2 w-full">
-          <div className="flex-grow flex-shrink min-w-0">
-            {/* @ts-ignore */}
-            <bim-number-input
-              id="gis-rotation"
-              ref={rotationRef}
-              style={{ maxHeight: "min-content" }}
-              pref="Rotation"
-              slider
-              min={-180}
-              max={360}
-              step={1}
-            />
-          </div>
-          <div className="flex-grow flex-shrink min-w-0">
-            {/* @ts-ignore */}
-            <bim-number-input
-              id="gis-elevation"
-              ref={elevationRef}
-              style={{ maxHeight: "min-content" }}
-              pref="Elevation"
-              slider
-              min={-100}
-              max={10000}
-              step={0.1}
-            />
-          </div>
-        </div>
+        <NumberSliderRow label="Rotation" value={state.rotation} min={-180} max={360} step={1} onChange={updateRotation} />
+        <NumberSliderRow
+          label="Elevation"
+          value={state.elevation}
+          min={-100}
+          max={10000}
+          step={0.1}
+          onChange={updateElevation}
+        />
 
         <div className="flex min-h-[19rem] flex-col overflow-hidden rounded border border-border bg-bg">
           <div ref={mapHostRef} className="min-h-[19rem] w-full overflow-hidden" />

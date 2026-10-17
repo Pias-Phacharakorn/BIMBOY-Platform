@@ -1,4 +1,4 @@
-import type { ProjectRow } from "@/react-components/features/projects/projectsService";
+import type { ProjectRow } from "./projectsService";
 
 /**
  * The guest demo's project, defined entirely in the client.

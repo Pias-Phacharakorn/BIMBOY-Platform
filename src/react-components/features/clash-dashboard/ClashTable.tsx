@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { useClashStore } from "@/react-components/store/clashStore";
-import { useFilteredClashItems } from "@/react-components/features/clash-dashboard/useFilteredClashItems";
+import { useFilteredClashItems } from "./useFilteredClashItems";
 import { Icon } from "@/react-components/components/ui/Icon";
 import { useClashTable } from "./useClashTable";
 import { BulkEditClashModal } from "./BulkEditClashModal";
@@ -9,7 +9,7 @@ import {
   statusToneClassMap,
   typeLabelMap,
   typeDotClassMap,
-} from "@/react-components/features/clash-dashboard/clashDisplayHelpers";
+} from "./clashDisplayHelpers";
 
 interface ClashTableProps {
   projectId: string;

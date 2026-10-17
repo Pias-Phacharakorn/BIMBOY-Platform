@@ -1,7 +1,7 @@
 import { useState, useMemo, type MouseEvent as ReactMouseEvent } from "react";
 import type { ClashItem, ClashStatus, ClashType } from "@/types";
-import { useDeleteClashViewpoints, useBulkUpdateClashViewpoints } from "../clash-dashboard/useClashViewpoints";
-import { getClashSeqId } from "../clash-dashboard/clashDisplayHelpers";
+import { useDeleteClashViewpoints, useBulkUpdateClashViewpoints } from "./useClashViewpoints";
+import { getClashSeqId } from "./clashDisplayHelpers";
 
 export function useClashTable(projectId: string, clashItems: ClashItem[]) {
   const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());

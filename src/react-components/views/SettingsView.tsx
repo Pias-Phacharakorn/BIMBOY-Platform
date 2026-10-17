@@ -6,7 +6,7 @@ import { useProject, useIsProjectAdmin } from "@/react-components/features/proje
 import { useAuth } from "@/react-components/features/auth/useAuth";
 import { ProjectSettingsForm } from "@/react-components/features/project-settings/ProjectSettingsForm";
 import { ProjectMembersSettings } from "@/react-components/features/project-members/ProjectMembersSettings";
-import { ProjectFolders } from "@/react-components/features/project-folders/ProjectFolders";
+import { ProjectFolders } from "@/react-components/features/shop-drawings/ProjectFolders";
 import { ProjectPowerBISettings } from "@/react-components/features/project-powerbi-settings/ProjectPowerBISettings";
 
 export function SettingsView() {

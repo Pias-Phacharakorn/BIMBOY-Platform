@@ -10,8 +10,8 @@ import {
   ClashMatrix,
   ClashHistory,
   ClashPreview,
+  ClashTable,
 } from "@/react-components/features/clash-dashboard";
-import { ClashTable } from "@/react-components/features/clash-table";
 
 export function ClashView() {
   const { projectId } = useParams({ strict: false });

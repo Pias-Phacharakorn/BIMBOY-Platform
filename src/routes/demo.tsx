@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { GuestEntryView } from '@/react-components/views'
-import { DEMO_PROJECT_ID } from '@/react-components/features/guest-demo/demoProject'
+import { DEMO_PROJECT_ID } from '@/react-components/features/projects/demoProject'
 import { isGuestSession } from '@/lib/guestSession'
 
 // ─── /demo — the shareable guest entry point ───────────────────────────────────

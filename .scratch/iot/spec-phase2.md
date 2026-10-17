@@ -1,7 +1,7 @@
 # Spec — IOT phase 2: IFC elements as devices, persisted
 
 > Grilled design + rejected alternatives: `CONTEXT.md` § *IOT phase 2*.
-> Flow diagrams and files-changed: `plan-visualizer.md`.
+> Flow diagrams and files-changed: `plan-visualizer.md` (repo root).
 > Migration already written (not applied): `supabase/migrations/20260907120000_create_iot_devices_schema.sql`.
 > Status label not applied — the tracker is unreachable, see § Further Notes.
 
