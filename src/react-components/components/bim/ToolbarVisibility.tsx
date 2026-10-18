@@ -37,6 +37,7 @@ function MenuRow({
       <button
         className={menuItemClass}
         type="button"
+        aria-label={label}
         disabled={disabled}
         onClick={onClick}
       >
@@ -57,6 +58,7 @@ function MenuRow({
 export function ToolbarVisibility() {
   const { components, selectedElementIds } = useBimStore();
   const bumpVisibilityEpoch = useUIStore((state) => state.bumpVisibilityEpoch);
+  const visibilityLocked = useUIStore((state) => state.visibilityLocked);
   const [isOpen, setIsOpen] = useState(false);
   const [busy, setBusy] = useState<ActionKey | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -140,8 +142,15 @@ export function ToolbarVisibility() {
       : "border-transparent hover:border-border hover:bg-surface-alt hover:text-fg"
   );
 
-  // Reads as "Isolate — select items first" in the hover pill.
-  const selectionHint = hasSelection ? undefined : "select items first";
+  // Reads as "Isolate — select items first" in the hover pill. While a tab owns visibility (4D),
+  // Isolate and Hide are off whatever the selection: that tab re-decides every element's
+  // visibility on each month change and would silently undo them.
+  const selectionHint = visibilityLocked
+    ? "the 4D tab controls visibility"
+    : hasSelection
+      ? undefined
+      : "select items first";
+  const selectionActionsDisabled = busy !== null || !hasSelection || visibilityLocked;
 
   return (
     <div className="relative flex items-center" ref={dropdownRef}>
@@ -149,6 +158,7 @@ export function ToolbarVisibility() {
         onClick={() => setIsOpen(!isOpen)}
         className={buttonClass}
         title="Visibility"
+        aria-label="Visibility"
         type="button"
       >
         <Icon name="SHOW" size={20} />
@@ -168,7 +178,7 @@ export function ToolbarVisibility() {
             label="Isolate"
             hint={selectionHint}
             busy={busy === "isolate"}
-            disabled={busy !== null || !hasSelection}
+            disabled={selectionActionsDisabled}
             onClick={handleIsolate}
           />
           <MenuRow
@@ -176,7 +186,7 @@ export function ToolbarVisibility() {
             label="Hide"
             hint={selectionHint}
             busy={busy === "hide"}
-            disabled={busy !== null || !hasSelection}
+            disabled={selectionActionsDisabled}
             onClick={handleHide}
           />
         </div>

@@ -12,6 +12,7 @@ import { PostRenderPanel } from "@/react-components/features/post-render";
 import { RealisticPanel } from "@/react-components/features/realistic-view";
 import { IotDeviceList, IotDataPanel, IotBindPanel } from "@/react-components/features/iot";
 import { useIotTab } from "@/react-components/features/iot/useIotTab";
+import { ConstructionSchedulePanel, ConstructionTimeline, useConstructionSequence } from "@/react-components/features/construction-sequence";
 // AR runs on a standalone full-screen /ar page (single WebGL context, no OBC engine).
 // Clicking the "AR" tab navigates there — see onTabChange below.
 // The custom ArSession/ArViewerPanel/useArSession approach is kept in the repo but
@@ -24,7 +25,7 @@ import { useIfcSpaceVisibility } from "@/react-components/features/ifc-space-vis
 import { useViewportFullscreenOwner } from "@/react-components/features/viewport-fullscreen/useViewportFullscreen";
 import { useUIStore } from "@/react-components/store/uiStore";
 
-const workspaceTabs = ["Models", "Queries", "Room", "Smart Views", "GIS", "Viewpoint", "Drawing Editor", "AR", "IOT", "PostRender", "Realistic"];
+const workspaceTabs = ["Models", "Queries", "Room", "Smart Views", "GIS", "Viewpoint", "Drawing Editor", "AR", "IOT", "4D", "PostRender", "Realistic"];
 
 export function ModelsView() {
   const { projectId } = useParams({ strict: false });
@@ -46,6 +47,7 @@ export function ModelsView() {
   const isPostRenderTab = activeTab === "PostRender";
   const isRealisticTab = activeTab === "Realistic";
   const isIotTab = activeTab === "IOT";
+  const is4DTab = activeTab === "4D";
   const isFlexLayout =
     activeTab === "Models" ||
     isGisTab ||
@@ -54,12 +56,18 @@ export function ModelsView() {
     isRoomTab ||
     isPostRenderTab ||
     isRealisticTab ||
-    isIotTab;
+    isIotTab ||
+    is4DTab;
 
   // The IOT tab's devices, binding, selection and live tick. Called once here and passed to both
   // panels: they are siblings with the viewport between them, so calling the hook in each would
   // give the tab two selections, two ticks and two device lists.
   const iot = useIotTab(isIotTab, project?.id, user?.id, showSettings);
+
+  // The 4D tab's Schedule, month and Play. Same reason as the IOT hook above: the Gantt panel and
+  // the timeline are siblings with the viewport between them. While open it owns viewport
+  // visibility (Isolate / Hide disabled) — see `useConstructionSequence`.
+  const construction = useConstructionSequence(is4DTab, project?.id, user?.id ?? null, showSettings);
 
   // IFCSPACE geometry is hidden in the viewport unless the user ticks it in Settings — except on
   // the Room tab, whose whole content is a list of spaces.
@@ -194,6 +202,14 @@ export function ModelsView() {
           </LeftPanel>
         )}
 
+        {is4DTab && (
+          <LeftPanel icon="STARTDATE" defaultOpen={true}>
+            <PanelSection label="Construction Sequence" icon="STARTDATE" defaultOpen={true} noPadding={true} fullHeight={true}>
+              <ConstructionSchedulePanel tab={construction} />
+            </PanelSection>
+          </LeftPanel>
+        )}
+
         <section
           className={`h-full min-w-0 relative border border-border overflow-hidden bg-[#0d0e12] ${
             isFlexLayout ? "flex-1" : ""
@@ -203,6 +219,7 @@ export function ModelsView() {
           <ViewportWrapper />
           <ViewportRightToolbar />
           <ViewportToolbar />
+          {is4DTab && <ConstructionTimeline tab={construction} />}
           <CloudModelLoadingModal />
         </section>
 

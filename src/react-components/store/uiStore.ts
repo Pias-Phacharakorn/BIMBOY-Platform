@@ -46,6 +46,14 @@ interface UIState {
    */
   visibilityEpoch: number
   bumpVisibilityEpoch: () => void
+  /**
+   * Set while a tab owns viewport visibility outright — today only the 4D tab, which sets every
+   * element's visibility from the month. The Visibility toolbar disables Isolate and Hide while it
+   * is set; Show All still runs and bumps `visibilityEpoch`, which the owner answers by re-applying
+   * its own picture. Two writers re-deciding visibility on every month change cannot share.
+   */
+  visibilityLocked: boolean
+  setVisibilityLocked: (locked: boolean) => void
 
   /**
    * Whether the IOT tab's floating reading chips are drawn.
@@ -109,6 +117,8 @@ export const useUIStore = create<UIState>((set) => ({
   setIfcSpacesForced: (forced) => set({ ifcSpacesForced: forced }),
   visibilityEpoch: 0,
   bumpVisibilityEpoch: () => set((state) => ({ visibilityEpoch: state.visibilityEpoch + 1 })),
+  visibilityLocked: false,
+  setVisibilityLocked: (locked) => set({ visibilityLocked: locked }),
 
   iotChipsVisible: true,
   setIotChipsVisible: (visible) => set({ iotChipsVisible: visible }),
