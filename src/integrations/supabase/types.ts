@@ -234,6 +234,45 @@ export type Database = {
           },
         ]
       }
+      construction_schedules: {
+        Row: {
+          body: Json
+          id: string
+          project_id: string
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          body: Json
+          id?: string
+          project_id: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          body?: Json
+          id?: string
+          project_id?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "construction_schedules_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["uid"]
+          },
+          {
+            foreignKeyName: "construction_schedules_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       iot_devices: {
         Row: {
           created_at: string
